@@ -9,6 +9,8 @@ from ui.compte_ajout import bloc_ajout_compte
 from ui.compte_saisie import bloc_saisie_operation
 from ui.compte_vue import tableau_operations
 from ui.barre_navigation import sidebar_personnes
+from ui.depenses_scanner import onglet_depenses
+
 
 st.set_page_config(page_title="Personnes", layout="wide")
 
@@ -25,6 +27,19 @@ def main():
     noms = people["name"].tolist()
     nom_personne = st.selectbox("Choisir une personne", noms)
     person_id = int(people.loc[people["name"] == nom_personne, "id"].iloc[0])
+
+    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus"])
+
+    with tabs_fixes[0]:
+        st.subheader("Vue d’ensemble")
+        st.caption("On garde l’existant ici (KPI, aperçu, etc.)")
+
+    with tabs_fixes[1]:
+        onglet_depenses(conn, person_id=person_id, key_prefix=f"p{person_id}_dep")
+
+    with tabs_fixes[2]:
+        st.subheader("Revenus")
+        st.caption("On le code juste après (copie de Dépenses avec catégories revenus)")
 
     # --- Comptes dynamiques ---
     comptes = repo.list_accounts(conn, person_id=person_id)
