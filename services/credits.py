@@ -390,3 +390,46 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
 
     mask = mask_cat & mask_type
     return float(pd.to_numeric(df.loc[mask, "amount"], errors="coerce").fillna(0.0).sum())
+
+
+
+def get_credit_dates(conn, credit_id: int) -> dict:
+    """
+    Retourne:
+      - date_debut_echeances: première échéance du tableau
+      - date_debut_remboursement: première échéance où capital_amorti > 0
+      - date_fin: dernière échéance du tableau
+    """
+    df = pd.read_sql_query(
+        """
+        SELECT date_echeance, capital_amorti
+        FROM credit_amortissements
+        WHERE credit_id = ?
+        ORDER BY date_echeance
+        """,
+        conn,
+        params=[int(credit_id)],
+    )
+
+    if df.empty:
+        return {
+            "date_debut_echeances": None,
+            "date_debut_remboursement": None,
+            "date_fin": None,
+        }
+
+    df["date_echeance"] = pd.to_datetime(df["date_echeance"], errors="coerce")
+    df["capital_amorti"] = pd.to_numeric(df["capital_amorti"], errors="coerce").fillna(0.0)
+    df = df.dropna(subset=["date_echeance"]).sort_values("date_echeance")
+
+    date_debut_echeances = df.iloc[0]["date_echeance"].date()
+    date_fin = df.iloc[-1]["date_echeance"].date()
+
+    cap = df[df["capital_amorti"] > 0]
+    date_debut_remboursement = cap.iloc[0]["date_echeance"].date() if not cap.empty else None
+
+    return {
+        "date_debut_echeances": date_debut_echeances,
+        "date_debut_remboursement": date_debut_remboursement,
+        "date_fin": date_fin,
+    }

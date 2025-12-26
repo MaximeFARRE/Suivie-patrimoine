@@ -3,6 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import altair as alt
 from datetime import datetime
+from services.credits import get_credit_dates
+
 import pytz
 from services.credits import get_credit_by_account, get_credit_kpis,cout_reel_mois_via_bankin, cout_reel_mois_credit_via_bankin, get_crd_a_date
 
@@ -86,6 +88,13 @@ def afficher_dashboard_credit(conn, person_id: int, account_id: int):
 
 
     st.divider()
+    dates = get_credit_dates(conn, credit_id=int(credit["id"]))
+    debut_remb = dates["date_debut_remboursement"]
+    fin = dates["date_fin"]
+
+    cA, cB = st.columns(2)
+    cA.metric("Début remboursement", debut_remb.isoformat() if debut_remb else "—")
+    cB.metric("Fin estimée", fin.isoformat() if fin else "—")
 
     # --- Fiche contrat ---
     st.markdown("### Fiche crédit")
