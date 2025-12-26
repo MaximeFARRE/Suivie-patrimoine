@@ -12,7 +12,7 @@ from ui.barre_navigation import sidebar_personnes
 from ui.depenses_scanner import onglet_depenses
 from ui.revenus_scanner import onglet_revenus
 from ui.sankey import afficher_sankey
-
+from services.sankey import months_range, year_to_date_months
 
 
 st.set_page_config(page_title="Personnes", layout="wide")
@@ -53,6 +53,8 @@ def main():
 
     aujourd_hui = pd.Timestamp.today()
     cashflow_mois = calc.cashflow_mois(tx_person, int(aujourd_hui.year), int(aujourd_hui.month))
+    # Mois courant au format DB (YYYY-MM-01) pour le Sankey
+    mois = f"{int(aujourd_hui.year):04d}-{int(aujourd_hui.month):02d}-01"
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Solde global (flux)", f"{solde_global:,.2f} €".replace(",", " "))
@@ -104,10 +106,39 @@ def main():
 
             with col_d:
                 st.markdown("### Ajouter une opération (dans ce compte)")
-                bloc_saisie_operation(conn, person_id=person_id, account_id=account_id, account_type=account_type, key_prefix=f"p{person_id}_a{account_id}")
-                
+                bloc_saisie_operation(conn,person_id=person_id,account_id=account_id,account_type=account_type,key_prefix=f"p{person_id}_a{account_id}",)
 
-            afficher_sankey(conn, person_id=person_id, mois=mois, titre="Sankey — Cashflow du mois")
+          
+          
+          
+          
+ 
+
+    # mois courant au format DB
+    today = pd.Timestamp.today()
+    mois_courant = f"{today.year:04d}-{today.month:02d}-01"
+    mois_dernier = f"{(today - pd.DateOffset(months=1)).year:04d}-{(today - pd.DateOffset(months=1)).month:02d}-01"
+
+    periode = st.selectbox(
+        "Période du Sankey",
+        ["Mois en cours", "Dernier mois", "3 derniers mois", "6 derniers mois", "12 derniers mois", "Année en cours"],
+        index=0
+    )
+
+    if periode == "Mois en cours":
+        mois_list = [mois_courant]
+    elif periode == "Dernier mois":
+        mois_list = [mois_dernier]
+    elif periode == "3 derniers mois":
+        mois_list = months_range(mois_courant, 3)
+    elif periode == "6 derniers mois":
+        mois_list = months_range(mois_courant, 6)
+    elif periode == "12 derniers mois":
+        mois_list = months_range(mois_courant, 12)
+    else:  # Année en cours
+        mois_list = year_to_date_months(mois_courant)
+
+    afficher_sankey(conn, person_id=person_id, mois_list=mois_list, titre="Sankey — Cashflow")
 
 
     st.divider()

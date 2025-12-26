@@ -2,6 +2,28 @@
 from __future__ import annotations
 import sqlite3
 from typing import Dict, List, Tuple, Optional
+import pandas as pd
+from typing import List
+
+def months_range(end_mois: str, n: int) -> List[str]:
+    """
+    end_mois: 'YYYY-MM-01'
+    n: nombre de mois à inclure (ex: 3 => end + 2 précédents)
+    """
+    end = pd.to_datetime(end_mois)
+    months = []
+    for i in range(n):
+        d = (end - pd.DateOffset(months=i))
+        months.append(f"{d.year:04d}-{d.month:02d}-01")
+    return sorted(months)
+
+def year_to_date_months(mois: str) -> List[str]:
+    """De janvier de l'année de `mois` jusqu'à `mois` inclus."""
+    end = pd.to_datetime(mois)
+    months = []
+    for m in range(1, end.month + 1):
+        months.append(f"{end.year:04d}-{m:02d}-01")
+    return months
 
 # ---------------------------
 # Catégories finales (N3) -> Bloc (N2)
@@ -69,15 +91,19 @@ DEPENSES_N2_ORDER = [
     "Investissements / Épargne",
 ]
 
-def _sum_by_categorie(conn: sqlite3.Connection, table: str, person_id: int, mois: str) -> Dict[str, float]:
+def _sum_by_categorie(conn: sqlite3.Connection, table: str, person_id: int, mois_list: List[str]) -> Dict[str, float]:
+    if not mois_list:
+        return {}
+
+    placeholders = ",".join(["?"] * len(mois_list))
     rows = conn.execute(
         f"""
         SELECT categorie, SUM(montant) AS total
         FROM {table}
-        WHERE person_id = ? AND mois = ?
+        WHERE person_id = ? AND mois IN ({placeholders})
         GROUP BY categorie
         """,
-        (person_id, mois)
+        (person_id, *mois_list)
     ).fetchall()
 
     out: Dict[str, float] = {}
@@ -88,12 +114,11 @@ def _sum_by_categorie(conn: sqlite3.Connection, table: str, person_id: int, mois
     return out
 
 
-def build_cashflow_sankey(
-    conn: sqlite3.Connection,
-    *,
-    person_id: int,
-    mois: str,  # format DB: YYYY-MM-01
-) -> dict:
+def build_cashflow_sankey(conn: sqlite3.Connection, *, person_id: int, mois_list: List[str]) -> dict:
+    revenus_raw = _sum_by_categorie(conn, "revenus", person_id, mois_list)
+    depenses_raw = _sum_by_categorie(conn, "depenses", person_id, mois_list)
+    ...
+
     """
     Sortie compatible Plotly Sankey:
     {
@@ -104,8 +129,8 @@ def build_cashflow_sankey(
     }
     """
 
-    revenus_raw = _sum_by_categorie(conn, "revenus", person_id, mois)
-    depenses_raw = _sum_by_categorie(conn, "depenses", person_id, mois)
+    revenus_raw = _sum_by_categorie(conn, "revenus", person_id, mois_list)
+    depenses_raw = _sum_by_categorie(conn, "depenses", person_id, mois_list)
 
     # 1) Normaliser: on ne garde que les catégories "finales" (N3).
     #    Si tu as encore des anciennes catégories, elles iront dans "Dépenses courantes".
@@ -129,11 +154,28 @@ def build_cashflow_sankey(
     total_dep = sum(depenses_n3.values())
 
     # 2) Construire les nœuds
+    x = []
+
+
+
     # Colonnes:
     # [Revenus N3] -> [Cash disponible] -> [Dépenses N2] -> [Dépenses N3]
     labels: List[str] = []
     idx: Dict[str, int] = {}
-
+    for label in labels:
+        if label in REVENUS_N3:
+            x.append(0.0)
+        elif label == "Cash disponible":
+            x.append(0.2)
+        elif label in DEPENSES_N2_ORDER:
+            x.append(0.45)
+        elif label in depenses_n3:
+            x.append(0.7)
+        else:
+            # Excédent / Financement
+            x.append(0.95)
+            
+            
     def add_node(name: str) -> int:
         if name in idx:
             return idx[name]
@@ -203,10 +245,12 @@ def build_cashflow_sankey(
         link(n2, n3, amt)
 
     return {
-        "labels": labels,
-        "sources": sources,
-        "targets": targets,
-        "values": values,
-        "total_rev": total_rev,
-        "total_dep": total_dep,
-    }
+    "labels": labels,
+    "sources": sources,
+    "targets": targets,
+    "values": values,
+    "x": x,
+    "total_rev": total_rev,
+    "total_dep": total_dep,
+}
+
