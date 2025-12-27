@@ -1,8 +1,11 @@
 # ui/private_equity_overview.py
 import streamlit as st
+import matplotlib.pyplot as plt
+import altair as alt
 
 from services import private_equity_repository as pe_repo
 from services import private_equity as pe
+from services import pe_cash_repository as cash_repo
 
 def afficher_private_equity_overview(conn, person_id: int):
     st.subheader("Private Equity")
@@ -11,6 +14,7 @@ def afficher_private_equity_overview(conn, person_id: int):
     # --- Data
     projects = pe_repo.list_pe_projects(conn, person_id)
     tx = pe_repo.list_pe_transactions(conn, person_id)
+    cash_tx = cash_repo.list_pe_cash_transactions(conn, person_id)
 
     # --- Filtres (plateforme + statut)
     colf1, colf2 = st.columns(2)
@@ -31,6 +35,9 @@ def afficher_private_equity_overview(conn, person_id: int):
         tx_f = tx_f[tx_f["project_id"].isin(projects_f["id"].tolist())]
     else:
         tx_f = tx_f.iloc[0:0]
+
+    cash_by_platform = pe.compute_platform_cash(pe_tx=tx_f, cash_tx=cash_tx)
+    cash_total = float(cash_by_platform["cash"].sum()) if not cash_by_platform.empty else 0.0
 
     # --- Positions + KPI
     positions = pe.build_pe_positions(projects_f, tx_f)
@@ -60,6 +67,34 @@ def afficher_private_equity_overview(conn, person_id: int):
     c14.metric("Durée moyenne avant sortie", "-" if k["avg_exit_days"] is None else f"{k['avg_exit_days']:.0f} jours")
 
     st.divider()
+
+    st.subheader("Liquidités")
+
+    cash_by_platform = pe.compute_platform_cash(pe_tx=tx_f, cash_tx=cash_tx)
+    cash_total = float(cash_by_platform["cash"].sum()) if not cash_by_platform.empty else 0.0
+
+    # --- KPIs (total + plateformes)
+    if cash_by_platform.empty:
+        st.metric("Liquidités totales", f"{cash_total:,.2f} €".replace(",", " "))
+    else:
+        # On affiche Total + les 3 plus grosses plateformes
+        top_n = min(3, len(cash_by_platform))
+        cols = st.columns(1 + top_n)
+
+        cols[0].metric("Liquidités totales", f"{cash_total:,.2f} €".replace(",", " "))
+
+        for i in range(top_n):
+            row = cash_by_platform.iloc[i]
+            plat = str(row["platform"])
+            val = float(row["cash"])
+            cols[i + 1].metric(f"{plat}", f"{val:,.2f} €".replace(",", " "))
+        
+    
+    # Optionnel : format cash + colonne lisible
+    df_cash_view = cash_by_platform.copy()
+    df_cash_view["cash"] = df_cash_view["cash"].map(lambda x: f"{float(x):,.2f} €".replace(",", " "))
+    st.dataframe(df_cash_view, use_container_width=True, hide_index=True)
+
 
     # --- Création projet
     with st.expander("➕ Créer un projet / ligne", expanded=False):
@@ -133,6 +168,135 @@ def afficher_private_equity_overview(conn, person_id: int):
                     st.rerun()
 
     st.divider()
+    # ----------------------------
+    # --- Ajout opération liquidité
+    # ----------------------------
+    with st.expander("➕ Ajouter une opération de liquidité (plateforme)", expanded=False):
+
+        # 1️⃣ Récupération des plateformes déjà connues
+        platforms_from_projects = []
+        if not projects.empty and "platform" in projects.columns:
+            platforms_from_projects = [
+                p for p in projects["platform"].dropna().unique().tolist()
+                if str(p).strip()
+            ]
+
+        platforms_from_cash = []
+        if not cash_tx.empty and "platform" in cash_tx.columns:
+            platforms_from_cash = [
+                p for p in cash_tx["platform"].dropna().unique().tolist()
+                if str(p).strip()
+            ]
+
+        # Liste unique + tri
+        platforms = sorted(set(platforms_from_projects + platforms_from_cash))
+
+        # Options du menu déroulant
+        platform_options = platforms + ["➕ Nouvelle plateforme..."]
+
+        col1, col2 = st.columns(2)
+
+        # 2️⃣ Colonne gauche : plateforme + type + date
+        with col1:
+            selected_platform = st.selectbox(
+                "Plateforme",
+                platform_options,
+                key="pe_cash_platform_select"
+            )
+
+            # Si l’utilisateur choisit "Nouvelle plateforme"
+            if selected_platform == "➕ Nouvelle plateforme...":
+                cash_platform = st.text_input(
+                    "Nom de la nouvelle plateforme",
+                    key="pe_cash_platform_new"
+                )
+            else:
+                cash_platform = selected_platform
+
+            cash_date = st.date_input("Date", key="pe_cash_date")
+
+            cash_type = st.selectbox(
+                "Type d'opération",
+                ["ADJUST", "DEPOSIT", "WITHDRAW"],
+                key="pe_cash_type"
+            )
+
+        # 3️⃣ Colonne droite : montant + note
+        with col2:
+            cash_amount = st.number_input(
+                "Montant (€)",
+                min_value=0.0,
+                step=10.0,
+                key="pe_cash_amount"
+            )
+
+            cash_note = st.text_input(
+                "Note (optionnel)",
+                key="pe_cash_note"
+            )
+
+        # 4️⃣ Bouton de validation
+        if st.button(
+            "Ajouter l'opération de liquidité",
+            use_container_width=True,
+            key="pe_cash_add_btn"
+        ):
+            if not str(cash_platform).strip():
+                st.warning("Plateforme obligatoire (ex: Blast).")
+
+            elif cash_amount <= 0:
+                st.warning("Le montant doit être strictement positif.")
+
+            else:
+                cash_repo.add_pe_cash_transaction(
+                    conn,
+                    person_id=person_id,
+                    platform=str(cash_platform).strip(),
+                    date=str(cash_date),
+                    tx_type=cash_type,
+                    amount=float(cash_amount),
+                    note=cash_note,
+                )
+
+                st.success("Opération de liquidité ajoutée.")
+                st.rerun()
+
+
+    #-----------------------------
+    # --- Graphes ---
+    #-----------------------------
+    st.subheader("Graphes")
+
+
+
+    series = pe.build_pe_monthly_series(tx_f)
+    value_series = pe.build_pe_portfolio_value_series(projects_f, tx_f)
+
+    if series.empty:
+        st.info("Pas assez de données pour tracer.")
+    else:
+        df = series.copy().sort_values("month")
+
+        if not value_series.empty:
+            df = df.merge(value_series, on="month", how="left")
+        else:
+            df["portfolio_value"] = None
+
+        # IMPORTANT : c’est ça qui fixe ton problème
+        st.line_chart(df.set_index("month")[["invest_cum", "portfolio_value"]])
+
+
+
+    st.markdown("**Répartition de la valeur par plateforme**")
+
+    by_plat = positions.groupby("platform")["value_used"].sum().sort_values(ascending=False)
+    if by_plat.empty:
+        st.info("Aucune donnée plateforme.")
+    else:
+        st.bar_chart(by_plat)
+
+
+
 
     st.markdown("### Projets (positions)")
     st.dataframe(positions, use_container_width=True, hide_index=True)

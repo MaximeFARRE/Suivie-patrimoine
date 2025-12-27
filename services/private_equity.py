@@ -143,3 +143,204 @@ def compute_pe_kpis(positions: pd.DataFrame) -> dict:
         "avg_holding_days": avg_holding_days,
         "avg_exit_days": avg_exit_days,
     }
+
+
+
+def build_pe_monthly_series(tx: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retourne un DF mensuel avec :
+    invest, fees, cash_out et une valeur 'value_proxy' (invest cumulé)
+    """
+    if tx is None or tx.empty:
+        return pd.DataFrame(columns=["month", "invest", "fees", "cash_out", "invest_cum"])
+
+    d = tx.copy()
+    d["date_dt"] = pd.to_datetime(d["date"], errors="coerce")
+    d = d.dropna(subset=["date_dt"])
+    d["month"] = d["date_dt"].dt.to_period("M").dt.to_timestamp()
+
+    invest = d[d["tx_type"] == "INVEST"].groupby("month")["amount"].sum()
+    fees = d[d["tx_type"] == "FEES"].groupby("month")["amount"].sum()
+    cash_out = d[d["tx_type"].isin(["DISTRIB", "VENTE"])].groupby("month")["amount"].sum()
+
+    out = pd.DataFrame(index=sorted(d["month"].unique()))
+    out.index.name = "month"
+    out["invest"] = invest.reindex(out.index).fillna(0.0)
+    out["fees"] = fees.reindex(out.index).fillna(0.0)
+    out["cash_out"] = cash_out.reindex(out.index).fillna(0.0)
+
+    # proxy valeur (fallback) : invest cumulé (sans frais)
+    out["invest_cum"] = out["invest"].cumsum()
+
+    return out.reset_index()
+
+
+def add_portfolio_value(series: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ajoute une colonne 'portfolio_value' :
+    valeur du portefeuille = investi cumulé + cash-out cumulés
+    (fallback cohérent tant qu'il n'y a pas de VALO intermédiaire)
+    """
+    if series.empty:
+        return series
+
+    s = series.copy()
+    s = s.sort_values("month")
+
+    s["cash_out_cum"] = s["cash_out"].cumsum()
+
+    # Valeur portefeuille (fallback)
+    s["portfolio_value"] = s["invest_cum"] + s["cash_out_cum"]
+
+    return s
+
+import pandas as pd
+
+def build_pe_portfolio_value_series(projects: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFrame:
+    """
+    Série mensuelle de la valeur du portefeuille :
+    - si VALO existe avant/à la date -> on prend la dernière VALO
+    - sinon -> on prend l'investi cumulé (INVEST) jusqu'à la date
+    - si projet SORTI et exit_date <= date -> valeur = 0
+    """
+    if projects is None or projects.empty:
+        return pd.DataFrame(columns=["month", "portfolio_value"])
+
+    if tx is None or tx.empty:
+        return pd.DataFrame(columns=["month", "portfolio_value"])
+
+    d = tx.copy()
+    d["date_dt"] = pd.to_datetime(d["date"], errors="coerce")
+    d = d.dropna(subset=["date_dt"])
+
+    # mois (début de mois)
+    d["month"] = d["date_dt"].dt.to_period("M").dt.to_timestamp()
+    months = sorted(d["month"].unique())
+
+    # préparations
+    projects2 = projects.copy()
+    projects2["exit_date_dt"] = pd.to_datetime(projects2.get("exit_date"), errors="coerce")
+
+    rows = []
+    for m in months:
+        total_value = 0.0
+
+        for _, p in projects2.iterrows():
+            pid = int(p["id"])
+
+            # si sorti avant/à ce mois -> valeur = 0
+            if p.get("status") == "SORTI" and pd.notna(p["exit_date_dt"]) and p["exit_date_dt"] <= m:
+                continue
+
+            tx_p = d[d["project_id"] == pid]
+            tx_p = tx_p[tx_p["date_dt"] <= m + pd.offsets.MonthEnd(0)]  # inclure tout le mois
+
+            if tx_p.empty:
+                continue
+
+            # dernière VALO <= mois
+            valos = tx_p[tx_p["tx_type"] == "VALO"].sort_values("date_dt")
+            if not valos.empty:
+                value = float(valos.iloc[-1]["amount"])
+            else:
+                # fallback : investi cumulé <= mois (sans frais)
+                invested = float(tx_p[tx_p["tx_type"] == "INVEST"]["amount"].sum())
+                value = invested
+
+            total_value += value
+
+        rows.append({"month": m, "portfolio_value": total_value})
+
+    return pd.DataFrame(rows)
+
+
+
+def compute_platform_cash(
+    pe_tx: pd.DataFrame,
+    cash_tx: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Retourne une DF:
+    platform | cash | last_adjust_date | last_adjust_amount
+
+    Logique:
+    - On prend le dernier ADJUST par plateforme (snapshot).
+    - Ensuite on applique:
+        + DEPOSIT, - WITHDRAW
+        + (DISTRIB + VENTE) - (INVEST + FEES)
+      uniquement sur les mouvements dont la date >= last_adjust_date (ou tout si aucun ADJUST)
+    """
+
+    # Normaliser entrées
+    if pe_tx is None:
+        pe_tx = pd.DataFrame(columns=["platform", "date", "tx_type", "amount"])
+    if cash_tx is None:
+        cash_tx = pd.DataFrame(columns=["platform", "date", "tx_type", "amount"])
+
+    if pe_tx.empty and cash_tx.empty:
+        return pd.DataFrame(columns=["platform", "cash", "last_adjust_date", "last_adjust_amount"])
+
+    pe = pe_tx.copy()
+    if not pe.empty:
+        pe["date_dt"] = pd.to_datetime(pe["date"], errors="coerce")
+        pe = pe.dropna(subset=["date_dt"])
+        pe["platform"] = pe["platform"].fillna("Inconnue")
+
+    c = cash_tx.copy()
+    if not c.empty:
+        c["date_dt"] = pd.to_datetime(c["date"], errors="coerce")
+        c = c.dropna(subset=["date_dt"])
+        c["platform"] = c["platform"].fillna("Inconnue")
+
+    platforms = set()
+    if not pe.empty:
+        platforms |= set(pe["platform"].unique().tolist())
+    if not c.empty:
+        platforms |= set(c["platform"].unique().tolist())
+
+    rows = []
+
+    for plat in sorted(platforms):
+        pe_p = pe[pe["platform"] == plat] if not pe.empty else pe
+        c_p = c[c["platform"] == plat] if not c.empty else c
+
+        # Dernier ADJUST (snapshot)
+        adjust = None
+        if not c_p.empty:
+            adj = c_p[c_p["tx_type"] == "ADJUST"].sort_values("date_dt")
+            if not adj.empty:
+                adjust = adj.iloc[-1]
+
+        if adjust is not None:
+            base_cash = float(adjust["amount"])
+            base_date = adjust["date_dt"]
+            last_adjust_date = adjust["date"]
+            last_adjust_amount = float(adjust["amount"])
+        else:
+            base_cash = 0.0
+            base_date = pd.Timestamp.min
+            last_adjust_date = None
+            last_adjust_amount = None
+
+        # Cash tx manuels après base_date
+        cash_after = c_p[c_p["date_dt"] >= base_date] if not c_p.empty else c_p
+        deposits = float(cash_after[cash_after["tx_type"] == "DEPOSIT"]["amount"].sum()) if not cash_after.empty else 0.0
+        withdraws = float(cash_after[cash_after["tx_type"] == "WITHDRAW"]["amount"].sum()) if not cash_after.empty else 0.0
+
+        # Impact PE après base_date
+        pe_after = pe_p[pe_p["date_dt"] >= base_date] if not pe_p.empty else pe_p
+
+        invest = float(pe_after[pe_after["tx_type"] == "INVEST"]["amount"].sum()) if not pe_after.empty else 0.0
+        fees = float(pe_after[pe_after["tx_type"] == "FEES"]["amount"].sum()) if not pe_after.empty else 0.0
+        cash_in = float(pe_after[pe_after["tx_type"].isin(["DISTRIB", "VENTE"])]["amount"].sum()) if not pe_after.empty else 0.0
+
+        cash = base_cash + deposits - withdraws + cash_in - invest - fees
+
+        rows.append({
+            "platform": plat,
+            "cash": cash,
+            "last_adjust_date": last_adjust_date,
+            "last_adjust_amount": last_adjust_amount,
+        })
+
+    return pd.DataFrame(rows).sort_values("cash", ascending=False)

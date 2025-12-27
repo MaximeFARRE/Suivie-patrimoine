@@ -154,3 +154,21 @@ CREATE TABLE IF NOT EXISTS pe_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_pe_projects_person ON pe_projects(person_id);
 CREATE INDEX IF NOT EXISTS idx_pe_tx_project_date ON pe_transactions(project_id, date);
+
+-- =========================================
+-- Private Equity - Cash (liquidité plateforme)
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS pe_cash_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL,
+    platform TEXT NOT NULL,          -- ex: Blast
+    date TEXT NOT NULL,              -- YYYY-MM-DD
+    tx_type TEXT NOT NULL,           -- ADJUST | DEPOSIT | WITHDRAW
+    amount REAL NOT NULL,            -- EUR, positif
+    note TEXT,
+    FOREIGN KEY (person_id) REFERENCES people(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pe_cash_person_platform_date
+ON pe_cash_transactions(person_id, platform, date);
