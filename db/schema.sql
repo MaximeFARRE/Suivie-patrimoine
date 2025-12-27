@@ -121,3 +121,36 @@ CREATE TABLE IF NOT EXISTS credit_amortissements (
 CREATE INDEX IF NOT EXISTS idx_credit_person ON credits(person_id);
 CREATE INDEX IF NOT EXISTS idx_amort_credit_date ON credit_amortissements(credit_id, date_echeance);
 CREATE INDEX IF NOT EXISTS idx_amort_credit_annee ON credit_amortissements(credit_id, annee);
+
+
+-- =========================================
+-- Private Equity
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS pe_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    platform TEXT, -- ex: Blast, Seedrs, Wiseed...
+    project_type TEXT, -- ex: Startup, Fonds, Crowdfunding (optionnel)
+    status TEXT NOT NULL DEFAULT 'EN_COURS', -- EN_COURS | SORTI | FAILLITE
+    created_at TEXT DEFAULT (DATE('now')),
+    exit_date TEXT, -- rempli si SORTI
+    note TEXT,
+    FOREIGN KEY (person_id) REFERENCES people(id)
+);
+
+CREATE TABLE IF NOT EXISTS pe_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    date TEXT NOT NULL, -- YYYY-MM-DD
+    tx_type TEXT NOT NULL, -- INVEST | DISTRIB | FEES | VALO | VENTE
+    amount REAL NOT NULL,  -- EUR (positif)
+    quantity REAL,         -- optionnel
+    unit_price REAL,       -- optionnel
+    note TEXT,
+    FOREIGN KEY (project_id) REFERENCES pe_projects(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pe_projects_person ON pe_projects(person_id);
+CREATE INDEX IF NOT EXISTS idx_pe_tx_project_date ON pe_transactions(project_id, date);

@@ -15,6 +15,7 @@ from ui.sankey import afficher_sankey
 from services.sankey import months_range, year_to_date_months
 from services.credits import list_credits_by_person
 from ui.credits_overview import afficher_credit_overview
+from ui.private_equity_overview import afficher_private_equity_overview
 
 
 st.set_page_config(page_title="Personnes", layout="wide")
@@ -33,7 +34,7 @@ def main():
     nom_personne = st.selectbox("Choisir une personne", noms)
     person_id = int(people.loc[people["name"] == nom_personne, "id"].iloc[0])
 
-    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit"])
+    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit", "Private Equity"])
 
     with tabs_fixes[0]:
         st.subheader("Vue d’ensemble")
@@ -47,6 +48,9 @@ def main():
 
     with tabs_fixes[3]:
         afficher_credit_overview(conn, person_id=person_id)
+
+    with tabs_fixes[4]:
+        afficher_private_equity_overview(conn, person_id=person_id)
 
 
     # --- Comptes dynamiques ---
