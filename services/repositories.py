@@ -231,4 +231,80 @@ def get_latest_prices(conn: sqlite3.Connection, asset_ids: list[int]) -> pd.Data
     return df_from_rows(rows, ["asset_id", "date", "price", "currency", "source"])
 
 
+# -------------------------------------------------------------------
+# BANQUE container -> sous-comptes (NOUVEAU, n'impacte pas l'existant)
+# -------------------------------------------------------------------
 
+def link_subaccount_to_bank(conn, bank_account_id: int, sub_account_id: int, subtype: str) -> None:
+    subtype = (subtype or "").lower().strip()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO bank_subaccounts(bank_account_id, sub_account_id, subtype)
+        VALUES (?, ?, ?);
+        """,
+        (int(bank_account_id), int(sub_account_id), subtype),
+    )
+    conn.commit()
+
+
+def list_bank_subaccounts(conn, bank_account_id: int) -> pd.DataFrame:
+    q = """
+    SELECT b.sub_account_id,
+           b.subtype,
+           a.name       AS account_name,
+           a.account_type AS account_type,
+           a.currency   AS account_currency,
+           a.institution AS institution
+    FROM bank_subaccounts b
+    JOIN accounts a ON a.id = b.sub_account_id
+    WHERE b.bank_account_id = ?
+    ORDER BY b.subtype, a.name;
+    """
+    return pd.read_sql_query(q, conn, params=(int(bank_account_id),))
+
+
+def list_all_subaccount_ids(conn, person_id: int) -> list[int]:
+    """
+    Sert à masquer les sous-comptes dans les onglets 'Personnes',
+    pour qu'ils n'apparaissent que dans le container BANQUE.
+    """
+    rows = conn.execute(
+        """
+        SELECT b.sub_account_id
+        FROM bank_subaccounts b
+        JOIN accounts a ON a.id = b.sub_account_id
+        WHERE a.person_id = ?;
+        """,
+        (int(person_id),),
+    ).fetchall()
+    return [int(r["sub_account_id"]) for r in rows]
+
+
+def is_bank_container(conn, account_id: int) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM bank_subaccounts WHERE bank_account_id = ? LIMIT 1;",
+        (int(account_id),),
+    ).fetchone()
+    return row is not None
+
+
+def get_fx_rate_asof_or_before(conn: sqlite3.Connection, base_ccy: str, quote_ccy: str, asof: str):
+    """
+    Retourne le taux base->quote le plus récent dont asof <= date demandée.
+    Exemple: USD->EUR au 2024-12-01.
+    """
+    base_ccy = (base_ccy or "").upper()
+    quote_ccy = (quote_ccy or "").upper()
+    if not base_ccy or not quote_ccy or not asof:
+        return None
+
+    return conn.execute(
+        """
+        SELECT rate, asof
+        FROM fx_rates
+        WHERE base_ccy = ? AND quote_ccy = ? AND asof <= ?
+        ORDER BY asof DESC
+        LIMIT 1;
+        """,
+        (base_ccy, quote_ccy, asof),
+    ).fetchone()

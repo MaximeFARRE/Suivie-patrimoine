@@ -215,3 +215,21 @@ CREATE TABLE IF NOT EXISTS fx_rates (
 
 CREATE INDEX IF NOT EXISTS idx_fx_pair_date
 ON fx_rates(base_ccy, quote_ccy, asof);
+
+
+-- ------------------------------------------------------------
+-- BANQUE (container) -> sous-comptes
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS bank_subaccounts (
+  bank_account_id INTEGER NOT NULL,
+  sub_account_id  INTEGER NOT NULL,
+  subtype         TEXT    NOT NULL, -- courant / livret / remunere / pel
+
+  PRIMARY KEY (bank_account_id, sub_account_id),
+  FOREIGN KEY (bank_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (sub_account_id)  REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bank_subaccounts_bank ON bank_subaccounts(bank_account_id);
+CREATE INDEX IF NOT EXISTS idx_bank_subaccounts_sub  ON bank_subaccounts(sub_account_id);
+-- =========================================

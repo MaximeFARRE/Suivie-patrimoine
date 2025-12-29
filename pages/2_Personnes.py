@@ -18,6 +18,7 @@ from ui.credits_overview import afficher_credit_overview
 from ui.private_equity_overview import afficher_private_equity_overview
 from ui.compte_bourse import afficher_compte_bourse
 from ui.entreprises_overview import afficher_entreprises_overview
+from utils.format_monnaie import money
 
 
 st.set_page_config(page_title="Personnes", layout="wide")
@@ -60,6 +61,17 @@ def main():
 
     # --- Comptes dynamiques ---
     comptes = repo.list_accounts(conn, person_id=person_id)
+    
+    # ------------------------------------------------------------
+    # BANQUE container : on masque les sous-comptes des onglets principaux
+    # ------------------------------------------------------------
+    try:
+        sub_ids = repo.list_all_subaccount_ids(conn, person_id)
+        if sub_ids:
+            comptes = comptes[~comptes["id"].isin(sub_ids)].copy()
+    except Exception:
+        pass
+
 
     # --- KPIs simples V1 (basés sur les flux) ---
     tx_person = repo.list_transactions(conn, person_id=person_id, limit=5000)
@@ -131,7 +143,17 @@ def main():
                     tableau_operations(tx_acc)
 
             else:
-                if account_type in {"PEA", "CTO", "CRYPTO"}:
+                if account_type == "BANQUE":
+                    from ui.compte_banque import afficher_compte_banque
+
+                    afficher_compte_banque(
+                        conn,
+                        person_id=person_id,
+                        bank_account_id=account_id,
+                        key_prefix=f"p{person_id}_a{account_id}_bank",
+                    )
+                
+                elif account_type in {"PEA", "CTO", "CRYPTO"}:
                     afficher_compte_bourse(
                         conn,
                         person_id=person_id,
