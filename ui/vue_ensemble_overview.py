@@ -10,6 +10,8 @@ from services import fx
 from ui.liquidites_overview import _compute_liquidites_like_overview
 
 from services import repositories as repo
+from services import snapshots as wk_snap
+from services import market_repository as mrepo
 
 # Dépenses / revenus
 from services.depenses_repository import depenses_par_mois
@@ -620,15 +622,12 @@ def afficher_vue_ensemble_overview(conn, person_id: int):
     pct_cash = _pct(liquidites_total, patrimoine_brut)
     pct_invest = _pct(invested_total, patrimoine_brut)
     
-    with st.expander("📸 Snapshot familiale (prix + patrimoine)", expanded=False):
-        st.caption("Crée/actualise la snapshot du jour pour toutes les personnes, après mise à jour des prix bourse.")
-        if st.button("📸 Faire la snapshot familiale maintenant", use_container_width=True):
-            stats = ensure_daily_snapshots_for_all_people(conn, mode="MANUAL", force_refresh_prices=True)
-            st.success(
-                f"Snapshot OK ✅ | personnes: {stats.get('n_ok',0)} OK, {stats.get('n_fail',0)} KO | "
-                f"prix: {stats.get('price_ok',0)} OK, {stats.get('price_fail',0)} KO"
-            )
+    with st.expander("📸 Snapshot / Rebuild (weekly)", expanded=False):
+        if st.button("📸 Snapshot / Rebuild (90 jours)", use_container_width=True):
+            res = wk_snap.rebuild_snapshots_person(conn, person_id=person_id, lookback_days=90)
+            st.success(f"Weekly rebuild terminé ✅ {res}")
             st.rerun()
+
 
 
     # ─────────────────────────────────────────────
@@ -696,9 +695,10 @@ def afficher_vue_ensemble_overview(conn, person_id: int):
 
     df_snap = None
     try:
-        df_snap = repo.list_patrimoine_snapshots(conn, person_id=person_id)
+        df_snap = mrepo.list_weekly_snapshots(conn, person_id=person_id)
     except Exception:
         df_snap = None
+
 
     if df_snap is None or df_snap.empty:
         st.info("Aucune snapshot enregistrée pour le moment. Fais une snapshot (bouton) puis reviens ici.")

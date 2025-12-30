@@ -21,6 +21,7 @@ from ui.entreprises_overview import afficher_entreprises_overview
 from ui.liquidites_overview import afficher_liquidites_overview 
 from ui.vue_ensemble_overview import afficher_vue_ensemble_overview
 from utils.format_monnaie import money
+from ui.bourse_global_overview import afficher_bourse_global_overview
 
 
 st.set_page_config(page_title="Personnes", layout="wide")
@@ -46,7 +47,7 @@ def main():
     nom_personne = st.selectbox("Choisir une personne", noms)
     person_id = int(people.loc[people["name"] == nom_personne, "id"].iloc[0])
 
-    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit", "Private Equity", "Entreprises", "Liquidités"])
+    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit", "Private Equity", "Entreprises", "Liquidités", "Bourse"])
 
     with tabs_fixes[0]:
         afficher_vue_ensemble_overview(conn, person_id=person_id)
@@ -68,6 +69,9 @@ def main():
         
     with tabs_fixes[6]:
         afficher_liquidites_overview(conn, person_id=person_id)
+    
+    with tabs_fixes[7]:
+        afficher_bourse_global_overview(conn, person_id=person_id)
 
     # --- Comptes dynamiques ---
     comptes = repo.list_accounts(conn, person_id=person_id)

@@ -232,4 +232,64 @@ CREATE TABLE IF NOT EXISTS bank_subaccounts (
 
 CREATE INDEX IF NOT EXISTS idx_bank_subaccounts_bank ON bank_subaccounts(bank_account_id);
 CREATE INDEX IF NOT EXISTS idx_bank_subaccounts_sub  ON bank_subaccounts(sub_account_id);
+
 -- =========================================
+-- WEEKLY MARKET DATA + SNAPSHOTS (V2)
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS asset_prices_weekly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  symbol TEXT NOT NULL,
+  week_date TEXT NOT NULL,          -- YYYY-MM-DD (lundi)
+  adj_close REAL NOT NULL,
+  currency TEXT,
+  source TEXT DEFAULT 'YFINANCE',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(symbol, week_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_apw_symbol_week
+ON asset_prices_weekly(symbol, week_date);
+
+CREATE TABLE IF NOT EXISTS fx_rates_weekly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  base_ccy TEXT NOT NULL,
+  quote_ccy TEXT NOT NULL,
+  week_date TEXT NOT NULL,          -- YYYY-MM-DD (lundi)
+  rate REAL NOT NULL,               -- base -> quote
+  source TEXT DEFAULT 'YFINANCE',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(base_ccy, quote_ccy, week_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fxw_pair_week
+ON fx_rates_weekly(base_ccy, quote_ccy, week_date);
+
+CREATE TABLE IF NOT EXISTS patrimoine_snapshots_weekly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL,
+  week_date TEXT NOT NULL,          -- YYYY-MM-DD (lundi)
+  created_at TEXT NOT NULL,         -- ISO datetime
+  mode TEXT DEFAULT 'MANUAL',       -- MANUAL / REBUILD
+
+  patrimoine_net REAL DEFAULT 0,
+  patrimoine_brut REAL DEFAULT 0,
+
+  liquidites_total REAL DEFAULT 0,
+  bank_cash REAL DEFAULT 0,
+  bourse_cash REAL DEFAULT 0,
+  pe_cash REAL DEFAULT 0,
+
+  bourse_holdings REAL DEFAULT 0,
+  pe_value REAL DEFAULT 0,
+  ent_value REAL DEFAULT 0,
+  credits_remaining REAL DEFAULT 0,
+
+  notes TEXT,
+
+  FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE,
+  UNIQUE(person_id, week_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_psw_person_week
+ON patrimoine_snapshots_weekly(person_id, week_date);
