@@ -8,10 +8,11 @@ from services import repositories as repo
 from services import pe_cash_repository as pe_cash_repo
 from utils.validators import sens_flux
 from utils.format_monnaie import money
+from services.pe_cash_repository import list_pe_cash_transactions
+from utils.validators import sens_flux
 
 
 def _bank_balance_from_tx(tx_df: pd.DataFrame) -> float:
-    """Solde banque = somme(amount * sens_flux(type))"""
     if tx_df is None or tx_df.empty:
         return 0.0
     s = 0.0
@@ -19,9 +20,128 @@ def _bank_balance_from_tx(tx_df: pd.DataFrame) -> float:
         s += float(r.get("amount", 0.0) or 0.0) * sens_flux(str(r.get("type", "")))
     return float(round(s, 2))
 
+def _compute_liquidites_like_overview(conn, person_id: int):
+    """
+    Reproduit le calcul de ui/liquidites_overview.py :
+    - Banque: somme(amount * sens_flux)
+    - Bourse: cash via DEPOT/RETRAIT/ACHAT/VENTE/DIVIDENDE/INTERETS/FRAIS + fees
+    - PE: cash plateformes via pe_cash_transactions
+    Le tout converti en EUR via _fx_to_eur()
+    """
+    accounts = repo.list_accounts(conn, person_id=person_id)
+    if accounts is None or accounts.empty:
+        return 0.0, 0.0, 0.0, 0.0  # bank, bourse, pe, total
+
+    # ---- BANQUE
+    bank_total_eur = 0.0
+    df_banks = accounts[accounts["account_type"].astype(str).str.upper() == "BANQUE"].copy()
+    for _, acc in df_banks.iterrows():
+        acc_id = int(acc["id"])
+        acc_ccy = str(acc.get("currency", "EUR") or "EUR").upper()
+
+        try:
+            is_container = repo.is_bank_container(conn, acc_id)
+        except Exception:
+            is_container = False
+
+        total_native = 0.0
+        if is_container:
+            subs = repo.list_bank_subaccounts(conn, acc_id)
+            if subs is not None and not subs.empty:
+                for _, s in subs.iterrows():
+                    sub_id = int(s["sub_account_id"])  # ✅ comme liquidites_overview.py
+                    tx = repo.list_transactions(conn, person_id=person_id, account_id=sub_id, limit=100000)
+                    if tx is not None and not tx.empty:
+                        for _, r in tx.iterrows():
+                            total_native += float(r.get("amount", 0.0) or 0.0) * sens_flux(str(r.get("type", "")))
+        else:
+            tx = repo.list_transactions(conn, person_id=person_id, account_id=acc_id, limit=100000)
+            if tx is not None and not tx.empty:
+                for _, r in tx.iterrows():
+                    total_native += float(r.get("amount", 0.0) or 0.0) * sens_flux(str(r.get("type", "")))
+
+        bank_total_eur += float(_fx_to_eur(conn, total_native, acc_ccy))
+
+    bank_total_eur = round(float(bank_total_eur), 2)
+
+    # ---- BOURSE (cash uniquement) : uniquement PEA/CTO
+    bourse_total_eur = 0.0
+    df_bourse = accounts[accounts["account_type"].astype(str).str.upper().isin(["PEA", "CTO"])].copy()
+    for _, acc in df_bourse.iterrows():
+        acc_id = int(acc["id"])
+        acc_ccy = str(acc.get("currency", "EUR") or "EUR").upper()
+
+        tx = repo.list_transactions(conn, person_id=person_id, account_id=acc_id, limit=100000)
+        cash_native = 0.0
+        if tx is not None and not tx.empty:
+            df = tx.copy()
+            df["type"] = df["type"].astype(str)
+            df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
+            df["fees"] = pd.to_numeric(df.get("fees", 0.0), errors="coerce").fillna(0.0)
+
+            cash_native += float(df.loc[df["type"] == "DEPOT", "amount"].sum())
+            cash_native -= float(df.loc[df["type"] == "RETRAIT", "amount"].sum())
+            cash_native -= float(df.loc[df["type"] == "ACHAT", "amount"].sum())
+            cash_native += float(df.loc[df["type"] == "VENTE", "amount"].sum())
+            cash_native += float(df.loc[df["type"] == "DIVIDENDE", "amount"].sum())
+            cash_native += float(df.loc[df["type"] == "INTERETS", "amount"].sum())
+            cash_native -= float(df.loc[df["type"] == "FRAIS", "amount"].sum())
+            cash_native -= float(df["fees"].sum())
+
+        bourse_total_eur += float(_fx_to_eur(conn, cash_native, acc_ccy))
+
+    bourse_total_eur = round(float(bourse_total_eur), 2)
+
+    # ---- PRIVATE EQUITY cash plateformes
+    pe_cash_tx = pe_cash_repo.list_pe_cash_transactions(conn, person_id=person_id)
+    pe_total_eur = 0.0
+    if pe_cash_tx is not None and not pe_cash_tx.empty:
+        df = pe_cash_tx.copy()
+        df["tx_type"] = df["tx_type"].astype(str).str.upper()
+        df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
+        # on suppose en EUR (comme ton onglet)
+        pe_total_eur = float(df.apply(lambda r: float(r["amount"]) if r["tx_type"] == "DEPOSIT" else -float(r["amount"]), axis=1).sum())
+    pe_total_eur = round(float(pe_total_eur), 2)
+
+    total = round(float(bank_total_eur + bourse_total_eur + pe_total_eur), 2)
+    return bank_total_eur, bourse_total_eur, pe_total_eur, total
+
+
+def _compute_bank_cash_eur(conn, person_id: int) -> float:
+    accounts = repo.list_accounts(conn, person_id=person_id)
+    if accounts is None or accounts.empty:
+        return 0.0
+
+    bank_total_eur = 0.0
+
+    df_banks = accounts[accounts["account_type"].astype(str).str.upper() == "BANQUE"].copy()
+    for _, acc in df_banks.iterrows():
+        acc_id = int(acc["id"])
+        acc_ccy = str(acc.get("currency", "EUR") or "EUR").upper()
+
+        try:
+            is_container = repo.is_bank_container(conn, acc_id)
+        except Exception:
+            is_container = False
+
+        if is_container:
+            subs = repo.list_bank_subaccounts(conn, acc_id)
+            total_native = 0.0
+            for _, s in subs.iterrows():
+                # ✅ chez toi c'est sub_account_id (pas id)
+                sub_id = int(s["sub_account_id"])
+                tx = repo.list_transactions(conn, person_id=person_id, account_id=sub_id, limit=100000)
+                total_native += _bank_balance_from_tx(tx)
+            total_native = float(round(total_native, 2))
+        else:
+            tx = repo.list_transactions(conn, person_id=person_id, account_id=acc_id, limit=100000)
+            total_native = _bank_balance_from_tx(tx)
+
+        bank_total_eur += float(round(_fx_to_eur(conn, total_native, acc_ccy), 2))
+
+    return round(float(bank_total_eur), 2)
 
 def _broker_cash_from_tx(tx: pd.DataFrame) -> float:
-    """Cash d'un compte bourse (PEA/CTO) calculé à partir des transactions."""
     if tx is None or tx.empty:
         return 0.0
 
@@ -38,8 +158,6 @@ def _broker_cash_from_tx(tx: pd.DataFrame) -> float:
     cash += float(df.loc[df["type"] == "DIVIDENDE", "amount"].sum())
     cash += float(df.loc[df["type"] == "INTERETS", "amount"].sum())
     cash -= float(df.loc[df["type"] == "FRAIS", "amount"].sum())
-
-    # On retire aussi la colonne fees (frais associés aux ops)
     cash -= float(df["fees"].sum())
 
     return float(round(cash, 2))
@@ -70,7 +188,6 @@ def _pe_cash_by_platform(cash_tx: pd.DataFrame) -> pd.DataFrame:
 
 
 def _fx_to_eur(conn, amount: float, ccy: str) -> float:
-    """Convertit vers EUR avec le dernier taux connu (si dispo)."""
     ccy = (ccy or "EUR").upper()
     if ccy == "EUR":
         return float(amount)
@@ -80,15 +197,14 @@ def _fx_to_eur(conn, amount: float, ccy: str) -> float:
         rate = float(row["rate"]) if isinstance(row, dict) else float(row[0])
         return float(amount) * rate
 
-    # Tente l'inverse EUR->CCY
     row2 = repo.get_latest_fx_rate(conn, base_ccy="EUR", quote_ccy=ccy)
     if row2 is not None:
         rate = float(row2["rate"]) if isinstance(row2, dict) else float(row2[0])
         if abs(rate) > 1e-12:
             return float(amount) / rate
 
-    # Pas de taux : on renvoie tel quel (mieux que planter)
     return float(amount)
+
 
 def _kpi_card(title: str, value: str, subtitle: str = "", emoji: str = "", tone: str = "neutral"):
     tones = {

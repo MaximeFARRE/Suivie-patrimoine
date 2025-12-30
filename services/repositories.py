@@ -308,3 +308,83 @@ def get_fx_rate_asof_or_before(conn: sqlite3.Connection, base_ccy: str, quote_cc
         """,
         (base_ccy, quote_ccy, asof),
     ).fetchone()
+
+
+# -------- Patrimoine snapshots --------
+def upsert_patrimoine_snapshot(
+    conn: sqlite3.Connection,
+    person_id: int,
+    snapshot_date: str,
+    created_at: str,
+    mode: str,
+    patrimoine_net: float,
+    patrimoine_brut: float,
+    liquidites_total: float,
+    bank_cash: float,
+    bourse_cash: float,
+    pe_cash: float,
+    bourse_holdings: float,
+    pe_value: float,
+    ent_value: float,
+    credits_remaining: float,
+    notes: str = None,
+):
+    conn.execute(
+        """
+        INSERT INTO patrimoine_snapshots(
+            person_id, snapshot_date, created_at, mode,
+            patrimoine_net, patrimoine_brut,
+            liquidites_total, bank_cash, bourse_cash, pe_cash,
+            bourse_holdings, pe_value, ent_value, credits_remaining,
+            notes
+        )
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(person_id, snapshot_date) DO UPDATE SET
+            created_at = excluded.created_at,
+            mode = excluded.mode,
+            patrimoine_net = excluded.patrimoine_net,
+            patrimoine_brut = excluded.patrimoine_brut,
+            liquidites_total = excluded.liquidites_total,
+            bank_cash = excluded.bank_cash,
+            bourse_cash = excluded.bourse_cash,
+            pe_cash = excluded.pe_cash,
+            bourse_holdings = excluded.bourse_holdings,
+            pe_value = excluded.pe_value,
+            ent_value = excluded.ent_value,
+            credits_remaining = excluded.credits_remaining,
+            notes = excluded.notes
+        ;
+        """,
+        (
+            person_id, snapshot_date, created_at, mode,
+            float(patrimoine_net), float(patrimoine_brut),
+            float(liquidites_total), float(bank_cash), float(bourse_cash), float(pe_cash),
+            float(bourse_holdings), float(pe_value), float(ent_value), float(credits_remaining),
+            notes,
+        ),
+    )
+    conn.commit()
+
+
+def count_snapshots_for_date(conn: sqlite3.Connection, snapshot_date: str) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM patrimoine_snapshots WHERE snapshot_date = ?;",
+        (snapshot_date,),
+    ).fetchone()
+    return int(row["c"]) if row else 0
+
+
+def list_patrimoine_snapshots(conn: sqlite3.Connection, person_id: int) -> pd.DataFrame:
+    rows = conn.execute(
+        """
+        SELECT snapshot_date, created_at, mode,
+               patrimoine_net, patrimoine_brut,
+               liquidites_total, bank_cash, bourse_cash, pe_cash,
+               bourse_holdings, pe_value, ent_value, credits_remaining
+        FROM patrimoine_snapshots
+        WHERE person_id = ?
+        ORDER BY snapshot_date ASC;
+        """,
+        (person_id,),
+    ).fetchall()
+    return df_from_rows(rows)

@@ -19,6 +19,7 @@ from ui.private_equity_overview import afficher_private_equity_overview
 from ui.compte_bourse import afficher_compte_bourse
 from ui.entreprises_overview import afficher_entreprises_overview
 from ui.liquidites_overview import afficher_liquidites_overview 
+from ui.vue_ensemble_overview import afficher_vue_ensemble_overview
 from utils.format_monnaie import money
 
 
@@ -30,6 +31,13 @@ def main():
 
     conn = cached_conn()
     people = repo.list_people(conn)
+    
+    try:
+        from ui.vue_ensemble_overview import ensure_daily_snapshots_for_all_people
+        ensure_daily_snapshots_for_all_people(conn, mode="AUTO", force_refresh_prices=True)
+    except Exception:
+        pass
+
 
     st.title("Personnes")
 
@@ -41,8 +49,7 @@ def main():
     tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit", "Private Equity", "Entreprises", "Liquidités"])
 
     with tabs_fixes[0]:
-        st.subheader("Vue d’ensemble")
-        st.caption("On garde l’existant ici (KPI, aperçu, etc.)")
+        afficher_vue_ensemble_overview(conn, person_id=person_id)
 
     with tabs_fixes[1]:
         onglet_depenses(conn, person_id=person_id, key_prefix=f"p{person_id}_dep")
