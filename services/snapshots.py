@@ -395,3 +395,189 @@ def rebuild_snapshots_person(conn, person_id: int, lookback_days: int = 90) -> d
 
     conn.commit()
     return {"did_run": True, "n_weeks": len(weeks), "start": weeks[0], "end": weeks[-1], "n_ok": n_ok}
+
+
+def rebuild_snapshots_person_missing_only(
+    conn,
+    person_id: int,
+    lookback_days: int = 90,
+    recalc_days: int = 0,
+) -> dict:
+    """
+    Rebuild intelligent :
+    - Crée UNIQUEMENT les snapshots weekly manquantes dans la fenêtre lookback_days
+    - Optionnel: recalc les X derniers jours (fenêtre glissante) même si déjà présents
+      (recalc_days=0 => pas de recalcul supplémentaire)
+    """
+    end = market_history.week_start(_today_paris_date())
+    start = end - dt.timedelta(days=int(lookback_days))
+    weeks = _list_weeks(start, end)
+    if not weeks:
+        return {"did_run": False, "reason": "no_weeks"}
+
+    # 1) semaines existantes en base
+    df_have = pd.read_sql_query(
+        """
+        SELECT week_date
+        FROM patrimoine_snapshots_weekly
+        WHERE person_id = ?
+          AND week_date >= ?
+          AND week_date <= ?
+        """,
+        conn,
+        params=(int(person_id), str(weeks[0]), str(weeks[-1])),
+    )
+    have = set()
+    if df_have is not None and not df_have.empty:
+        have = set(df_have["week_date"].astype(str).tolist())
+
+    missing = [wd for wd in weeks if wd not in have]
+
+    # 2) fenêtre glissante optionnelle (recalc)
+    recalc_weeks = []
+    if int(recalc_days) > 0:
+        recalc_start = end - dt.timedelta(days=int(recalc_days))
+        recalc_weeks = _list_weeks(recalc_start, end)
+
+    # 3) semaines à traiter = missing + recalc_weeks (unique)
+    todo = sorted(set(missing + recalc_weeks))
+    if not todo:
+        return {"did_run": False, "reason": "nothing_to_do", "n_missing": 0, "n_recalc": 0}
+
+    # --- Même logique que rebuild_snapshots_person pour récupérer tickers + FX
+    tx = repo.list_transactions(conn, person_id=person_id, limit=300000)
+    symbols = []
+    pairs = set()
+
+    if tx is not None and not tx.empty:
+        tx2 = tx[tx["asset_symbol"].notna()].copy()
+        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
+
+        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
+        if asset_ids:
+            q = ",".join(["?"] * len(asset_ids))
+            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
+            for r in rows:
+                ccy = (r["currency"] or "EUR").upper()
+                if ccy != "EUR":
+                    pairs.add((ccy, "EUR"))
+
+    # Import weekly market data (sur l'intervalle global, simple et safe)
+    if symbols:
+        market_history.sync_asset_prices_weekly(conn, symbols, weeks[0], weeks[-1])
+    if pairs:
+        market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
+
+    # 4) upsert uniquement semaines todo
+    n_ok = 0
+    for wd in todo:
+        payload = compute_weekly_snapshot_person(conn, person_id, wd)
+        upsert_weekly_snapshot(conn, person_id, wd, mode="REBUILD", payload=payload)
+        n_ok += 1
+
+    conn.commit()
+    return {
+        "did_run": True,
+        "mode": "MISSING_ONLY",
+        "person_id": int(person_id),
+        "window_start": weeks[0],
+        "window_end": weeks[-1],
+        "n_missing": len(missing),
+        "n_recalc": len(recalc_weeks),
+        "n_done": len(todo),
+        "n_ok": n_ok,
+    }
+
+def rebuild_snapshots_person_from_last(
+    conn,
+    person_id: int,
+    safety_weeks: int = 4,
+    fallback_lookback_days: int = 90,
+) -> dict:
+    """
+    Rebuild "quotidien" ultra rapide :
+    - Cherche la dernière snapshot weekly existante pour la personne
+    - Rebuild depuis cette date jusqu'à aujourd'hui
+    - + recalcul d'une fenêtre de sécurité (safety_weeks) pour corriger les incohérences récentes
+    - Si aucune snapshot n'existe, fallback sur lookback_days (90j)
+
+    ⚠️ Ne casse pas l'existant : fonction additive.
+    """
+    end = market_history.week_start(_today_paris_date())
+
+    # 1) Dernière snapshot existante
+    row = conn.execute(
+        "SELECT MAX(week_date) AS d FROM patrimoine_snapshots_weekly WHERE person_id=?",
+        (int(person_id),),
+    ).fetchone()
+
+    last_week = None
+    if row and row["d"]:
+        try:
+            last_week = pd.to_datetime(row["d"], errors="coerce")
+            if pd.isna(last_week):
+                last_week = None
+        except Exception:
+            last_week = None
+
+    # 2) Définir start
+    if last_week is None:
+        # aucun historique => fallback fenêtre 90j
+        start = end - dt.timedelta(days=int(fallback_lookback_days))
+        start = market_history.week_start(start)
+        mode = "FROM_LAST_FALLBACK"
+    else:
+        # on recule d'une fenêtre de sécurité
+        start = (last_week.date() - dt.timedelta(days=int(safety_weeks) * 7))
+        start = market_history.week_start(start)
+        mode = "FROM_LAST"
+
+    weeks = _list_weeks(start, end)
+    if not weeks:
+        return {"did_run": False, "reason": "no_weeks", "mode": mode}
+
+    # 3) Import marché (comme rebuild_snapshots_person) sur la période utile
+    tx = repo.list_transactions(conn, person_id=person_id, limit=300000)
+    symbols = []
+    pairs = set()
+
+    if tx is not None and not tx.empty:
+        tx2 = tx[tx["asset_symbol"].notna()].copy()
+        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
+
+        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
+        if asset_ids:
+            q = ",".join(["?"] * len(asset_ids))
+            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
+            for r in rows:
+                ccy = (r["currency"] or "EUR").upper()
+                if ccy != "EUR":
+                    pairs.add((ccy, "EUR"))
+
+    if symbols:
+        market_history.sync_asset_prices_weekly(conn, symbols, weeks[0], weeks[-1])
+    if pairs:
+        market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
+
+    # 4) Traitement :
+    # - Toujours recalculer toutes les semaines dans weeks (petit volume, rapide)
+    #   (car on inclut la fenêtre de sécurité)
+    n_ok = 0
+    for wd in weeks:
+        payload = compute_weekly_snapshot_person(conn, person_id, wd)
+        upsert_weekly_snapshot(conn, person_id, wd, mode="REBUILD", payload=payload)
+        n_ok += 1
+
+    conn.commit()
+
+    return {
+        "did_run": True,
+        "mode": mode,
+        "person_id": int(person_id),
+        "start": weeks[0],
+        "end": weeks[-1],
+        "safety_weeks": int(safety_weeks),
+        "fallback_lookback_days": int(fallback_lookback_days),
+        "n_weeks": len(weeks),
+        "n_ok": n_ok,
+    }

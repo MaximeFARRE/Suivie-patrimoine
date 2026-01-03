@@ -144,4 +144,27 @@ def ensure_weekly_tables(conn):
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_psw_person_week ON patrimoine_snapshots_weekly(person_id, week_date);")
+    
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS patrimoine_snapshots_family_weekly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    family_id INTEGER DEFAULT 1,
+    week_date TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    mode TEXT DEFAULT 'REBUILD',
+
+    patrimoine_net REAL DEFAULT 0,
+    patrimoine_brut REAL DEFAULT 0,
+    liquidites_total REAL DEFAULT 0,
+    bourse_holdings REAL DEFAULT 0,
+    pe_value REAL DEFAULT 0,
+    ent_value REAL DEFAULT 0,
+    credits_remaining REAL DEFAULT 0,
+
+    notes TEXT,
+    UNIQUE(family_id, week_date)
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_psfw_family_week ON patrimoine_snapshots_family_weekly(family_id, week_date);")
     conn.commit()
+

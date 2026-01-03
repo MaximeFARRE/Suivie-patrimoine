@@ -5,6 +5,7 @@ import plotly.express as px
 from utils.format_monnaie import money
 from services import snapshots as wk_snap
 from services import bourse_analytics as ba
+from services import diagnostics as diag
 
 
 def afficher_bourse_global_overview(conn, person_id: int):
@@ -279,3 +280,29 @@ def afficher_bourse_global_overview(conn, person_id: int):
         st.info("Aucun sous-compte bourse détecté.")
     else:
         st.dataframe(df_break, use_container_width=True, hide_index=True)
+
+
+    with st.expander("🛠️ Diagnostic (qualité des données)", expanded=False):
+        info_dates = diag.last_market_dates(conn)
+        st.write("**Dernières données en base**")
+        st.write(f"- Prix weekly : {info_dates.get('last_price_week')}")
+        st.write(f"- FX weekly   : {info_dates.get('last_fx_week')}")
+
+        d = diag.diagnose_bourse_asof(conn, person_id=person_id, asof_week_date=asof_date)
+        if not d.get("ok"):
+            st.warning(f"Diagnostic impossible: {d.get('reason')}")
+        else:
+            st.write(f"**Positions détectées : {d.get('positions', 0)}**")
+
+            mp = d.get("missing_prices", [])
+            mf = d.get("missing_fx", [])
+
+            if mp:
+                st.error(f"Tickers sans prix weekly (as-of {asof_date}) : {', '.join(mp[:25])}" + (" ..." if len(mp) > 25 else ""))
+            else:
+                st.success("Tous les tickers ont un prix weekly ✅")
+
+            if mf:
+                st.error("FX manquants : " + ", ".join([f"{a}/{b}" for a,b in mf]))
+            else:
+                st.success("FX OK ✅")
