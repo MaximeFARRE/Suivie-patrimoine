@@ -110,12 +110,18 @@ def init_db() -> None:
 
     with get_conn() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
-        conn.executescript(schema_sql)
+
+        # ✅ Turso/libsql ne supporte pas executescript().
+        # On exécute le schema instruction par instruction.
+        statements = [s.strip() for s in schema_sql.split(";") if s.strip()]
+        for stmt in statements:
+            conn.execute(stmt)
+
         ensure_snapshots_table(conn)
         ensure_weekly_tables(conn)
 
-
         conn.commit()
+
 
 def ensure_snapshots_table(conn: sqlite3.Connection) -> None:
     conn.execute("""
