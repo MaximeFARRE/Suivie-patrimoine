@@ -174,7 +174,7 @@ def _pe_cash_asof_eur(conn, person_id: int, week_date: str) -> float:
     if df is None or df.empty:
         return 0.0
     d = df.copy()
-    d["date"] = pd.to_datetime(d.get("date"), errors="coerce")
+    d["date"] = pd.to_datetime(d["date"] if "date" in d.columns else None, errors="coerce")
     d = d.dropna(subset=["date"])
     d = d[d["date"] <= pd.to_datetime(week_date)]
     if d.empty:
