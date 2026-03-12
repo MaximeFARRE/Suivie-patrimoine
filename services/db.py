@@ -81,7 +81,8 @@ def get_conn():
 
     # 3) Embedded replica: fichier local + sync_url vers Turso
     # NB: le fichier local peut être perdu sur Streamlit, mais sync() le rehydrate
-    conn = libsql.connect(str(DB_PATH), sync_url=url, auth_token=token)
+    replica_path = str(DB_PATH).replace(".db", "_turso.db")
+    conn = libsql.connect(replica_path, sync_url=url, auth_token=token)
 
     # Sync au démarrage pour récupérer l'état Turso
     try:
@@ -102,6 +103,13 @@ def get_conn():
 
     return SyncedLibsqlConn(conn)
 
+def _row_get(row, key: str, idx: int = 0):
+    if row is None:
+        return None
+    try:
+        return row[key]
+    except Exception:
+        return row[idx]
 
 
 def init_db() -> None:
@@ -182,16 +190,18 @@ def seed_minimal() -> None:
             conn.commit()
 
         # Accounts
-        c2 = conn.execute("SELECT COUNT(*) AS c FROM accounts;").fetchone()["c"]
+        row = conn.execute("SELECT COUNT(*) AS c FROM accounts;").fetchone()
+        c2 = _row_value(row, "c", 0)
         if c2 == 0:
             people = conn.execute("SELECT id, name FROM people ORDER BY id;").fetchall()
             for p in people:
+                person_id = _row_value(p, "id", 0)
                 conn.execute(
                     """
                     INSERT INTO accounts(person_id, name, account_type, institution, currency)
                     VALUES (?,?,?,?,?)
                     """,
-                    (p["id"], "Banque principale", "BANQUE", None, "EUR"),
+                    (person_id, "Banque principale", "BANQUE", None, "EUR"),
                 )
             conn.commit()
 

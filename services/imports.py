@@ -318,7 +318,13 @@ def import_bankin_csv(
 
     # Option : remplir depenses/revenus (mensuel)
     if also_fill_monthly_tables:
-        # On ne purge pas tout : on "merge" par (person_id, mois, categorie)
+        # Supprimer les mois concernés avant ré-insert pour éviter les doublons
+        # lors de ré-importations successives du même fichier Bankin.
+        for mois in set(m for (m, _) in monthly_dep.keys()):
+            conn.execute("DELETE FROM depenses WHERE person_id = ? AND mois = ?", (person_id, mois))
+        for mois in set(m for (m, _) in monthly_rev.keys()):
+            conn.execute("DELETE FROM revenus WHERE person_id = ? AND mois = ?", (person_id, mois))
+
         for (mois, cat), total in monthly_dep.items():
             conn.execute(
                 """
