@@ -202,9 +202,13 @@ class VueEnsemblePanel(QWidget):
                     val_first = float(first["patrimoine_net"])
                     n_years = (today - df_snap.iloc[0]["week_date"]).days / 365.25
                     if abs(val_first) > 1 and n_years > 0.1:
-                        cagr = ((net / val_first) ** (1 / n_years) - 1) * 100
-                        self._kpi_cagr.set_content("Rendement annualisé", f"{cagr:.1f}%",
-                                                    delta=f"{cagr:.1f}%", delta_positive=cagr >= 0)
+                        ratio = net / val_first
+                        if ratio > 0:
+                            cagr = (ratio ** (1 / n_years) - 1) * 100
+                            self._kpi_cagr.set_content("Rendement annualisé", f"{cagr:.1f}%",
+                                                        delta=f"{cagr:.1f}%", delta_positive=cagr >= 0)
+                        else:
+                            self._kpi_cagr.set_content("Rendement annualisé", "—")
             except Exception as e:
                 logger.warning("Calcul des performances échoué : %s", e)
 
