@@ -59,7 +59,7 @@ class LiquiditesPanel(QWidget):
 
     def _load_data(self) -> None:
         try:
-            from ui.liquidites_overview import _compute_liquidites_like_overview
+            from services.liquidites import _compute_liquidites_like_overview
             bank_cash, bourse_cash, pe_cash, total = _compute_liquidites_like_overview(
                 self._conn, self._person_id
             )
