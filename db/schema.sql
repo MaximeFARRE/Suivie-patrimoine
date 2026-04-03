@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS credits (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   person_id INTEGER NOT NULL,
   account_id INTEGER NOT NULL,           -- le sous-compte de type CREDIT
+  payer_account_id INTEGER,              -- compte bancaire payeur
   nom TEXT NOT NULL,
   banque TEXT,
   type_credit TEXT,                     -- immo / conso / auto / etudiant / autre
