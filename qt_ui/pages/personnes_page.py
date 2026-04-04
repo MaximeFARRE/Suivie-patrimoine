@@ -46,7 +46,8 @@ def _make_account_panel(conn, person_id: int, account_id: int, account_type: str
     if atype == "BANQUE":
         from qt_ui.panels.compte_banque_panel import CompteBanquePanel
         return CompteBanquePanel(conn, person_id, account_id, parent=parent)
-    elif atype in ("PEA", "CTO", "CRYPTO"):
+    elif atype in ("PEA", "PEA_PME", "CTO", "CRYPTO",
+                   "ASSURANCE_VIE", "PER", "PEE"):
         from qt_ui.panels.compte_bourse_panel import CompteBoursePanel
         return CompteBoursePanel(conn, person_id, account_id, atype, parent=parent)
     elif atype == "CREDIT":

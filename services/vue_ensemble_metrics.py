@@ -34,7 +34,7 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
 
     Clés retournées (toutes peuvent être None si données insuffisantes) :
         Snapshot courant :
-            net, brut, liq, bourse, credits, pe_value, ent_value, week_date
+            net, brut, liq, bourse, credits, pe_value, ent_value, immobilier_value, week_date
         Historiques :
             net_13w, net_52w
         Santé patrimoniale :
@@ -71,6 +71,7 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
     m["credits"]   = _sf(last.get("credits_remaining"))
     m["pe_value"]  = _sf(last.get("pe_value"))
     m["ent_value"] = _sf(last.get("ent_value"))
+    m["immo_value"] = _sf(last.get("immobilier_value"))
     m["week_date"] = str(last.get("week_date", "—"))
 
     # ── 2. Patrimoine net historique ──────────────────────────────────────
@@ -119,9 +120,9 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
     brut = m["brut"]
     if brut > 0:
         m["taux_endettement"]  = m["credits"] / brut * 100
-        m["part_liquide"]      = m["liq"] / brut * 100
+        m["part_liquide"]       = m["liq"] / brut * 100
         m["exposition_marches"] = (m["bourse"] + m["pe_value"]) / brut * 100
-        m["actifs_illiquides"] = (m["ent_value"] + m["pe_value"]) / brut * 100
+        m["actifs_illiquides"]  = (m["ent_value"] + m["pe_value"] + m["immo_value"]) / brut * 100
     else:
         m["taux_endettement"]   = None
         m["part_liquide"]       = None

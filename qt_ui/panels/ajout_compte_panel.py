@@ -14,7 +14,16 @@ from qt_ui.theme import (
 
 logger = logging.getLogger(__name__)
 
-TYPES_COMPTE = ["BANQUE", "PEA", "CTO", "CRYPTO", "IMMOBILIER", "CREDIT", "PE"]
+TYPES_COMPTE = [
+    "BANQUE",
+    "PEA",
+    "PEA_PME",
+    "CTO",
+    "CRYPTO",
+    "ASSURANCE_VIE",
+    "PER",
+    "PEE",
+]
 DEVISES = ["EUR", "USD", "CHF", "GBP", "JPY"]
 
 
