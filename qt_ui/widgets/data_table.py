@@ -16,9 +16,11 @@ from qt_ui.theme import BG_CARD, BG_CARD_ALT, STYLE_TABLE, STYLE_INPUT
 class PandasTableModel(QAbstractTableModel):
     """Modèle Qt pour afficher un DataFrame pandas dans un QTableView."""
 
-    def __init__(self, df: pd.DataFrame = None, parent=None):
+    def __init__(self, df: pd.DataFrame = None, column_colors: dict = None, parent=None):
         super().__init__(parent)
         self._df = df if df is not None else pd.DataFrame()
+        # column_colors: dict[str, callable(value) -> hex_str | None]
+        self._column_colors: dict = column_colors or {}
 
     def rowCount(self, parent=QModelIndex()) -> int:
         return len(self._df)
@@ -49,6 +51,14 @@ class PandasTableModel(QAbstractTableModel):
             return QColor(BG_CARD_ALT)
 
         if role == Qt.ItemDataRole.ForegroundRole:
+            col_name = self._df.columns[index.column()]
+            if col_name in self._column_colors:
+                try:
+                    color = self._column_colors[col_name](self._df.iloc[index.row(), index.column()])
+                    if color:
+                        return QColor(color)
+                except Exception:
+                    pass
             return QColor("#e0e0e0")
 
         return None
@@ -64,6 +74,11 @@ class PandasTableModel(QAbstractTableModel):
         self.beginResetModel()
         self._df = df if df is not None else pd.DataFrame()
         self.endResetModel()
+
+    def set_column_colors(self, column_colors: dict) -> None:
+        self._column_colors = column_colors or {}
+        if not self._df.empty:
+            self.layoutChanged.emit()
 
     def get_dataframe(self) -> pd.DataFrame:
         return self._df.copy()
@@ -119,6 +134,10 @@ class DataTableWidget(QWidget):
 
     def get_dataframe(self) -> pd.DataFrame:
         return self._model.get_dataframe()
+
+    def set_column_colors(self, column_colors: dict) -> None:
+        """Définit des fonctions de couleur par colonne. Ex: {"PnL (€)": lambda v: "#4ade80" if v >= 0 else "#f87171"}"""
+        self._model.set_column_colors(column_colors)
 
     def _on_filter_changed(self, text: str) -> None:
         if not text.strip() or self._full_df.empty:

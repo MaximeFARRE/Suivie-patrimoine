@@ -42,6 +42,9 @@ KPI_TONES = {
     "bank":    ("#0B3B2E", "#D1FAE5"),
     "broker":  ("#1E3A8A", "#DBEAFE"),
     "pe":      ("#4C1D95", "#EDE9FE"),
+    # Tones dynamiques (gain/perte)
+    "success": ("#0a2e1a", "#4ade80"),
+    "alert":   ("#2e0a0a", "#f87171"),
 }
 
 # ─── Couleurs spécifiques ─────────────────────────────────────────────────
