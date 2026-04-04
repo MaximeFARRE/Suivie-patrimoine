@@ -16,7 +16,7 @@ from PyQt6.QtCore import Qt
 from qt_ui.theme import (
     BG_PRIMARY, STYLE_TITLE, STYLE_SECTION, STYLE_STATUS, STYLE_GROUP,
     COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, CHART_GREEN, CHART_RED,
-    TEXT_MUTED, plotly_layout,
+    TEXT_MUTED, plotly_layout, plotly_time_series_layout,
 )
 from qt_ui.widgets import KpiCard, PlotlyView, DataTableWidget, LoadingOverlay
 
@@ -100,7 +100,7 @@ class TauxEpargnePanel(QWidget):
         box_hist = QGroupBox("Historique du taux d'épargne (24 derniers mois)")
         box_hist.setStyleSheet(STYLE_GROUP)
         box_hist_v = QVBoxLayout(box_hist)
-        self._chart_hist = PlotlyView(min_height=300)
+        self._chart_hist = PlotlyView(min_height=360)
         box_hist_v.addWidget(self._chart_hist)
         layout.addWidget(box_hist)
 
@@ -235,36 +235,35 @@ class TauxEpargnePanel(QWidget):
     def _build_chart(self, df: pd.DataFrame) -> None:
         """Construit le graphique barre + ligne taux + zone objectif 20%."""
         try:
-            df = df.copy()
-            df["mois_label"] = pd.to_datetime(df["mois"], errors="coerce").dt.strftime("%b %Y")
+            df["_dt"] = pd.to_datetime(df["mois"], errors="coerce")
             df["bar_color"] = df["taux_epargne"].apply(_color_for_rate)
 
             fig = go.Figure()
 
             # Barres revenus (fond semi-transparent)
             fig.add_trace(go.Bar(
-                x=df["mois_label"], y=df["revenus"],
+                x=df["_dt"], y=df["revenus"],
                 name="Revenus", marker_color="rgba(96,165,250,0.25)",
-                hovertemplate="<b>%{x}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
+                hovertemplate="<b>%{x|%b %Y}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
             ))
 
             # Barres dépenses
             fig.add_trace(go.Bar(
-                x=df["mois_label"], y=df["depenses"],
+                x=df["_dt"], y=df["depenses"],
                 name="Dépenses", marker_color="rgba(239,68,68,0.35)",
-                hovertemplate="<b>%{x}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
+                hovertemplate="<b>%{x|%b %Y}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
             ))
 
             # Ligne taux d'épargne (axe secondaire Y2)
             df_valid = df.dropna(subset=["taux_epargne"])
             if not df_valid.empty:
                 fig.add_trace(go.Scatter(
-                    x=df_valid["mois_label"], y=df_valid["taux_epargne"],
+                    x=df_valid["_dt"], y=df_valid["taux_epargne"],
                     name="Taux d'épargne", yaxis="y2",
                     mode="lines+markers",
                     line=dict(color=COLOR_SUCCESS, width=2.5),
                     marker=dict(size=7, color=df_valid["taux_epargne"].apply(_color_for_rate)),
-                    hovertemplate="<b>%{x}</b><br>Taux : %{y:.1f} %<extra></extra>",
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Taux : %{y:.1f} %<extra></extra>",
                 ))
 
             # Ligne objectif 20% (en pointillés)
@@ -284,8 +283,8 @@ class TauxEpargnePanel(QWidget):
             )
 
             fig.update_layout(
-                **plotly_layout(barmode="group", margin=dict(l=10, r=10, t=10, b=10)),
-                xaxis=dict(title="", showgrid=False, tickangle=-35),
+                **plotly_time_series_layout(barmode="group", margin=dict(l=10, r=10, t=40, b=10)),
+                xaxis=dict(title="", showgrid=False, tickformat="%b %Y"),
                 yaxis=dict(
                     title="Montant (€)", showgrid=True, gridcolor="#1e2538",
                     tickformat=",.0f", ticksuffix=" €",
@@ -294,6 +293,7 @@ class TauxEpargnePanel(QWidget):
                     title="Taux (%)", overlaying="y", side="right",
                     showgrid=False, ticksuffix=" %",
                     zeroline=True, zerolinecolor="#334155", zerolinewidth=1,
+                    range=[-10, 100]
                 ),
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.02,

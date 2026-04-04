@@ -16,7 +16,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from qt_ui.theme import (
     BG_PRIMARY, STYLE_BTN_PRIMARY, STYLE_GROUP, STYLE_SECTION,
     STYLE_SECTION_MARGIN, STYLE_STATUS, CHART_GREEN, CHART_RED,
-    plotly_layout, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, TEXT_MUTED,
+    plotly_layout, plotly_time_series_layout, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, TEXT_MUTED,
 )
 from qt_ui.widgets import PlotlyView, KpiCard, MetricLabel, LoadingOverlay
 from utils.format_monnaie import money
@@ -230,7 +230,7 @@ class VueEnsemblePanel(QWidget):
         lbl_ev = QLabel("📈 Évolution du patrimoine net (weekly)")
         lbl_ev.setStyleSheet(STYLE_SECTION_MARGIN)
         layout.addWidget(lbl_ev)
-        self._chart_line = PlotlyView(min_height=300)
+        self._chart_line = PlotlyView(min_height=350)
         layout.addWidget(self._chart_line)
 
         # ── Graphiques allocation + cashflow côte à côte ──────────────────
@@ -519,7 +519,7 @@ class VueEnsemblePanel(QWidget):
                 template="plotly_dark",
                 labels={"_dt": "Semaine", "patrimoine_net": "Patrimoine net (€)"},
             )
-            fig.update_layout(**plotly_layout())
+            fig.update_layout(**plotly_time_series_layout())
             self._chart_line.set_figure(fig)
         except Exception as exc:
             logger.warning("_build_line_chart error: %s", exc)
