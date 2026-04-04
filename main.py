@@ -82,53 +82,50 @@ def _backup_database():
     backup_dir.mkdir(exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     files_to_backup = [
-        "patrimoine.db",
-        "patrimoine_turso.db",
-        "patrimoine_turso.db-info"
+        ("patrimoine.db",           f"patrimoine_{timestamp}.db"),
+        ("patrimoine_turso.db",     f"patrimoine_turso_{timestamp}.db"),
+        ("patrimoine_turso.db-info", f"patrimoine_turso_{timestamp}.db-info"),
     ]
-    
+
     backed_up = False
-    for filename in files_to_backup:
+    for filename, destname in files_to_backup:
         src = _APP_DIR / filename
-        if src.exists():
-            if ".db-info" in filename:
-                dest = backup_dir / f"patrimoine_turso_{timestamp}.db-info"
+        if not src.exists():
+            continue
+        dest = backup_dir / destname
+        try:
+            if src.is_dir():
+                shutil.copytree(str(src), str(dest), dirs_exist_ok=True)
             else:
-                dest = backup_dir / filename.replace(".db", f"_{timestamp}.db")
-                
-            try:
-                if src.is_dir():
-                    import shutil
-                    shutil.copytree(src, dest, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(src, dest)
-                logger.info("Sauvegarde DB → %s", dest)
-                backed_up = True
-            except Exception as e:
-                logger.error("Échec sauvegarde %s : %s", filename, e)
+                shutil.copy2(str(src), str(dest))
+            logger.info("Sauvegarde DB → %s", dest)
+            backed_up = True
+        except Exception as e:
+            logger.error("Échec sauvegarde %s : %s", filename, e)
 
     if not backed_up:
         return
 
     # Rotation : ne garder que les 10 dernières de chaque type principal
-    for prefix in ["patrimoine_", "patrimoine_turso_"]:
-        # Ne cibler que les fichiers .db pour vérifier le quota des 10 backups
-        backups = sorted(backup_dir.glob(f"{prefix}*.db"), key=lambda p: str(p.name))
-        
+    for prefix in ["patrimoine_2", "patrimoine_turso_2"]:
+        backups = sorted(
+            [p for p in backup_dir.glob(f"{prefix}*.db") if p.is_file()],
+            key=lambda p: p.name
+        )
         while len(backups) > 10:
             old = backups.pop(0)
             try:
                 old.unlink()
-                # Tenter de supprimer le -info associé si présent
-                info_file = backup_dir / f"{old.stem}.db-info"
-                if info_file.exists():
-                    if info_file.is_dir():
-                        shutil.rmtree(info_file)
-                    else:
-                        info_file.unlink()
-                        
+                # Supprimer le .db-info associé si présent
+                for ext in [".db-info"]:
+                    companion = backup_dir / (old.stem + ext)
+                    if companion.exists():
+                        if companion.is_dir():
+                            shutil.rmtree(str(companion))
+                        else:
+                            companion.unlink()
                 logger.info("Ancienne sauvegarde supprimée : %s", old.name)
             except Exception:
                 pass
