@@ -7,12 +7,13 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy, QStatusBar
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon
 
 from qt_ui.pages.famille_page import FamillePage
 from qt_ui.pages.personnes_page import PersonnesPage
 from qt_ui.pages.import_page import ImportPage
+from qt_ui.pages.settings_page import SettingsPage
 from qt_ui.theme import (
     BG_PRIMARY, BG_SIDEBAR, BG_HOVER, BG_ACTIVE, BORDER_SUBTLE,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_DARK, TEXT_DISABLED,
@@ -20,6 +21,80 @@ from qt_ui.theme import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ── Background rebuild thread (AM-30) ────────────────────────────────────────
+
+class AutoRebuildThread(QThread):
+    """
+    Thread de rebuild automatique au lancement.
+
+    Crée sa propre connexion SQLite dédiée (isolation thread, BUG-01) et
+    lance rebuild_snapshots_person_from_last() pour chaque personne en
+    arrière-plan, sans bloquer l'UI.
+
+    Signaux :
+      progress(str)  — message de statut court affiché dans la status bar
+      finished_ok()  — rebuild terminé avec succès
+      finished_err(str) — rebuild terminé avec une erreur
+    """
+
+    progress = pyqtSignal(str)
+    finished_ok = pyqtSignal()
+    finished_err = pyqtSignal(str)
+
+    def run(self) -> None:
+        try:
+            import sqlite3
+            from services.db import DB_PATH
+            from services import repositories as repo
+            from services import snapshots as snap
+
+            # ── Connexion dédiée à ce thread ────────────────────────────
+            conn = sqlite3.connect(str(DB_PATH), check_same_thread=True)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON;")
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA cache_size = -32000;")   # 32 MB
+            conn.execute("PRAGMA synchronous = NORMAL;")
+
+            # ── Liste des personnes ─────────────────────────────────────
+            people = repo.list_people(conn)
+            if people is None or people.empty:
+                conn.close()
+                self.finished_ok.emit()
+                return
+
+            total = len(people)
+            for i, (_, person) in enumerate(people.iterrows(), start=1):
+                pid = int(person["id"])
+                name = str(person.get("name", f"#{pid}"))
+                self.progress.emit(
+                    f"🔄 Rebuild auto ({i}/{total}) — {name}…"
+                )
+                try:
+                    result = snap.rebuild_snapshots_person_from_last(
+                        conn,
+                        person_id=pid,
+                        safety_weeks=4,
+                        fallback_lookback_days=90,
+                    )
+                    logger.info(
+                        "AutoRebuild %s : %s",
+                        name,
+                        result,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "AutoRebuild %s — erreur ignorée : %s", name, exc
+                    )
+
+            conn.close()
+            self.finished_ok.emit()
+
+        except Exception as exc:
+            logger.error("AutoRebuildThread — erreur critique : %s", exc)
+            self.finished_err.emit(str(exc))
 
 
 class NavButton(QPushButton):
@@ -95,6 +170,15 @@ class NavSidebar(QFrame):
 
         layout.addStretch()
 
+        # ── Bouton Paramètres (bas de sidebar) ─────────────────────────────
+        layout.addWidget(self._make_separator())
+        self._btn_settings = QPushButton("⚙️  Paramètres")
+        self._btn_settings.setCheckable(True)
+        self._btn_settings.setStyleSheet(STYLE_NAV_BTN.format(color=TEXT_MUTED))
+        self._btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_settings.clicked.connect(lambda: main_window.show_page("settings"))
+        layout.addWidget(self._btn_settings)
+
         # Version
         ver = QLabel("v2.0 — Qt Desktop")
         ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -132,6 +216,7 @@ class NavSidebar(QFrame):
         self._btn_famille.setChecked(page == "famille")
         self._btn_personnes.setChecked(page == "personnes")
         self._btn_import.setChecked(page == "import")
+        self._btn_settings.setChecked(page == "settings")
         for btn in self._person_buttons:
             btn.setChecked(False)
 
@@ -158,12 +243,14 @@ class MainWindow(QMainWindow):
         self._page_famille = FamillePage(conn)
         self._page_personnes = PersonnesPage(conn)
         self._page_import = ImportPage(conn)
+        self._page_settings = SettingsPage(conn)
 
         # Stack
         self._stack = QStackedWidget()
         self._stack.addWidget(self._page_famille)
         self._stack.addWidget(self._page_personnes)
         self._stack.addWidget(self._page_import)
+        self._stack.addWidget(self._page_settings)
 
         # Sidebar
         self._sidebar = NavSidebar(self)
@@ -181,6 +268,39 @@ class MainWindow(QMainWindow):
 
         # Page initiale
         self.show_page("famille")
+
+        # ── Rebuild automatique au lancement (AM-30) ──────────────────────
+        # Déclenché 500ms après le show() pour laisser l'UI se rendre d'abord.
+        self._rebuild_thread: AutoRebuildThread | None = None
+        QTimer.singleShot(500, self._start_auto_rebuild)
+
+    def _start_auto_rebuild(self) -> None:
+        """Lance le rebuild automatique en background thread."""
+        self._rebuild_thread = AutoRebuildThread(self)
+        self._rebuild_thread.progress.connect(self._on_rebuild_progress)
+        self._rebuild_thread.finished_ok.connect(self._on_rebuild_done)
+        self._rebuild_thread.finished_err.connect(self._on_rebuild_error)
+        self._rebuild_thread.start()
+        logger.info("AutoRebuild démarré en background.")
+
+    def _on_rebuild_progress(self, msg: str) -> None:
+        self._status.showMessage(msg)
+
+    def _on_rebuild_done(self) -> None:
+        """Appelé dans le thread Qt principal après le rebuild réussi."""
+        logger.info("AutoRebuild terminé — rafraîchissement de la page active.")
+        self._status.showMessage("✅ Rebuild auto terminé — données à jour.", 5000)
+        # Rafraîchir la page courante si elle a une méthode refresh()
+        current = self._stack.currentWidget()
+        if hasattr(current, "refresh"):
+            try:
+                current.refresh()
+            except Exception as exc:
+                logger.warning("Refresh post-rebuild échoué : %s", exc)
+
+    def _on_rebuild_error(self, err: str) -> None:
+        logger.error("AutoRebuild échoué : %s", err)
+        self._status.showMessage(f"⚠️ Rebuild auto échoué : {err}", 8000)
 
     def _load_people(self) -> None:
         try:
@@ -202,6 +322,9 @@ class MainWindow(QMainWindow):
         elif page == "import":
             self._stack.setCurrentWidget(self._page_import)
             self._page_import.refresh()
+        elif page == "settings":
+            self._stack.setCurrentWidget(self._page_settings)
+            self._page_settings.refresh()
 
     def show_person(self, name: str) -> None:
         """Navigue vers la page Personnes et sélectionne la personne."""

@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel
+from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel, LoadingOverlay
 from qt_ui.panels.saisie_panel import SaisiePanel
 from qt_ui.theme import (
     BG_PRIMARY, STYLE_BTN_PRIMARY, STYLE_SECTION, STYLE_STATUS,
@@ -138,7 +138,14 @@ class CompteBoursePanel(QWidget):
         main_v.addWidget(tabs)
         self._tabs = tabs
         self._tabs.currentChanged.connect(self._on_tab_changed)
+
+        # ── Overlay de chargement ──────────────────────────────────────────
+        self._overlay = LoadingOverlay(self)
         self._load_dashboard()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.resize(self.size())
 
     def refresh(self) -> None:
         self._load_dashboard()
@@ -173,6 +180,7 @@ class CompteBoursePanel(QWidget):
         self._load_dashboard()
 
     def _load_dashboard(self) -> None:
+        self._overlay.start("Chargement du portefeuille…")
         try:
             from services import repositories as repo
             from services import portfolio
@@ -215,6 +223,8 @@ class CompteBoursePanel(QWidget):
 
         except Exception as e:
             logger.error("CompteBoursePanel._load_dashboard error: %s", e, exc_info=True)
+        finally:
+            self._overlay.stop()
 
     def _load_history(self) -> None:
         try:
