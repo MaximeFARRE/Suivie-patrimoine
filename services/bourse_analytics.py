@@ -670,6 +670,8 @@ def get_tickers_diagnostic_df(conn, person_id: int) -> pd.DataFrame:
             "Statut": statut
         })
 
+    return pd.DataFrame(rows)
+
 
 def get_bourse_state_asof(conn, person_id: int, asof_date: str) -> dict:
     """

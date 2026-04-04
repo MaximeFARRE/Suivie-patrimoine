@@ -17,6 +17,7 @@ from qt_ui.panels.revenus_panel import RevenusPanel
 from qt_ui.panels.credits_overview_panel import CreditsOverviewPanel
 from qt_ui.panels.private_equity_panel import PrivateEquityPanel
 from qt_ui.panels.entreprises_panel import EntreprisesPanel
+from qt_ui.panels.immobilier_panel import ImmobilierPanel
 from qt_ui.panels.liquidites_panel import LiquiditesPanel
 from qt_ui.panels.bourse_global_panel import BourseGlobalPanel
 from qt_ui.panels.ajout_compte_panel import AjoutComptePanel
@@ -117,6 +118,7 @@ class PersonnesPage(QWidget):
         self._panel_credits = CreditsOverviewPanel(conn, 0)
         self._panel_pe = PrivateEquityPanel(conn, 0)
         self._panel_ent = EntreprisesPanel(conn, 0)
+        self._panel_immo = ImmobilierPanel(conn, 0)
         self._panel_liq = LiquiditesPanel(conn, 0)
         self._panel_bourse = BourseGlobalPanel(conn, 0)
 
@@ -126,6 +128,7 @@ class PersonnesPage(QWidget):
         self._fixed_tabs.addTab(self._panel_credits, "🏦  Crédits")
         self._fixed_tabs.addTab(self._panel_pe, "🌱  Private Equity")
         self._fixed_tabs.addTab(self._panel_ent, "🏢  Entreprises")
+        self._fixed_tabs.addTab(self._panel_immo, "🏠  Immobilier")
         self._fixed_tabs.addTab(self._panel_liq, "💧  Liquidités")
         self._fixed_tabs.addTab(self._panel_bourse, "📈  Bourse globale")
 
@@ -195,6 +198,7 @@ class PersonnesPage(QWidget):
         self._panel_credits.set_person(self._current_person_id)
         self._panel_pe.set_person(self._current_person_id)
         self._panel_ent.set_person(self._current_person_id)
+        self._panel_immo.set_person(self._current_person_id)
         self._panel_liq.set_person(self._current_person_id)
         self._panel_bourse.set_person(self._current_person_id)
         self._ajout_panel.set_person(self._current_person_id)
@@ -220,7 +224,7 @@ class PersonnesPage(QWidget):
         panels = [
             self._panel_vue, self._panel_dep, self._panel_rev,
             self._panel_credits, self._panel_pe, self._panel_ent,
-            self._panel_liq, self._panel_bourse,
+            self._panel_immo, self._panel_liq, self._panel_bourse,
         ]
         if 0 <= index < len(panels):
             panels[index].refresh()

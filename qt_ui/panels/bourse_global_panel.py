@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 _COL_LABELS = {
     "symbol":     "Symbole",
     "name":       "Nom",
+    "asset_type": "Type actif",
     "quantity":   "Qté",
     "pru":        "PRU (€)",
     "last_price": "Prix (€)",
@@ -593,7 +594,7 @@ class BourseGlobalPanel(QWidget):
                 display_cols = ["symbol", "quantity", "last_price", "currency", "fx_rate", "value", "compte"]
                 _LABELS = {**_COL_LABELS, "last_price": "Prix (Date)", "fx_rate": "Taux FX"}
             else:
-                display_cols = ["symbol", "name", "quantity", "pru", "last_price",
+                display_cols = ["symbol", "name", "asset_type", "quantity", "pru", "last_price",
                                 "value", "pnl_latent", "compte", "type"]
                 _LABELS = _COL_LABELS
 
@@ -724,7 +725,7 @@ class BourseGlobalPanel(QWidget):
 
             # ── Diagnostic Tickers ───────────────────────────────────────────
             df_diag = get_tickers_diagnostic_df(self._conn, self._person_id)
-            if not df_diag.empty:
+            if df_diag is not None and not df_diag.empty:
                 self._table_diag.set_dataframe(df_diag)
                 # Coloration du statut
                 self._table_diag.set_column_colors({
