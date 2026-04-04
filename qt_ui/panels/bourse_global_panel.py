@@ -18,7 +18,7 @@ from qt_ui.theme import (
     BG_PRIMARY, BORDER_SUBTLE, TEXT_SECONDARY, TEXT_MUTED,
     STYLE_BTN_PRIMARY, STYLE_TITLE_XL, STYLE_SECTION,
     STYLE_STATUS, COLOR_SUCCESS, COLOR_ERROR,
-    plotly_layout,
+    plotly_layout, plotly_time_series_layout,
 )
 
 logger = logging.getLogger(__name__)
@@ -269,7 +269,7 @@ class BourseGlobalPanel(QWidget):
         vbox_hist.setSpacing(4)
         lbl_hist = QLabel("Évolution du portefeuille")
         lbl_hist.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px;")
-        self._chart_history = PlotlyView(min_height=280)
+        self._chart_history = PlotlyView(min_height=320)
         vbox_hist.addWidget(lbl_hist)
         vbox_hist.addWidget(self._chart_history)
         charts_row.addLayout(vbox_hist, stretch=3)
@@ -660,7 +660,7 @@ class BourseGlobalPanel(QWidget):
                         ))
 
                     fig_hist.update_layout(
-                        **plotly_layout(margin=dict(l=10, r=10, t=36, b=10)),
+                        **plotly_time_series_layout(margin=dict(l=10, r=10, t=40, b=10)),
                         xaxis=dict(
                             title="", showgrid=True, gridcolor="#1e2538", gridwidth=1,
                             tickformat="%b %Y",

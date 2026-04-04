@@ -240,9 +240,44 @@ PLOTLY_LAYOUT = dict(
     margin=dict(l=0, r=0, t=10, b=0),
 )
 
+PLOTLY_RANGE_SELECTOR = dict(
+    buttons=list([
+        dict(count=1, label="1M", step="month", stepmode="backward"),
+        dict(count=3, label="3M", step="month", stepmode="backward"),
+        dict(count=6, label="6M", step="month", stepmode="backward"),
+        dict(count=1, label="1Y", step="year", stepmode="backward"),
+        dict(step="all", label="ALL")
+    ]),
+    bgcolor="rgba(30, 41, 59, 0.4)",
+    activecolor=ACCENT_BLUE,
+    font=dict(size=11, color=TEXT_PRIMARY),
+    borderwidth=1,
+    bordercolor=BORDER_SUBTLE,
+    x=0, y=1.1,
+)
+
 
 def plotly_layout(**overrides) -> dict:
     """Retourne un dict de layout Plotly avec le thème de l'app."""
     layout = {**PLOTLY_LAYOUT}
     layout.update(overrides)
     return layout
+
+
+def plotly_time_series_layout(**overrides) -> dict:
+    """Layout spécialisé pour les séries temporelles (sélecteurs + slider)."""
+    ts_overrides = {
+        "xaxis": dict(
+            rangeselector=PLOTLY_RANGE_SELECTOR,
+            rangeslider=dict(visible=True, thickness=0.05, bgcolor="rgba(0,0,0,0)"),
+            type="date"
+        ),
+        "margin": dict(l=10, r=10, t=40, b=10),
+    }
+    # Fusion récursive simple
+    for k, v in overrides.items():
+        if k in ts_overrides and isinstance(ts_overrides[k], dict) and isinstance(v, dict):
+            ts_overrides[k].update(v)
+        else:
+            ts_overrides[k] = v
+    return plotly_layout(**ts_overrides)
