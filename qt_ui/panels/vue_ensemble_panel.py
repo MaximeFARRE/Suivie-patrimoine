@@ -17,9 +17,34 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from qt_ui.theme import (
     BG_PRIMARY, STYLE_BTN_PRIMARY, STYLE_GROUP, STYLE_SECTION,
     STYLE_STATUS, CHART_GREEN, CHART_RED, plotly_layout,
+    COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, TEXT_MUTED,
 )
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, MetricLabel
+from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, MetricLabel, LoadingOverlay
 from utils.format_monnaie import money
+
+
+def _color_for_rate(rate):
+    if rate is None:
+        return "#64748b"
+    if rate >= 20:
+        return COLOR_SUCCESS
+    if rate >= 10:
+        return "#86efac"
+    if rate >= 0:
+        return COLOR_WARNING
+    return COLOR_ERROR
+
+
+def _tone_for_rate(rate):
+    if rate is None:
+        return "neutral"
+    if rate >= 20:
+        return "success"
+    if rate >= 10:
+        return "green"
+    if rate >= 0:
+        return "neutral"
+    return "alert"
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +143,35 @@ class VueEnsemblePanel(QWidget):
         pie_row.addWidget(right_box)
         layout.addLayout(pie_row)
 
+        # ── Section Taux d'épargne ─────────────────────────────────────────
+        kpi_row3 = QHBoxLayout()
+        self._kpi_avg12 = KpiCard("Taux moy. épargne 12 mois", "—", tone="neutral")
+        self._kpi_avg12_ep = KpiCard("Épargne moy. 12 mois", "—", tone="neutral")
+        kpi_row3.addWidget(self._kpi_avg12)
+        kpi_row3.addWidget(self._kpi_avg12_ep)
+        kpi_row3.addStretch()
+        layout.addLayout(kpi_row3)
+
+        epargne_box = QGroupBox("Taux d'épargne (24 derniers mois)")
+        epargne_box.setStyleSheet(STYLE_GROUP)
+        epargne_box_v = QVBoxLayout(epargne_box)
+        self._chart_epargne = PlotlyView(min_height=280)
+        epargne_box_v.addWidget(self._chart_epargne)
+        layout.addWidget(epargne_box)
+
         # Semaine info
         self._semaine_label = QLabel()
         self._semaine_label.setStyleSheet(STYLE_STATUS)
         layout.addWidget(self._semaine_label)
 
         layout.addStretch()
+
+        # ── Overlay de chargement ──────────────────────────────────────────
+        self._overlay = LoadingOverlay(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.resize(self.size())
 
     def refresh(self) -> None:
         self._load_data()
@@ -146,6 +194,7 @@ class VueEnsemblePanel(QWidget):
         self._load_data()
 
     def _load_data(self) -> None:
+        self._overlay.start("Chargement des snapshots…")
         try:
             rows = self._conn.execute(
                 "SELECT * FROM patrimoine_snapshots_weekly WHERE person_id = ? ORDER BY week_date",
@@ -239,8 +288,107 @@ class VueEnsemblePanel(QWidget):
             except Exception as e:
                 logger.warning("Chargement du graphique cashflow échoué : %s", e)
 
+            # Taux d'épargne
+            try:
+                self._load_epargne_section()
+            except Exception as e:
+                logger.warning("Chargement de la section taux d'épargne échoué : %s", e)
+
         except Exception as e:
             self._semaine_label.setText(f"Erreur : {e}")
+        finally:
+            self._overlay.stop()
+
+    def _load_epargne_section(self) -> None:
+        from services.revenus_repository import compute_taux_epargne_mensuel
+
+        df = compute_taux_epargne_mensuel(self._conn, self._person_id, n_mois=24)
+        if df is None or df.empty:
+            self._kpi_avg12.set_content("Taux moy. épargne 12 mois", "—", tone="neutral")
+            self._kpi_avg12_ep.set_content("Épargne moy. 12 mois", "—", tone="neutral")
+            return
+
+        # KPI moyenne 12 mois
+        last12 = df.tail(12)
+        valid_rates = last12["taux_epargne"].dropna()
+        if not valid_rates.empty:
+            avg_rate = round(float(valid_rates.mean()), 1)
+            self._kpi_avg12.set_content(
+                "Taux moy. épargne 12 mois", f"{avg_rate} %",
+                subtitle="Taux moyen d'épargne", tone=_tone_for_rate(avg_rate),
+            )
+        else:
+            self._kpi_avg12.set_content("Taux moy. épargne 12 mois", "—", tone="neutral")
+
+        avg_ep = float(last12["epargne"].mean()) if not last12.empty else 0.0
+        self._kpi_avg12_ep.set_content(
+            "Épargne moy. 12 mois",
+            f"{avg_ep:+,.0f} €".replace(",", " "),
+            subtitle="Revenus − Dépenses / mois",
+            tone="success" if avg_ep >= 0 else "alert",
+        )
+
+        # Graphique
+        self._build_epargne_chart(df)
+
+    def _build_epargne_chart(self, df: pd.DataFrame) -> None:
+        try:
+            df = df.copy()
+            df["mois_label"] = pd.to_datetime(df["mois"], errors="coerce").dt.strftime("%b %Y")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=df["mois_label"], y=df["revenus"],
+                name="Revenus", marker_color="rgba(96,165,250,0.25)",
+                hovertemplate="<b>%{x}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
+            ))
+            fig.add_trace(go.Bar(
+                x=df["mois_label"], y=df["depenses"],
+                name="Dépenses", marker_color="rgba(239,68,68,0.35)",
+                hovertemplate="<b>%{x}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
+            ))
+            df_valid = df.dropna(subset=["taux_epargne"])
+            if not df_valid.empty:
+                fig.add_trace(go.Scatter(
+                    x=df_valid["mois_label"], y=df_valid["taux_epargne"],
+                    name="Taux d'épargne", yaxis="y2",
+                    mode="lines+markers",
+                    line=dict(color=COLOR_SUCCESS, width=2.5),
+                    marker=dict(size=7, color=df_valid["taux_epargne"].apply(_color_for_rate)),
+                    hovertemplate="<b>%{x}</b><br>Taux : %{y:.1f} %<extra></extra>",
+                ))
+            if len(df) > 0:
+                fig.add_hline(
+                    y=20, yref="y2",
+                    line=dict(color="#4ade80", width=1.5, dash="dot"),
+                    annotation_text="Objectif 20 %",
+                    annotation_font_color="#4ade80",
+                    annotation_position="top right",
+                )
+            fig.add_hline(
+                y=0, yref="y2",
+                line=dict(color="#64748b", width=1, dash="solid"),
+            )
+            fig.update_layout(
+                **plotly_layout(barmode="group", margin=dict(l=10, r=10, t=10, b=10)),
+                xaxis=dict(title="", showgrid=False, tickangle=-35),
+                yaxis=dict(
+                    title="Montant (€)", showgrid=True, gridcolor="#1e2538",
+                    tickformat=",.0f", ticksuffix=" €",
+                ),
+                yaxis2=dict(
+                    title="Taux (%)", overlaying="y", side="right",
+                    showgrid=False, ticksuffix=" %",
+                    zeroline=True, zerolinecolor="#334155", zerolinewidth=1,
+                ),
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.02,
+                    xanchor="right", x=1, font=dict(size=11),
+                ),
+                hovermode="x unified",
+            )
+            self._chart_epargne.set_figure(fig)
+        except Exception as e:
+            logger.warning("VueEnsemblePanel._build_epargne_chart error: %s", e)
 
     def _load_cashflow_chart(self) -> None:
         try:

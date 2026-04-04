@@ -16,7 +16,7 @@ from qt_ui.theme import (
     STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING,
     STYLE_BTN_UNDO, plotly_layout,
 )
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard
+from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, LoadingOverlay
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,13 @@ class DepensesPanel(QWidget):
         layout.addWidget(self._chart_hist)
 
         layout.addStretch()
+        # ── Overlay de chargement ──────────────────────────────────────────
+        self._overlay = LoadingOverlay(self)
         self._refresh_view()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.resize(self.size())
 
     def refresh(self) -> None:
         self._refresh_view()
@@ -184,6 +190,7 @@ class DepensesPanel(QWidget):
         self._refresh_view()
 
     def _refresh_view(self) -> None:
+        self._overlay.start("Chargement des dépenses…")
         try:
             from services.depenses_repository import depenses_du_mois, depenses_par_mois
             mois = self._get_mois()
@@ -232,3 +239,5 @@ class DepensesPanel(QWidget):
         except Exception as e:
             self._saisie_result.setStyleSheet(STYLE_STATUS_ERROR)
             self._saisie_result.setText(f"Erreur : {e}")
+        finally:
+            self._overlay.stop()

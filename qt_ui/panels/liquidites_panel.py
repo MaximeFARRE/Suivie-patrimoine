@@ -12,7 +12,7 @@ from qt_ui.theme import (
     BG_PRIMARY, STYLE_TITLE, STYLE_SECTION,
     CHART_GREEN, CHART_BLUE, CHART_PURPLE, plotly_layout,
 )
-from qt_ui.widgets import PlotlyView, KpiCard
+from qt_ui.widgets import PlotlyView, KpiCard, LoadingOverlay
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,13 @@ class LiquiditesPanel(QWidget):
 
         layout.addStretch()
 
+        # ── Overlay de chargement (──────────────────────────────────────────
+        self._overlay = LoadingOverlay(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.resize(self.size())
+
     def refresh(self) -> None:
         self._load_data()
 
@@ -58,6 +65,7 @@ class LiquiditesPanel(QWidget):
         self._load_data()
 
     def _load_data(self) -> None:
+        self._overlay.start("Chargement des liquidités…")
         try:
             from services.liquidites import _compute_liquidites_like_overview
             bank_cash, bourse_cash, pe_cash, total = _compute_liquidites_like_overview(
@@ -83,3 +91,5 @@ class LiquiditesPanel(QWidget):
                 self._chart.set_figure(fig)
         except Exception as e:
             logger.error("Erreur chargement liquidités : %s", e)
+        finally:
+            self._overlay.stop()
