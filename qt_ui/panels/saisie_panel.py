@@ -3,6 +3,7 @@ Panel de saisie d'opération — remplace ui/compte_saisie.py
 Gère la synchronisation qty × prix = total via signaux Qt.
 """
 import logging
+import re
 import pandas as pd
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -34,13 +35,46 @@ ASSET_TYPES = [
     "autre",
 ]
 
+# Types d'actifs sans ticker de marché — pas de cotation automatique,
+# prix mis à jour manuellement.
+_ASSET_TYPES_NON_COTES = {
+    "scpi", "private_equity", "non_cote",
+    "fonds", "fonds_euros", "autre",
+}
+
+
+def _auto_symbol(name: str, conn) -> str:
+    """
+    Génère un symbole unique à partir du nom pour les actifs non cotés.
+    Ex : "SCPI Primovie" → "SCPI_PRIMOVIE", ou "SCPI_PRIMOVIE_1" si déjà pris.
+    """
+    base = re.sub(r"[^A-Z0-9]", "_", name.upper())
+    base = re.sub(r"_+", "_", base).strip("_")[:20] or "ACTIF"
+    sym, counter = base, 1
+    while conn.execute("SELECT id FROM assets WHERE symbol = ?", (sym,)).fetchone():
+        sym = f"{base[:17]}_{counter}"
+        counter += 1
+    return sym
+
+# Opérations communes à tous les comptes multi-supports (bourse + enveloppes fiscales)
+_OPS_MULTI_SUPPORT = [
+    "DEPOT", "RETRAIT", "ACHAT", "VENTE", "DIVIDENDE", "FRAIS", "INTERETS",
+]
+
 TYPES_PAR_COMPTE = {
-    "BANQUE": ["DEPOT", "RETRAIT", "DEPENSE", "FRAIS", "IMPOT", "INTERETS"],
-    "PEA": ["DEPOT", "RETRAIT", "ACHAT", "VENTE", "DIVIDENDE", "FRAIS", "INTERETS"],
-    "CTO": ["DEPOT", "RETRAIT", "ACHAT", "VENTE", "DIVIDENDE", "FRAIS", "INTERETS"],
-    "CRYPTO": ["DEPOT", "RETRAIT", "ACHAT", "VENTE", "DIVIDENDE", "FRAIS", "INTERETS"],
-    "IMMOBILIER": ["LOYER", "DEPENSE", "FRAIS", "IMPOT"],
-    "CREDIT": ["REMBOURSEMENT_CREDIT", "INTERETS", "FRAIS"],
+    # ── Comptes bancaires ──────────────────────────────────────────────────
+    "BANQUE":        ["DEPOT", "RETRAIT", "DEPENSE", "FRAIS", "IMPOT", "INTERETS"],
+    # ── Comptes bourse et enveloppes fiscales ──────────────────────────────
+    "PEA":           _OPS_MULTI_SUPPORT,
+    "PEA_PME":       _OPS_MULTI_SUPPORT,          # Proche PEA, coté + non coté
+    "CTO":           _OPS_MULTI_SUPPORT,
+    "CRYPTO":        _OPS_MULTI_SUPPORT,
+    "ASSURANCE_VIE": _OPS_MULTI_SUPPORT,          # Multi-supports, fonds euros inclus
+    "PER":           _OPS_MULTI_SUPPORT,          # Multi-supports
+    "PEE":           _OPS_MULTI_SUPPORT + ["ABONDEMENT"],  # + abondement employeur
+    # ── Comptes spéciaux (gérés via d'autres panels dédiés) ───────────────
+    "IMMOBILIER":    ["LOYER", "DEPENSE", "FRAIS", "IMPOT"],
+    "CREDIT":        ["REMBOURSEMENT_CREDIT", "INTERETS", "FRAIS"],
 }
 
 
@@ -144,11 +178,17 @@ class SaisiePanel(QWidget):
         nv = QHBoxLayout(new_w)
         nv.setContentsMargins(0, 0, 0, 0)
         nc1 = QVBoxLayout()
-        nc1.addWidget(_lbl("Ticker / Symbole"))
+        self._new_symbol_lbl = _lbl("Ticker / Symbole")
+        nc1.addWidget(self._new_symbol_lbl)
         self._new_symbol = QLineEdit()
         self._new_symbol.setPlaceholderText("AAPL, CW8, BTC-USD...")
         self._new_symbol.setStyleSheet(STYLE_INPUT)
         nc1.addWidget(self._new_symbol)
+        # Hint affiché seulement pour les actifs non cotés
+        self._new_symbol_hint = QLabel("⚠️ Optionnel — généré depuis le nom si vide")
+        self._new_symbol_hint.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        self._new_symbol_hint.setVisible(False)
+        nc1.addWidget(self._new_symbol_hint)
         nv.addLayout(nc1)
         nc2 = QVBoxLayout()
         nc2.addWidget(_lbl("Nom"))
@@ -223,6 +263,7 @@ class SaisiePanel(QWidget):
         self._type_combo.currentIndexChanged.connect(self._on_type_changed)
         self._radio_existing.toggled.connect(self._on_asset_mode_changed)
         self._asset_combo.currentIndexChanged.connect(self._on_asset_selected)
+        self._new_type.currentIndexChanged.connect(self._on_new_asset_type_changed)
         self._qty_spin.valueChanged.connect(self._sync_from_qty_price)
         self._price_spin.valueChanged.connect(self._sync_from_qty_price)
         self._total_spin.valueChanged.connect(self._sync_from_total)
@@ -231,6 +272,7 @@ class SaisiePanel(QWidget):
         # Init
         self._load_assets()
         self._on_type_changed()
+        self._on_new_asset_type_changed()
 
     def _load_assets(self) -> None:
         from services import repositories as repo
@@ -255,6 +297,16 @@ class SaisiePanel(QWidget):
 
     def _on_asset_mode_changed(self) -> None:
         self._asset_stack.setCurrentIndex(0 if self._radio_existing.isChecked() else 1)
+
+    def _on_new_asset_type_changed(self) -> None:
+        """Adapte le champ ticker selon que l'actif est coté ou non coté."""
+        atype = self._new_type.currentText()
+        if atype in _ASSET_TYPES_NON_COTES:
+            self._new_symbol.setPlaceholderText("Optionnel — généré depuis le nom si vide")
+            self._new_symbol_hint.setVisible(True)
+        else:
+            self._new_symbol.setPlaceholderText("AAPL, CW8, BTC-USD...")
+            self._new_symbol_hint.setVisible(False)
 
     def _on_asset_selected(self) -> None:
         aid = self._asset_combo.currentData()
@@ -291,16 +343,17 @@ class SaisiePanel(QWidget):
     def _on_submit(self) -> None:
         from services import repositories as repo
         type_code = self._type_combo.currentData()
-        date_str = self._date_edit.date().toString("yyyy-MM-dd")
-        fees = self._fees_spin.value()
-        note = self._note_edit.text().strip() or None
-        amount = self._total_spin.value()
-        qty = self._qty_spin.value()
-        price = self._price_spin.value()
+        date_str  = self._date_edit.date().toString("yyyy-MM-dd")
+        fees      = self._fees_spin.value()
+        note      = self._note_edit.text().strip() or None
+        amount    = self._total_spin.value()
+        qty       = self._qty_spin.value()
+        price     = self._price_spin.value()
 
-        # Résoudre asset_id
-        asset_id = None
-        asset_type = None
+        # ── Résoudre / créer l'actif ──────────────────────────────────────
+        asset_id  = None
+        new_atype = None  # type de l'actif nouvellement créé (si applicable)
+
         if operation_requiert_actif(type_code):
             if self._radio_existing.isChecked():
                 asset_id = self._asset_combo.currentData()
@@ -308,40 +361,74 @@ class SaisiePanel(QWidget):
                     self._show_error("Veuillez sélectionner un actif.")
                     return
             else:
-                sym = self._new_symbol.text().strip().upper()
-                nom = self._new_name.text().strip() or sym
                 atype = self._new_type.currentText()
+                nom   = self._new_name.text().strip()
+                sym   = self._new_symbol.text().strip().upper()
+
+                # Pour les actifs non cotés, le ticker est optionnel
                 if not sym:
-                    self._show_error("Le ticker est obligatoire.")
-                    return
+                    if atype in _ASSET_TYPES_NON_COTES:
+                        if not nom:
+                            self._show_error("Le nom est obligatoire pour les actifs non cotés.")
+                            return
+                        sym = _auto_symbol(nom, self._conn)
+                    else:
+                        self._show_error("Le ticker est obligatoire pour les actifs cotés.")
+                        return
+
+                nom = nom or sym  # fallback si nom vide
                 try:
-                    asset_id = repo.create_asset(self._conn, sym, nom, atype)
+                    asset_id  = repo.create_asset(self._conn, sym, nom, atype)
+                    new_atype = atype
+                    self._load_assets()  # rafraîchir la liste pour les prochaines saisies
                 except Exception as e:
                     logger.error("Erreur création actif: %s", e, exc_info=True)
                     self._show_error(f"Erreur création actif : {e}")
                     return
 
+        # ── Enregistrer la transaction ────────────────────────────────────
         try:
             repo.create_transaction(self._conn, {
-                "date": date_str,
-                "person_id": self._person_id,
+                "date":       date_str,
+                "person_id":  self._person_id,
                 "account_id": self._account_id,
-                "type": type_code,
-                "amount": amount,
-                "fees": fees,
-                "asset_id": asset_id,
-                "quantity": qty if qty > 0 else None,
-                "price": price if price > 0 else None,
-                "note": note,
+                "type":       type_code,
+                "amount":     amount,
+                "fees":       fees,
+                "asset_id":   asset_id,
+                "quantity":   qty   if qty   > 0 else None,
+                "price":      price if price > 0 else None,
+                "note":       note,
             })
+
+            # ── Pour les actifs non cotés : sauvegarder le prix de l'opération
+            # comme dernier prix connu, afin d'afficher une valeur dans les positions.
+            if asset_id and price > 0 and type_code in ("ACHAT", "VENTE"):
+                # Déterminer si l'actif est non coté (nouveau ou existant)
+                atype_effectif = new_atype
+                if atype_effectif is None:
+                    # Actif existant — on vérifie son type en base
+                    row = self._conn.execute(
+                        "SELECT asset_type FROM assets WHERE id = ?", (asset_id,)
+                    ).fetchone()
+                    atype_effectif = row["asset_type"] if row else ""
+                if atype_effectif in _ASSET_TYPES_NON_COTES:
+                    try:
+                        repo.upsert_price(self._conn, asset_id, date_str, price)
+                    except Exception as e:
+                        logger.warning("Impossible d'upsert le prix pour actif non coté: %s", e)
+
             self._result_lbl.setStyleSheet(STYLE_STATUS_SUCCESS)
-            self._result_lbl.setText(f"Opération enregistrée ✅ — {type_code} {amount:.2f} le {date_str}")
-            # Reset
+            self._result_lbl.setText(
+                f"Opération enregistrée ✅ — {type_code} {amount:.2f} le {date_str}"
+            )
+            # Reset des champs montants
             self._qty_spin.setValue(0)
             self._price_spin.setValue(0)
             self._total_spin.setValue(0)
             self._fees_spin.setValue(0)
             self._note_edit.clear()
+
         except Exception as e:
             logger.error("Erreur enregistrement opération: %s", e, exc_info=True)
             self._show_error(str(e))

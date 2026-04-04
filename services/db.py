@@ -148,6 +148,7 @@ def ensure_snapshots_table(conn: sqlite3.Connection) -> None:
         bourse_holdings REAL DEFAULT 0,
         pe_value REAL DEFAULT 0,
         ent_value REAL DEFAULT 0,
+        immobilier_value REAL DEFAULT 0,
         credits_remaining REAL DEFAULT 0,
 
         notes TEXT,
@@ -259,6 +260,7 @@ def ensure_weekly_tables(conn):
       bourse_holdings REAL DEFAULT 0,
       pe_value REAL DEFAULT 0,
       ent_value REAL DEFAULT 0,
+      immobilier_value REAL DEFAULT 0,
       credits_remaining REAL DEFAULT 0,
 
       notes TEXT,
@@ -283,6 +285,7 @@ def ensure_weekly_tables(conn):
     bourse_holdings REAL DEFAULT 0,
     pe_value REAL DEFAULT 0,
     ent_value REAL DEFAULT 0,
+    immobilier_value REAL DEFAULT 0,
     credits_remaining REAL DEFAULT 0,
 
     notes TEXT,
@@ -305,6 +308,13 @@ def ensure_weekly_tables(conn):
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eh_ent_date ON enterprise_history(enterprise_id, effective_date);")
+
+    # Migration : immobilier_value dans les snapshots existants
+    for table in ["patrimoine_snapshots", "patrimoine_snapshots_weekly", "patrimoine_snapshots_family_weekly"]:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN immobilier_value REAL DEFAULT 0;")
+        except Exception:
+            pass # déjà présente
 
     conn.commit()
 

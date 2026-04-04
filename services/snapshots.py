@@ -10,6 +10,7 @@ from services import market_history
 from services import positions
 from services import private_equity_repository as pe_repo
 from services import entreprises_repository as ent_repo
+from services import immobilier_repository as immo_repo
 from services.credits import list_credits_by_person, get_crd_a_date
 
 _logger = logging.getLogger(__name__)
@@ -277,6 +278,74 @@ def _enterprise_value_asof_eur(conn, person_id: int, week_date: str) -> float:
     return float(round(total, 2))
 
 # --------------------
+# Immobilier as-of
+# --------------------
+def _immobilier_value_asof_eur(conn, person_id: int, week_date: str) -> float:
+    # 1. Biens directs
+    shares = immo_repo.list_positions_for_person(conn, person_id)
+    total_direct = 0.0
+    wd = pd.to_datetime(week_date)
+
+    if shares is not None and not shares.empty:
+        for _, r in shares.iterrows():
+            property_id = int(r["property_id"])
+            pct = float(r.get("pct", 100.0)) / 100.0
+
+            # Latest valuation from history <= week_date
+            row = conn.execute(
+                """
+                SELECT valuation_eur
+                FROM immobilier_history
+                WHERE property_id = ?
+                  AND effective_date <= ?
+                ORDER BY effective_date DESC, id DESC
+                LIMIT 1
+                """,
+                (property_id, wd.strftime("%Y-%m-%d")),
+            ).fetchone()
+
+            if row:
+                valo = float(row["valuation_eur"])
+            else:
+                # Fallback to current valuation from immobiliers table
+                valo = float(r.get("valuation_eur") or 0.0)
+
+            total_direct += valo * pct
+
+    # 2. SCPI automatiques (via transactions)
+    # On recalcule les positions à la date T
+    scpi_tx = conn.execute(
+        """
+        SELECT
+            a.id     AS asset_id,
+            a.symbol,
+            SUM(CASE
+                WHEN t.type = 'ACHAT' THEN  t.quantity
+                WHEN t.type = 'VENTE' THEN -t.quantity
+                ELSE 0
+            END) AS qty
+        FROM transactions t
+        JOIN assets a ON a.id = t.asset_id
+        WHERE t.person_id = ?
+          AND a.asset_type = 'scpi'
+          AND t.date <= ?
+        GROUP BY a.id
+        HAVING qty > 0.0001
+        """,
+        (int(person_id), wd.strftime("%Y-%m-%d")),
+    ).fetchall()
+
+    total_scpi = 0.0
+    for s in scpi_tx:
+        qty = float(s["qty"])
+        sym = str(s["symbol"])
+        px = market_history.get_price_asof(conn, sym, week_date)
+        if px is not None:
+            total_scpi += qty * float(px)
+
+    return float(round(total_direct + total_scpi, 2))
+
+# --------------------
 # Crédit as-of
 # --------------------
 def _credits_remaining_asof(conn, person_id: int, week_date: str) -> float:
@@ -299,10 +368,10 @@ def upsert_weekly_snapshot(conn, person_id: int, week_date: str, mode: str, payl
             person_id, week_date, created_at, mode,
             patrimoine_net, patrimoine_brut,
             liquidites_total, bank_cash, bourse_cash, pe_cash,
-            bourse_holdings, pe_value, ent_value, credits_remaining,
-            notes
+            bourse_holdings, pe_value, ent_value, immobilier_value,
+            credits_remaining, notes
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(person_id, week_date) DO UPDATE SET
             created_at = excluded.created_at,
             mode = excluded.mode,
@@ -315,6 +384,7 @@ def upsert_weekly_snapshot(conn, person_id: int, week_date: str, mode: str, payl
             bourse_holdings = excluded.bourse_holdings,
             pe_value = excluded.pe_value,
             ent_value = excluded.ent_value,
+            immobilier_value = excluded.immobilier_value,
             credits_remaining = excluded.credits_remaining,
             notes = excluded.notes
         """,
@@ -332,6 +402,7 @@ def upsert_weekly_snapshot(conn, person_id: int, week_date: str, mode: str, payl
             float(payload.get("bourse_holdings", 0.0)),
             float(payload.get("pe_value", 0.0)),
             float(payload.get("ent_value", 0.0)),
+            float(payload.get("immobilier_value", 0.0)),
             float(payload.get("credits_remaining", 0.0)),
             payload.get("notes"),
         ),
@@ -343,10 +414,11 @@ def compute_weekly_snapshot_person(conn, person_id: int, week_date: str) -> dict
     pe_cash = _pe_cash_asof_eur(conn, person_id, week_date)
     pe_value = _pe_value_asof_eur(conn, person_id, week_date)
     ent_value = _enterprise_value_asof_eur(conn, person_id, week_date)
+    immo_value = _immobilier_value_asof_eur(conn, person_id, week_date)
     credits_remaining = _credits_remaining_asof(conn, person_id, week_date)
 
     liquidites_total = float(round(bank_cash + bourse_cash + pe_cash, 2))
-    patrimoine_brut = float(round(liquidites_total + bourse_holdings + pe_value + ent_value, 2))
+    patrimoine_brut = float(round(liquidites_total + bourse_holdings + pe_value + ent_value + immo_value, 2))
     patrimoine_net = float(round(patrimoine_brut - credits_remaining, 2))
 
     return {
@@ -357,6 +429,7 @@ def compute_weekly_snapshot_person(conn, person_id: int, week_date: str) -> dict
         "bourse_holdings": bourse_holdings,
         "pe_value": pe_value,
         "ent_value": ent_value,
+        "immobilier_value": immo_value,
         "credits_remaining": credits_remaining,
         "patrimoine_brut": patrimoine_brut,
         "patrimoine_net": patrimoine_net,
@@ -799,13 +872,9 @@ def rebuild_snapshots_person_backdated_aware(
         "did_run": True,
         "mode": "BACKDATED_AWARE",
         "person_id": int(person_id),
-        "min_new_tx_date": min_date.strftime("%Y-%m-%d"),
-        "start": weeks[0],
-        "end": weeks[-1],
-        "safety_weeks": int(safety_weeks),
-        "fallback_lookback_days": int(fallback_lookback_days),
-        "truncated_to_floor": bool(truncated),
-        "n_new_tx": int(len(df_new)),
-        "n_weeks": int(len(weeks)),
-        "n_ok": int(n_ok),
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "n_weeks": len(weeks),
+        "n_ok": n_ok,
+        "truncated": truncated
     }

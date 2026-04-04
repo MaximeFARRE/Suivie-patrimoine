@@ -157,10 +157,11 @@ class VueEnsemblePanel(QWidget):
         self._kpi_net    = KpiCard("Patrimoine net",    "—", tone="blue")
         self._kpi_brut   = KpiCard("Patrimoine brut",   "—", tone="green")
         self._kpi_liq    = KpiCard("Liquidités",        "—", tone="primary")
-        self._kpi_bourse = KpiCard("Holdings bourse",   "—", tone="broker")
-        self._kpi_credits = KpiCard("Crédits restants", "—", tone="red")
+        self._kpi_bourse   = KpiCard("Holdings bourse",   "—", tone="broker")
+        self._kpi_immo     = KpiCard("Immobilier",        "—", tone="neutral")
+        self._kpi_credits  = KpiCard("Crédits restants", "—", tone="red")
         for k in [self._kpi_net, self._kpi_brut, self._kpi_liq,
-                  self._kpi_bourse, self._kpi_credits]:
+                  self._kpi_bourse, self._kpi_immo, self._kpi_credits]:
             kpi_row1.addWidget(k)
         layout.addLayout(kpi_row1)
 
@@ -324,6 +325,9 @@ class VueEnsemblePanel(QWidget):
             )
             self._kpi_bourse.set_content(
                 "Holdings bourse", money(m["bourse"]), tone="broker"
+            )
+            self._kpi_immo.set_content(
+                "Immobilier", money(m["immo_value"]), tone="neutral"
             )
             self._kpi_credits.set_content(
                 "Crédits restants", money(m["credits"]), tone="red"
@@ -501,6 +505,7 @@ class VueEnsemblePanel(QWidget):
             alloc_data = [
                 {"Catégorie": "Liquidités",     "Valeur": max(0.0, m["liq"])},
                 {"Catégorie": "Holdings bourse","Valeur": max(0.0, m["bourse"])},
+                {"Catégorie": "Immobilier",     "Valeur": max(0.0, m["immo_value"])},
                 {"Catégorie": "PE",             "Valeur": max(0.0, m["pe_value"])},
                 {"Catégorie": "Entreprises",    "Valeur": max(0.0, m["ent_value"])},
             ]
