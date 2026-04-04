@@ -694,3 +694,59 @@ def import_tr_transactions(
         "resolved_tickers": len(isin_ticker_map),
         "unresolved_isins": [i for i in unique_isins if i not in isin_ticker_map],
     }
+
+
+# ---------------------------------------------------------------------------
+# Correction des transactions mal classifiées lors d'anciens imports
+# ---------------------------------------------------------------------------
+
+def fix_misclassified_tr_transactions(conn, person_id: int) -> dict:
+    """
+    Corrige les transactions TR enregistrées avec le mauvais type suite à
+    d'anciens imports (dépôts, intérêts, dividendes classés en VENTE).
+
+    Stratégie : toute transaction de type VENTE sans asset_id est suspecte.
+    On réassigne son type en lisant le champ `note` (ex: "TR: Dépôt | ...").
+
+    Retourne le nombre de corrections par type.
+    """
+    import pandas as pd
+    import re
+
+    df = pd.read_sql_query(
+        """SELECT id, type, asset_id, note
+           FROM transactions
+           WHERE person_id = ? AND type = 'VENTE' AND asset_id IS NULL""",
+        conn,
+        params=(int(person_id),),
+    )
+
+    if df is None or df.empty:
+        return {"fixed_depot": 0, "fixed_interets": 0, "fixed_dividende": 0, "total": 0}
+
+    note_lower = df["note"].fillna("").str.lower()
+
+    # Détection par mots-clés (accents normalisés + variantes TR multilingues)
+    mask_depot    = note_lower.str.contains(r"d[eé]p[oô]t|depot|deposit|einzahlung", regex=True)
+    mask_interets = note_lower.str.contains(r"int[eé]r[eê]ts?|zinsen|interest", regex=True)
+    mask_dividende = note_lower.str.contains(r"dividendes?|dividend|dividende", regex=True)
+
+    results = {"fixed_depot": 0, "fixed_interets": 0, "fixed_dividende": 0}
+
+    for new_type, mask, key in [
+        ("DEPOT",     mask_depot,     "fixed_depot"),
+        ("INTERETS",  mask_interets,  "fixed_interets"),
+        ("DIVIDENDE", mask_dividende, "fixed_dividende"),
+    ]:
+        ids = df[mask]["id"].tolist()
+        if ids:
+            placeholders = ",".join(["?"] * len(ids))
+            conn.execute(
+                f"UPDATE transactions SET type = ? WHERE id IN ({placeholders})",
+                [new_type] + ids,
+            )
+            results[key] = len(ids)
+
+    conn.commit()
+    results["total"] = sum(v for v in results.values())
+    return results
