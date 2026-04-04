@@ -60,6 +60,57 @@ def _sep() -> QFrame:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+class RebuildHistoryThread(QThread):
+    """
+    Thread de fond pour :
+      1. Corriger les transactions TR mal typées (VENTE → DEPOT/INTERETS/DIVIDENDE)
+      2. Reconstruire les snapshots hebdomadaires depuis l'historique complet
+    """
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(str)
+
+    def __init__(self, person_id: int):
+        super().__init__()
+        self._person_id = person_id
+
+    def run(self):
+        try:
+            from services.db import get_conn
+            from services.tr_import import fix_misclassified_tr_transactions
+            from services.snapshots import rebuild_snapshots_person_backdated_aware
+
+            with get_conn() as conn:
+                # Étape 1 — Correction des types de transactions
+                self.progress.emit("Étape 1/2 : Correction des types de transactions TR…")
+                fix_res = fix_misclassified_tr_transactions(conn, self._person_id)
+                n_fixed = fix_res.get("total", 0)
+                detail = (
+                    f"depot={fix_res['fixed_depot']} "
+                    f"intérêts={fix_res['fixed_interets']} "
+                    f"dividendes={fix_res['fixed_dividende']}"
+                )
+
+                # Étape 2 — Reconstruction des snapshots sur ~4 ans
+                self.progress.emit(
+                    f"Étape 2/2 : Reconstruction des snapshots ({n_fixed} tx corrigées)…"
+                )
+                reb_res = rebuild_snapshots_person_backdated_aware(
+                    conn, self._person_id, fallback_lookback_days=1500
+                )
+                n_weeks = reb_res.get("n_ok", 0)
+                start   = reb_res.get("start", "?")
+
+            self.finished.emit(
+                f"✅ {n_fixed} tx corrigées ({detail}) · "
+                f"{n_weeks} semaines reconstruites depuis {start}"
+            )
+        except Exception as e:
+            logger.error("RebuildHistoryThread error: %s", e, exc_info=True)
+            self.finished.emit(f"Erreur : {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 class RefreshPricesThread(QThread):
     finished = pyqtSignal(str)
 
@@ -115,6 +166,7 @@ class BourseGlobalPanel(QWidget):
         self._conn = conn
         self._person_id = person_id
         self._thread = None
+        self._thread_rebuild = None
 
         self.setStyleSheet(f"background: {BG_PRIMARY};")
 
@@ -157,8 +209,23 @@ class BourseGlobalPanel(QWidget):
         self._refresh_status = QLabel()
         self._refresh_status.setStyleSheet(STYLE_STATUS)
         self._refresh_status.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._btn_rebuild = QPushButton("🔧  Reconstruire l'historique")
+        self._btn_rebuild.setStyleSheet(STYLE_BTN_PRIMARY)
+        self._btn_rebuild.setFixedWidth(210)
+        self._btn_rebuild.setToolTip(
+            "Corrige les transactions TR mal importées et reconstruit\n"
+            "les snapshots hebdomadaires depuis l'historique complet."
+        )
+        self._btn_rebuild.clicked.connect(self._on_rebuild)
+        self._rebuild_status = QLabel()
+        self._rebuild_status.setStyleSheet(STYLE_STATUS)
+        self._rebuild_status.setAlignment(Qt.AlignmentFlag.AlignRight)
+
         btn_col.addWidget(self._btn_refresh, alignment=Qt.AlignmentFlag.AlignRight)
         btn_col.addWidget(self._refresh_status, alignment=Qt.AlignmentFlag.AlignRight)
+        btn_col.addWidget(self._btn_rebuild, alignment=Qt.AlignmentFlag.AlignRight)
+        btn_col.addWidget(self._rebuild_status, alignment=Qt.AlignmentFlag.AlignRight)
         header_row.addLayout(btn_col)
 
         layout.addLayout(header_row)
@@ -259,6 +326,21 @@ class BourseGlobalPanel(QWidget):
     def _on_refresh_done(self, msg: str) -> None:
         self._btn_refresh.setEnabled(True)
         self._refresh_status.setText(f"✅ {msg}")
+        self._load_data()
+
+    def _on_rebuild(self) -> None:
+        self._btn_rebuild.setEnabled(False)
+        self._btn_refresh.setEnabled(False)
+        self._rebuild_status.setText("Démarrage…")
+        self._thread_rebuild = RebuildHistoryThread(self._person_id)
+        self._thread_rebuild.progress.connect(self._rebuild_status.setText)
+        self._thread_rebuild.finished.connect(self._on_rebuild_done)
+        self._thread_rebuild.start()
+
+    def _on_rebuild_done(self, msg: str) -> None:
+        self._btn_rebuild.setEnabled(True)
+        self._btn_refresh.setEnabled(True)
+        self._rebuild_status.setText(msg)
         self._load_data()
 
     # ── Chargement des données ────────────────────────────────────────────────
