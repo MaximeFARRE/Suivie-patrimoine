@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard
+from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, LoadingOverlay
 from qt_ui.theme import (
     BG_PRIMARY, BORDER_SUBTLE, TEXT_SECONDARY, TEXT_MUTED,
     STYLE_BTN_PRIMARY, STYLE_TITLE_XL, STYLE_SECTION,
@@ -77,7 +77,11 @@ class RebuildHistoryThread(QThread):
         try:
             from services.db import get_conn
             from services.tr_import import fix_misclassified_tr_transactions
-            from services.snapshots import rebuild_snapshots_person_backdated_aware
+            # rebuild_snapshots_person est utilisé (pas la version backdated_aware)
+            # car backdated_aware respecte le watermark → ne remonte pas avant la
+            # dernière exécution. rebuild_snapshots_person force le recalcul de
+            # TOUTES les semaines sur la fenêtre demandée, sans condition.
+            from services.snapshots import rebuild_snapshots_person
 
             with get_conn() as conn:
                 # Étape 1 — Correction des types de transactions
@@ -90,12 +94,12 @@ class RebuildHistoryThread(QThread):
                     f"dividendes={fix_res['fixed_dividende']}"
                 )
 
-                # Étape 2 — Reconstruction des snapshots sur ~4 ans
+                # Étape 2 — Reconstruction complète sur ~4 ans (ignore le watermark)
                 self.progress.emit(
-                    f"Étape 2/2 : Reconstruction des snapshots ({n_fixed} tx corrigées)…"
+                    f"Étape 2/2 : Reconstruction des snapshots depuis 2023 ({n_fixed} tx corrigées)…"
                 )
-                reb_res = rebuild_snapshots_person_backdated_aware(
-                    conn, self._person_id, fallback_lookback_days=1500
+                reb_res = rebuild_snapshots_person(
+                    conn, self._person_id, lookback_days=1500
                 )
                 n_weeks = reb_res.get("n_ok", 0)
                 start   = reb_res.get("start", "?")
@@ -307,7 +311,14 @@ class BourseGlobalPanel(QWidget):
 
         layout.addLayout(table_area)
 
+        # ── Overlay de chargement (sur le widget externe, pas le scroll) ───
+        self._overlay = LoadingOverlay(self)
+
     # ── Contrôles ─────────────────────────────────────────────────────────────
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.resize(self.size())
 
     def refresh(self) -> None:
         self._load_data()
@@ -346,6 +357,7 @@ class BourseGlobalPanel(QWidget):
     # ── Chargement des données ────────────────────────────────────────────────
 
     def _load_data(self) -> None:
+        self._overlay.start("Chargement du portefeuille global…")
         try:
             from services import repositories as repo
             from services import portfolio
@@ -564,6 +576,8 @@ class BourseGlobalPanel(QWidget):
 
         except Exception as e:
             logger.error("BourseGlobalPanel._load_data error: %s", e, exc_info=True)
+        finally:
+            self._overlay.stop()
 
 
 def _safe_float(v) -> float:
