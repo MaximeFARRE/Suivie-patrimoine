@@ -477,36 +477,107 @@ def compute_passive_income_history(conn, person_id: int) -> pd.DataFrame:
         
     return pd.DataFrame(rows)
 
-def get_bourse_performance_metrics(conn, person_id: int) -> dict:
+def compute_invested_series(conn, person_id: int) -> pd.DataFrame:
+    """
+    Retourne la série temporelle cumulée du montant net investi (EUR).
+    Utilisée pour tracer la courbe "montant investi" sur le graphe d'évolution.
+    Conversion FX au taux actuel (approximation acceptable pour l'affichage).
+    """
+    from services import fx
+
+    accounts = repo.list_accounts(conn, person_id=person_id)
+    if accounts is None or accounts.empty:
+        return pd.DataFrame(columns=["date", "invested_eur"])
+
+    bourse_acc = accounts[accounts["account_type"].astype(str).str.upper().isin(["PEA", "CTO", "CRYPTO"])].copy()
+    if bourse_acc.empty:
+        return pd.DataFrame(columns=["date", "invested_eur"])
+
+    all_rows = []
+    for _, a in bourse_acc.iterrows():
+        acc_id = int(a["id"])
+        acc_ccy = str(a.get("currency") or "EUR").upper()
+
+        tx = repo.list_transactions(conn, person_id=person_id, account_id=acc_id, limit=200000)
+        if tx is None or tx.empty:
+            continue
+
+        df = tx.copy()
+        df["date"] = pd.to_datetime(df.get("date"), errors="coerce")
+        df = df.dropna(subset=["date"])
+        df["type"] = df.get("type", "").astype(str)
+        df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
+        df["fees"] = pd.to_numeric(df.get("fees", 0.0), errors="coerce").fillna(0.0)
+
+        buys = df[df["type"] == "ACHAT"].copy()
+        sells = df[df["type"] == "VENTE"].copy()
+        buys["net_native"] = buys["amount"] + buys["fees"]
+        sells["net_native"] = -(sells["amount"] - sells["fees"])
+
+        combined = pd.concat([buys[["date", "net_native"]], sells[["date", "net_native"]]])
+
+        if acc_ccy != "EUR":
+            rate = float(fx.ensure_fx_rate(conn, acc_ccy, "EUR") or 1.0)
+            combined["net_eur"] = combined["net_native"] * rate
+        else:
+            combined["net_eur"] = combined["net_native"]
+
+        all_rows.append(combined[["date", "net_eur"]])
+
+    if not all_rows:
+        return pd.DataFrame(columns=["date", "invested_eur"])
+
+    all_tx = pd.concat(all_rows, ignore_index=True).sort_values("date")
+    all_tx["invested_eur"] = all_tx["net_eur"].cumsum()
+    return all_tx[["date", "invested_eur"]].reset_index(drop=True)
+
+
+def get_bourse_performance_metrics(conn, person_id: int, current_live_value: float | None = None) -> dict:
     """
     Retourne un résumé des métriques boursières globale et YTD ainsi que les DataFrames associées pour l'UI.
+
+    current_live_value : si fourni, utilisé à la place du dernier snapshot pour le calcul de
+                         global_perf et comme point final du graphe (évite le décalage snapshot/live).
     """
     df_snap = repo.list_patrimoine_snapshots(conn, person_id=person_id)
     if df_snap is None or df_snap.empty:
         df_snap = pd.DataFrame(columns=["snapshot_date", "bourse_holdings"])
-        
-    # We delay load since methods are in this very module
+
     import datetime as _dt
     invested_eur = compute_invested_amount_eur_asof(conn, person_id, _dt.date.today().isoformat())
-    
+
     df_income = compute_passive_income_history(conn, person_id)
     tot_div = float(df_income[df_income["type"] == "DIVIDENDE"]["amount_eur"].sum()) if not df_income.empty else 0.0
     tot_int = float(df_income[df_income["type"] == "INTERETS"]["amount_eur"].sum()) if not df_income.empty else 0.0
 
     global_perf = 0.0
     ytd_perf = 0.0
-    
+
     if not df_snap.empty:
         df_snap["date"] = pd.to_datetime(df_snap["snapshot_date"], errors="coerce")
         df_snap = df_snap.dropna(subset=["date"]).sort_values("date")
-        
+        df_snap["bourse_holdings"] = pd.to_numeric(df_snap.get("bourse_holdings", 0.0), errors="coerce").fillna(0.0)
+
+        # Injecter le point live aujourd'hui si le dernier snapshot a plus de 3 jours
+        today = pd.Timestamp(_dt.date.today())
+        if current_live_value is not None:
+            last_snap_date = df_snap["date"].max() if not df_snap.empty else pd.NaT
+            if pd.isna(last_snap_date) or (today - last_snap_date).days > 3:
+                today_row = pd.DataFrame([{
+                    "snapshot_date": today.strftime("%Y-%m-%d"),
+                    "date": today,
+                    "bourse_holdings": float(current_live_value),
+                }])
+                df_snap = pd.concat([df_snap, today_row], ignore_index=True).sort_values("date")
+
         if len(df_snap) > 0:
-            current_value = float(df_snap.iloc[-1]["bourse_holdings"])
-            
+            # Perf globale : on préfère la valeur live si disponible
+            current_value = float(current_live_value) if current_live_value is not None else float(df_snap.iloc[-1]["bourse_holdings"])
             if invested_eur > 0:
                 global_perf = (current_value / invested_eur - 1.0) * 100.0
-                
-            current_year = df_snap.iloc[-1]["date"].year
+
+            # Perf YTD : toujours basée sur les snapshots (historique intra-année)
+            current_year = today.year
             df_ytd = df_snap[df_snap["date"].dt.year == current_year]
             if len(df_ytd) > 1:
                 val_start_ytd = float(df_ytd.iloc[0]["bourse_holdings"])
@@ -521,5 +592,5 @@ def get_bourse_performance_metrics(conn, person_id: int) -> dict:
         "total_dividends": tot_div,
         "total_interests": tot_int,
         "snapshots_df": df_snap,
-        "income_df": df_income
+        "income_df": df_income,
     }
