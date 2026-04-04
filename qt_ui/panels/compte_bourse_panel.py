@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel, LoadingOverlay
-from qt_ui.panels.saisie_panel import SaisiePanel
+from qt_ui.panels.saisie_panel import SaisiePanel, ASSET_TYPES
 from qt_ui.theme import (
     BG_PRIMARY, STYLE_BTN_PRIMARY, STYLE_SECTION, STYLE_STATUS,
     STYLE_TAB_INNER, plotly_layout,
@@ -109,6 +109,9 @@ class CompteBoursePanel(QWidget):
         dash_v.addWidget(lbl_pos)
         self._table_pos = DataTableWidget()
         self._table_pos.setMinimumHeight(220)
+        self._table_pos.set_combo_delegate("asset_type", ASSET_TYPES)
+        self._table_pos.hide_column("asset_id")
+        self._table_pos.cell_changed.connect(self._on_asset_type_changed)
         dash_v.addWidget(self._table_pos)
 
         # Graphique répartition
@@ -207,7 +210,7 @@ class CompteBoursePanel(QWidget):
                                        delta=f"{total_pnl:+.2f}", delta_positive=total_pnl >= 0)
             self._kpi_nb.set_content("Positions", str(nb_pos))
 
-            display_cols = ["symbol", "name", "quantity", "pru", "last_price", "value", "pnl_latent", "asset_ccy"]
+            display_cols = ["asset_id", "symbol", "name", "asset_type", "quantity", "pru", "last_price", "value", "pnl_latent", "asset_ccy"]
             display_cols = [c for c in display_cols if c in pos.columns]
             self._table_pos.set_dataframe(pos[display_cols])
 
@@ -225,6 +228,18 @@ class CompteBoursePanel(QWidget):
             logger.error("CompteBoursePanel._load_dashboard error: %s", e, exc_info=True)
         finally:
             self._overlay.stop()
+
+    def _on_asset_type_changed(self, row: int, col_name: str, new_value) -> None:
+        if col_name != "asset_type":
+            return
+        df = self._table_pos.get_dataframe()
+        if row < len(df) and "asset_id" in df.columns:
+            try:
+                asset_id = int(df.iloc[row]["asset_id"])
+                from services import repositories as repo
+                repo.update_asset_type(self._conn, asset_id, str(new_value))
+            except Exception as e:
+                logger.error("Erreur mise à jour asset_type: %s", e, exc_info=True)
 
     def _load_history(self) -> None:
         try:

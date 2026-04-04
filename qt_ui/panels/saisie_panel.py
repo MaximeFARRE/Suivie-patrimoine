@@ -21,6 +21,18 @@ from qt_ui.theme import (
 
 logger = logging.getLogger(__name__)
 
+ASSET_TYPES = [
+    "action",
+    "etf",
+    "fonds",
+    "scpi",
+    "obligation",
+    "fonds_euros",
+    "crypto",
+    "private_equity",
+    "non_cote",
+    "autre",
+]
 
 TYPES_PAR_COMPTE = {
     "BANQUE": ["DEPOT", "RETRAIT", "DEPENSE", "FRAIS", "IMPOT", "INTERETS"],
@@ -147,7 +159,7 @@ class SaisiePanel(QWidget):
         nc3 = QVBoxLayout()
         nc3.addWidget(_lbl("Type d'actif"))
         self._new_type = QComboBox()
-        self._new_type.addItems(["action", "etf", "crypto", "private_equity", "autre"])
+        self._new_type.addItems(ASSET_TYPES)
         self._new_type.setStyleSheet(STYLE_INPUT)
         nc3.addWidget(self._new_type)
         nv.addLayout(nc3)

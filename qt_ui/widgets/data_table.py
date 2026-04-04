@@ -3,10 +3,10 @@ Widget QTableView avec modèle Pandas.
 Remplace st.dataframe() et st.data_editor() de Streamlit.
 """
 import pandas as pd
-from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal
 from PyQt6.QtWidgets import (
     QTableView, QWidget, QVBoxLayout, QHBoxLayout, QAbstractItemView,
-    QHeaderView, QLineEdit, QLabel,
+    QHeaderView, QLineEdit, QLabel, QStyledItemDelegate, QComboBox,
 )
 from PyQt6.QtGui import QColor
 
@@ -21,6 +21,7 @@ class PandasTableModel(QAbstractTableModel):
         self._df = df if df is not None else pd.DataFrame()
         # column_colors: dict[str, callable(value) -> hex_str | None]
         self._column_colors: dict = column_colors or {}
+        self._editable_cols: set = set()
 
     def rowCount(self, parent=QModelIndex()) -> int:
         return len(self._df)
@@ -63,6 +64,21 @@ class PandasTableModel(QAbstractTableModel):
 
         return None
 
+    def setData(self, index: QModelIndex, value, role=Qt.ItemDataRole.EditRole) -> bool:
+        if role == Qt.ItemDataRole.EditRole and index.isValid():
+            self._df.iloc[index.row(), index.column()] = value
+            self.dataChanged.emit(index, index, [role])
+            return True
+        return False
+
+    def flags(self, index: QModelIndex):
+        if not index.isValid():
+            return Qt.ItemFlag.ItemIsEnabled
+        base = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        if self._df.columns[index.column()] in self._editable_cols:
+            return base | Qt.ItemFlag.ItemIsEditable
+        return base
+
     def headerData(self, section: int, orientation: Qt.Orientation, role=Qt.ItemDataRole.DisplayRole):
         if role != Qt.ItemDataRole.DisplayRole:
             return None
@@ -80,12 +96,42 @@ class PandasTableModel(QAbstractTableModel):
         if not self._df.empty:
             self.layoutChanged.emit()
 
+    def set_editable_cols(self, cols: set) -> None:
+        self._editable_cols = cols or set()
+
     def get_dataframe(self) -> pd.DataFrame:
         return self._df.copy()
 
 
+class ComboBoxDelegate(QStyledItemDelegate):
+    """Délégué affichant un QComboBox pour les cellules éditables."""
+
+    def __init__(self, items: list, parent=None):
+        super().__init__(parent)
+        self._items = list(items)
+
+    def createEditor(self, parent, option, index):
+        editor = QComboBox(parent)
+        editor.addItems(self._items)
+        return editor
+
+    def setEditorData(self, editor, index):
+        value = index.data(Qt.ItemDataRole.DisplayRole) or ""
+        if value in self._items:
+            editor.setCurrentText(value)
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
+
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect)
+
+
 class DataTableWidget(QWidget):
     """Widget complet : tableau + en-têtes stylisés + barre de recherche."""
+
+    # Émis quand une cellule éditable est modifiée : (row_in_model, col_name, new_value)
+    cell_changed = pyqtSignal(int, str, object)
 
     def __init__(self, parent=None, editable: bool = False, searchable: bool = True):
         super().__init__(parent)
@@ -124,6 +170,14 @@ class DataTableWidget(QWidget):
         else:
             self._view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
+        # Mapping colonne → items pour les delegates ComboBox (persistant entre set_dataframe)
+        self._combo_delegates: dict = {}  # col_name -> [items]
+        # Colonnes à masquer visuellement
+        self._hidden_cols: set = set()
+
+        # Propager les modifications de cellule éditable
+        self._model.dataChanged.connect(self._on_model_data_changed)
+
         layout.addWidget(self._view)
 
     def set_dataframe(self, df: pd.DataFrame) -> None:
@@ -131,6 +185,8 @@ class DataTableWidget(QWidget):
         self._search_bar.clear()
         self._model.set_dataframe(self._full_df)
         self._view.resizeColumnsToContents()
+        self._apply_delegates()
+        self._apply_hidden_cols()
 
     def get_dataframe(self) -> pd.DataFrame:
         return self._model.get_dataframe()
@@ -139,12 +195,61 @@ class DataTableWidget(QWidget):
         """Définit des fonctions de couleur par colonne. Ex: {"PnL (€)": lambda v: "#4ade80" if v >= 0 else "#f87171"}"""
         self._model.set_column_colors(column_colors)
 
+    def set_combo_delegate(self, col_name: str, items: list) -> None:
+        """Rend une colonne éditable via une liste déroulante. Persistant entre les set_dataframe()."""
+        self._combo_delegates[col_name] = list(items)
+        self._model.set_editable_cols(self._model._editable_cols | {col_name})
+        self._view.setEditTriggers(
+            self._view.editTriggers() | QAbstractItemView.EditTrigger.DoubleClicked
+        )
+        self._apply_delegates()
+
+    def hide_column(self, col_name: str) -> None:
+        """Masque une colonne par son nom (elle reste dans le DataFrame sous-jacent)."""
+        self._hidden_cols.add(col_name)
+        self._apply_hidden_cols()
+
+    def _apply_delegates(self) -> None:
+        df = self._model.get_dataframe()
+        if df.empty:
+            return
+        cols = list(df.columns)
+        for col_name, items in self._combo_delegates.items():
+            if col_name in cols:
+                col_idx = cols.index(col_name)
+                delegate = ComboBoxDelegate(items, self._view)
+                self._view.setItemDelegateForColumn(col_idx, delegate)
+
+    def _apply_hidden_cols(self) -> None:
+        df = self._model.get_dataframe()
+        if df.empty:
+            return
+        cols = list(df.columns)
+        for col_name in self._hidden_cols:
+            if col_name in cols:
+                col_idx = cols.index(col_name)
+                self._view.setColumnHidden(col_idx, True)
+
+    def _on_model_data_changed(self, top_left: QModelIndex, bottom_right: QModelIndex, roles) -> None:
+        if Qt.ItemDataRole.EditRole in (roles or []):
+            row = top_left.row()
+            col = top_left.column()
+            df = self._model.get_dataframe()
+            if row < len(df) and col < len(df.columns):
+                col_name = df.columns[col]
+                new_value = df.iloc[row, col]
+                self.cell_changed.emit(row, col_name, new_value)
+
     def _on_filter_changed(self, text: str) -> None:
         if not text.strip() or self._full_df.empty:
             self._model.set_dataframe(self._full_df)
+            self._apply_delegates()
+            self._apply_hidden_cols()
             return
         query = text.strip().lower()
         mask = self._full_df.apply(
             lambda row: any(query in str(v).lower() for v in row), axis=1
         )
         self._model.set_dataframe(self._full_df[mask].reset_index(drop=True))
+        self._apply_delegates()
+        self._apply_hidden_cols()

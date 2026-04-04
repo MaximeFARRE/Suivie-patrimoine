@@ -100,6 +100,7 @@ def compute_taux_epargne_mensuel(
 
     # Outer join : garde les mois avec revenus OU dépenses
     df = pd.merge(df_rev, df_dep, on="mois", how="outer").fillna(0.0)
+    df = df.infer_objects(copy=False)
     df = df[df["mois"].notna()].copy()
     df["mois"] = df["mois"].astype(str)
     df = df.sort_values("mois")
