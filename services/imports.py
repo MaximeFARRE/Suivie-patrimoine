@@ -1,6 +1,9 @@
 # services/imports.py
+import logging
 import sqlite3
 import pandas as pd
+
+_logger = logging.getLogger(__name__)
 
 
 
@@ -93,6 +96,13 @@ def import_wide_csv_to_monthly_table(
     long = long[long[date_col].astype(str).str.strip() != ""]
 
     long["mois"] = long[date_col].apply(_month_key_from_date)
+
+    # Validation basique
+    if table == "depenses":
+        negatifs = long[long["montant"] < 0]
+        if not negatifs.empty:
+            _logger.warning("import_csv_wide: %d montants négatifs dans les dépenses (ignorés)", len(negatifs))
+            long = long[long["montant"] >= 0]
 
     # Option : on supprime l’existant pour cette personne (plus simple et safe)
     if delete_existing:
