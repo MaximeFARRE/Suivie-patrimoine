@@ -9,6 +9,7 @@ from ui.compte_saisie import bloc_saisie_operation
 from utils.cache import reset_cache
 from utils.format_monnaie import money
 from services import fx
+from utils.pagination import paginate_df
 
 
 def afficher_compte_bourse(conn, person_id: int, account_id: int, account_type: str, tx_acc: pd.DataFrame, key_prefix: str):
@@ -28,7 +29,10 @@ def afficher_compte_bourse(conn, person_id: int, account_id: int, account_type: 
             a = conn.execute("SELECT * FROM assets WHERE id = ?;", (aid,)).fetchone()
             if not a:
                 continue
-            sym = a["symbol"]
+            try:
+                sym = a["symbol"]
+            except (TypeError, KeyError):
+                sym = a[1]
             px, ccy = pricing.fetch_last_price_auto(sym)
             if px is not None:
                 repo.upsert_price(conn, asset_id=aid, date=pricing.today_str(), price=px, currency=ccy, source="AUTO")
@@ -353,4 +357,8 @@ def afficher_compte_bourse(conn, person_id: int, account_id: int, account_type: 
     )
 
     st.markdown("### Historique")
-    tableau_operations(tx_acc)
+    if tx_acc is not None and not tx_acc.empty:
+        tx_page = paginate_df(tx_acc.sort_values("date", ascending=False) if "date" in tx_acc.columns else tx_acc, key=f"{key_prefix}_ops")
+        tableau_operations(tx_page)
+    else:
+        tableau_operations(tx_acc)

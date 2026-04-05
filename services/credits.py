@@ -24,14 +24,15 @@ def upsert_credit(conn, data: Dict[str, Any]) -> int:
         "capital_emprunte", "taux_nominal", "taeg", "duree_mois",
         "mensualite_theorique", "assurance_mensuelle_theorique",
         "date_debut", "actif",
-        "payer_account_id",
     ]
-
 
     values = [data.get(f) for f in fields]
 
     if row:
-        credit_id = int(row["id"])
+        try:
+            credit_id = int(row["id"])
+        except (TypeError, KeyError):
+            credit_id = int(row[0])
         set_clause = ", ".join([f"{f} = ?" for f in fields] + ["updated_at = datetime('now')"])
         conn.execute(
             f"UPDATE credits SET {set_clause} WHERE id = ?",
@@ -51,11 +52,14 @@ def upsert_credit(conn, data: Dict[str, Any]) -> int:
 
 
 def get_credit_by_account(conn, account_id: int) -> Optional[dict]:
-    row = conn.execute(
+    df = pd.read_sql_query(
         "SELECT * FROM credits WHERE account_id = ?",
-        (int(account_id),)
-    ).fetchone()
-    return dict(row) if row else None
+        conn,
+        params=(int(account_id),),
+    )
+    if df.empty:
+        return None
+    return df.iloc[0].to_dict()
 
 
 def list_credits_by_person(conn, person_id: int, only_active: bool = True) -> pd.DataFrame:
@@ -83,6 +87,18 @@ def replace_amortissement(conn, credit_id: int, rows: List[Dict[str, Any]]) -> i
         conn.commit()
         return 0
 
+    def _safe_float(val, default=0.0) -> float:
+        try:
+            return float(val) if val is not None and val != "" else default
+        except (ValueError, TypeError):
+            return default
+
+    def _safe_int(val) -> int | None:
+        try:
+            return int(val) if val is not None and val != "" else None
+        except (ValueError, TypeError):
+            return None
+
     conn.executemany(
         """
         INSERT INTO credit_amortissements
@@ -93,13 +109,13 @@ def replace_amortissement(conn, credit_id: int, rows: List[Dict[str, Any]]) -> i
             (
                 credit_id,
                 r.get("date_echeance"),
-                float(r.get("mensualite") or 0),
-                float(r.get("capital_amorti") or 0),
-                float(r.get("interets") or 0),
-                float(r.get("assurance") or 0),
-                float(r.get("crd") or 0),
-                int(r.get("annee") or 0) if r.get("annee") else None,
-                int(r.get("mois") or 0) if r.get("mois") else None,
+                _safe_float(r.get("mensualite")),
+                _safe_float(r.get("capital_amorti")),
+                _safe_float(r.get("interets")),
+                _safe_float(r.get("assurance")),
+                _safe_float(r.get("crd")),
+                _safe_int(r.get("annee")),
+                _safe_int(r.get("mois")),
             )
             for r in rows
         ]
@@ -349,15 +365,26 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
     Somme des transactions du mois sur le compte payeur du crédit,
     filtrées sur catégorie "échéance prêt / emprunt".
     """
-    row = conn.execute(
-        "SELECT person_id, payer_account_id FROM credits WHERE id = ?",
-        (int(credit_id),)
-    ).fetchone()
-    if not row or row["payer_account_id"] is None:
+    try:
+        row = conn.execute(
+            "SELECT person_id, payer_account_id FROM credits WHERE id = ?",
+            (int(credit_id),)
+        ).fetchone()
+    except Exception:
         return 0.0
-
-    person_id = int(row["person_id"])
-    payer_account_id = int(row["payer_account_id"])
+    if not row:
+        return 0.0
+    try:
+        payer_val = row["payer_account_id"]
+    except (TypeError, KeyError):
+        payer_val = row[1] if len(row) > 1 else None
+    if payer_val is None:
+        return 0.0
+    try:
+        person_id = int(row["person_id"])
+    except (TypeError, KeyError):
+        person_id = int(row[0])
+    payer_account_id = int(payer_val)
 
     start = pd.to_datetime(mois_yyyy_mm_01)
     end = (start + pd.offsets.MonthBegin(1))

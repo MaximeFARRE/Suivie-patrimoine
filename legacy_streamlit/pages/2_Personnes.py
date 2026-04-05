@@ -22,6 +22,7 @@ from ui.liquidites_overview import afficher_liquidites_overview
 from ui.vue_ensemble_overview import afficher_vue_ensemble_overview
 from utils.format_monnaie import money
 from ui.bourse_global_overview import afficher_bourse_global_overview
+from ui.projections_overview import afficher_projections_overview
 
 
 st.set_page_config(page_title="Personnes", layout="wide")
@@ -35,7 +36,8 @@ def main():
     
     try:
         from ui.vue_ensemble_overview import ensure_daily_snapshots_for_all_people
-        ensure_daily_snapshots_for_all_people(conn, mode="AUTO", force_refresh_prices=True)
+        # force_refresh_prices=False : ne pas appeler les APIs externes à chaque rerun
+        ensure_daily_snapshots_for_all_people(conn, mode="AUTO", force_refresh_prices=False)
     except Exception:
         pass
 
@@ -47,10 +49,23 @@ def main():
     nom_personne = st.selectbox("Choisir une personne", noms)
     person_id = int(people.loc[people["name"] == nom_personne, "id"].iloc[0])
 
-    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit", "Private Equity", "Entreprises", "Liquidités", "Bourse"])
+    tabs_fixes = st.tabs(["Vue d’ensemble", "Dépenses", "Revenus", "Crédit", "Private Equity", "Entreprises", "Liquidités", "Bourse", "📈 Projections"])
+
+    # Fragments : les sliders/widgets internes ne relancent que leur section
+    @st.fragment
+    def _frag_vue_ensemble(conn, pid):
+        afficher_vue_ensemble_overview(conn, person_id=pid)
+
+    @st.fragment
+    def _frag_projections(conn, pid):
+        afficher_projections_overview(conn, person_id=pid)
+
+    @st.fragment
+    def _frag_bourse(conn, pid):
+        afficher_bourse_global_overview(conn, person_id=pid)
 
     with tabs_fixes[0]:
-        afficher_vue_ensemble_overview(conn, person_id=person_id)
+        _frag_vue_ensemble(conn, person_id)
 
     with tabs_fixes[1]:
         onglet_depenses(conn, person_id=person_id, key_prefix=f"p{person_id}_dep")
@@ -63,15 +78,18 @@ def main():
 
     with tabs_fixes[4]:
         afficher_private_equity_overview(conn, person_id=person_id)
-    
+
     with tabs_fixes[5]:
         afficher_entreprises_overview(conn, person_id=person_id)
-        
+
     with tabs_fixes[6]:
         afficher_liquidites_overview(conn, person_id=person_id)
-    
+
     with tabs_fixes[7]:
-        afficher_bourse_global_overview(conn, person_id=person_id)
+        _frag_bourse(conn, person_id)
+
+    with tabs_fixes[8]:
+        _frag_projections(conn, person_id)
 
     # --- Comptes dynamiques ---
     comptes = repo.list_accounts(conn, person_id=person_id)

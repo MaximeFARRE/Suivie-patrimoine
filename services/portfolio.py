@@ -101,6 +101,7 @@ def compute_positions_v2_fx(conn, tx_df: pd.DataFrame, latest_prices: pd.DataFra
             tuple(asset_ids),
         ).fetchall()
         cur_df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame(columns=["asset_id", "currency", "asset_type"])
+
         out = out.merge(cur_df, on="asset_id", how="left", suffixes=("", "_asset"))
     else:
         out["currency"] = None

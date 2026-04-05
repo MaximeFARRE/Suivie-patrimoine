@@ -80,7 +80,7 @@ def _bank_cash_asof_eur(conn, person_id: int, week_date: str) -> float:
                     df = df[df["date"] <= pd.to_datetime(week_date)]
                     if df.empty:
                         continue
-                    df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
+                    df["amount"] = pd.to_numeric(df["amount"] if "amount" in df.columns else 0.0, errors="coerce").fillna(0.0)
                     df["type"] = df["type"].astype(str)
                     total_native += float(df.apply(lambda r: float(r["amount"]) * _sens_flux(r["type"]), axis=1).sum())
         else:
@@ -91,7 +91,7 @@ def _bank_cash_asof_eur(conn, person_id: int, week_date: str) -> float:
                 df = df.dropna(subset=["date"])
                 df = df[df["date"] <= pd.to_datetime(week_date)]
                 if not df.empty:
-                    df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
+                    df["amount"] = pd.to_numeric(df["amount"] if "amount" in df.columns else 0.0, errors="coerce").fillna(0.0)
                     df["type"] = df["type"].astype(str)
                     total_native += float(df.apply(lambda r: float(r["amount"]) * _sens_flux(r["type"]), axis=1).sum())
 
@@ -156,13 +156,13 @@ def _pe_cash_asof_eur(conn, person_id: int, week_date: str) -> float:
     if df is None or df.empty:
         return 0.0
     d = df.copy()
-    d["date"] = pd.to_datetime(d.get("date"), errors="coerce")
+    d["date"] = pd.to_datetime(d["date"] if "date" in d.columns else None, errors="coerce")
     d = d.dropna(subset=["date"])
     d = d[d["date"] <= pd.to_datetime(week_date)]
     if d.empty:
         return 0.0
     d["tx_type"] = d["tx_type"].astype(str).str.upper()
-    d["amount"] = pd.to_numeric(d.get("amount", 0.0), errors="coerce").fillna(0.0)
+    d["amount"] = pd.to_numeric(d["amount"] if "amount" in d.columns else 0.0, errors="coerce").fillna(0.0)
 
     def sign(t: str) -> float:
         if t == "DEPOSIT":
@@ -239,8 +239,12 @@ def _enterprise_value_asof_eur(conn, person_id: int, week_date: str) -> float:
         ).fetchone()
 
         if row:
-            valuation = float(row["valuation_eur"])
-            debt = float(row["debt_eur"])
+            try:
+                valuation = float(row["valuation_eur"])
+                debt = float(row["debt_eur"])
+            except (TypeError, KeyError):
+                valuation = float(row[0] or 0.0)
+                debt = float(row[1] or 0.0)
         else:
             # fallback "actuel"
             valuation = float(r.get("valuation_eur") or 0.0)
@@ -586,9 +590,15 @@ def rebuild_snapshots_person_from_last(
     ).fetchone()
 
     last_week = None
-    if row and row["d"]:
+    _d_val = None
+    if row:
         try:
-            last_week = pd.to_datetime(row["d"], errors="coerce")
+            _d_val = row["d"]
+        except (TypeError, KeyError):
+            _d_val = row[0]
+    if row and _d_val:
+        try:
+            last_week = pd.to_datetime(_d_val, errors="coerce")
             if pd.isna(last_week):
                 last_week = None
         except Exception:
@@ -689,7 +699,10 @@ def _get_person_watermark(conn, person_id: int) -> dict:
     ).fetchone()
     if not row:
         return {"last_tx_id": None, "last_tx_created_at": None}
-    return {"last_tx_id": row["last_tx_id"], "last_tx_created_at": row["last_tx_created_at"]}
+    try:
+        return {"last_tx_id": row["last_tx_id"], "last_tx_created_at": row["last_tx_created_at"]}
+    except (TypeError, KeyError):
+        return {"last_tx_id": row[0], "last_tx_created_at": row[1]}
 
 
 def _set_person_watermark(conn, person_id: int, last_tx_id: int | None, last_tx_created_at: str | None) -> None:
@@ -838,8 +851,8 @@ def rebuild_snapshots_person_backdated_aware(
     _set_person_watermark(
         conn,
         person_id,
-        int(max_row["max_id"]) if max_row and max_row["max_id"] is not None else None,
-        str(max_row["max_created"]) if max_row and max_row["max_created"] is not None else None,
+        (int(max_row[0]) if max_row and max_row[0] is not None else None),
+        (str(max_row[1]) if max_row and max_row[1] is not None else None),
     )
 
     return {
