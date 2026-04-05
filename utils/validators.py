@@ -48,3 +48,15 @@ def sens_flux(type_operation: str) -> int:
         f"Positifs attendus: {sorted(positifs)}. "
         f"Négatifs attendus: {sorted(negatifs)}."
     )
+
+
+def sens_flux_safe(type_operation: str) -> int:
+    """Version safe de sens_flux : retourne 0 pour les types inconnus (neutre)."""
+    import logging
+    try:
+        return sens_flux(type_operation)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            "sens_flux_safe: type inconnu '%s' — traite comme 0 (neutre)", type_operation
+        )
+        return 0

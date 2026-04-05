@@ -43,18 +43,9 @@ def _list_weeks(start: dt.date, end: dt.date) -> list[str]:
 # CASH BANQUE as-of
 # --------------------
 def _sens_flux(t: str) -> int:
-    """
-    Wrapper safe autour de utils.validators.sens_flux.
-    Ne crashe jamais (retourne +1 pour les types inconnus avec un warning logué).
-    """
-    try:
-        from utils.validators import sens_flux
-        return sens_flux(t)
-    except ValueError:
-        _logger.warning("_sens_flux: type inconnu '%s' — traité comme +1 (neutre)", t)
-        return 1
-    except Exception:
-        return 1
+    """Wrapper safe : retourne 0 pour les types inconnus (neutre)."""
+    from utils.validators import sens_flux_safe
+    return sens_flux_safe(t)
 
 def _bank_cash_asof_eur(conn, person_id: int, week_date: str) -> float:
     accounts = repo.list_accounts(conn, person_id=person_id)
