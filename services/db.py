@@ -14,12 +14,95 @@ _logger = logging.getLogger(__name__)
 _ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = _ROOT / "patrimoine.db"
 SCHEMA_PATH = _ROOT / "db" / "schema.sql"
+MIGRATIONS_PATH = _ROOT / "db" / "migrations"
+
+# ──────────────────────────────────────────────────────────────
+# Compat libsql ↔ sqlite3 : DictRow + WrappedCursor
+# libsql retourne des tuples, sqlite3.Row supporte row["col"].
+# Ce wrapper rend les deux transparents pour tout le codebase.
+# ──────────────────────────────────────────────────────────────
+
+class DictRow:
+    """Simule sqlite3.Row : accès par clé ET par index."""
+
+    __slots__ = ("_values", "_columns", "_map")
+
+    def __init__(self, values, columns: list[str]):
+        self._values = tuple(values)
+        self._columns = columns
+        self._map = {c: i for i, c in enumerate(columns)}
+
+    # --- accès par clé ("col") ou par index (0) ---
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        return self._values[self._map[key]]
+
+    # --- dict(row) fonctionne grâce à keys() + __getitem__ ---
+    def keys(self):
+        return list(self._columns)
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __repr__(self):
+        pairs = ", ".join(f"{c}={v!r}" for c, v in zip(self._columns, self._values))
+        return f"DictRow({pairs})"
+
+    def __bool__(self):
+        return True
+
+
+class WrappedCursor:
+    """Intercepte fetchone/fetchall pour retourner des DictRow."""
+
+    def __init__(self, real_cursor):
+        self._cursor = real_cursor
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+    def _columns(self) -> list[str]:
+        desc = self._cursor.description
+        return [d[0] for d in desc] if desc else []
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        if row is None:
+            return None
+        # sqlite3.Row a déjà keys() → pas besoin de wrapper
+        if hasattr(row, "keys"):
+            return row
+        return DictRow(row, self._columns())
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if not rows:
+            return rows
+        if hasattr(rows[0], "keys"):
+            return rows
+        cols = self._columns()
+        return [DictRow(r, cols) for r in rows]
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        row = self.fetchone()
+        if row is None:
+            raise StopIteration
+        return row
+
 
 class SyncedLibsqlConn:
     """
-    Wrapper minimal:
-    - commit() => sync() (pour pousser sur Turso)
-    - close() safe
+    Wrapper complet pour les connexions libsql :
+    - execute() → retourne un WrappedCursor (DictRow compat)
+    - commit()  → sync() vers Turso
+    - close()   → safe
     - délègue tout le reste
     """
     def __init__(self, conn):
@@ -27,6 +110,18 @@ class SyncedLibsqlConn:
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
+
+    # --- Curseur wrappé : chaque execute retourne un WrappedCursor ---
+    def execute(self, sql, params=None):
+        if params is not None:
+            cursor = self._conn.execute(sql, params)
+        else:
+            cursor = self._conn.execute(sql)
+        return WrappedCursor(cursor)
+
+    def executemany(self, sql, params_list):
+        cursor = self._conn.executemany(sql, params_list)
+        return WrappedCursor(cursor)
 
     def commit(self):
         self._conn.commit()
@@ -76,7 +171,6 @@ def get_conn():
         return conn
 
     # 3) Embedded replica: fichier local + sync_url vers Turso
-    # NB: le fichier local peut être perdu sur Streamlit, mais sync() le rehydrate
     replica_path = str(DB_PATH).replace(".db", "_turso.db")
     conn = libsql.connect(replica_path, sync_url=url, auth_token=token)
 
@@ -108,6 +202,62 @@ def _row_get(row, key: str, idx: int = 0):
         return row[idx]
 
 
+def run_migrations(conn) -> list:
+    """
+    Applique les migrations SQL manquantes dans l'ordre numérique.
+    Retourne la liste des versions appliquées.
+    """
+    # Crée la table si absente (pour les DBs avant l'ajout du versioning)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS schema_version (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT DEFAULT (datetime('now')),
+      description TEXT
+    )
+    """)
+
+    # Numéro de version courant
+    row = conn.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()
+    current = 0
+    if row:
+        try:
+            v = row["v"]
+        except Exception:
+            v = row[0]
+        if v is not None:
+            current = int(v)
+
+    if not MIGRATIONS_PATH.exists():
+        return []
+
+    applied = []
+    migration_files = sorted(MIGRATIONS_PATH.glob("*.sql"))
+    for mf in migration_files:
+        # extrait le numéro depuis le nom de fichier (ex: 001_initial.sql -> 1)
+        try:
+            num = int(mf.stem.split("_")[0])
+        except (ValueError, IndexError):
+            continue
+
+        if num <= current:
+            continue
+
+        sql = mf.read_text(encoding="utf-8")
+        statements = [s.strip() for s in sql.split(";") if s.strip()]
+        for stmt in statements:
+            try:
+                conn.execute(stmt)
+            except Exception:
+                pass  # index déjà présent etc.
+
+        applied.append(num)
+
+    if applied:
+        conn.commit()
+
+    return applied
+
+
 def init_db() -> None:
     if not SCHEMA_PATH.exists():
         raise FileNotFoundError(f"Schema introuvable : {SCHEMA_PATH}")
@@ -125,6 +275,7 @@ def init_db() -> None:
         ensure_weekly_tables(conn)
         ensure_people_columns(conn)
         ensure_import_batches_table(conn)
+        run_migrations(conn)
 
         conn.commit()
 
@@ -190,17 +341,17 @@ def seed_minimal() -> None:
 
         # Accounts
         row = conn.execute("SELECT COUNT(*) AS c FROM accounts;").fetchone()
-        c2 = row[0]  # compatible tuple + sqlite3.Row
+        c2 = _row_value(row, "c", 0)
         if c2 == 0:
             people = conn.execute("SELECT id, name FROM people ORDER BY id;").fetchall()
             for p in people:
-
+                person_id = _row_value(p, "id", 0)
                 conn.execute(
                     """
                     INSERT INTO accounts(person_id, name, account_type, institution, currency)
                     VALUES (?,?,?,?,?)
                     """,
-                    (p["id"], "Banque principale", "BANQUE", None, "EUR"),
+                    (person_id, "Banque principale", "BANQUE", None, "EUR"),
                 )
             conn.commit()
 
@@ -310,7 +461,7 @@ def ensure_weekly_tables(conn):
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_psw_person_week ON patrimoine_snapshots_weekly(person_id, week_date);")
-    
+
     conn.execute("""
     CREATE TABLE IF NOT EXISTS patrimoine_snapshots_family_weekly (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -343,6 +494,8 @@ def ensure_weekly_tables(conn):
         except Exception:
             pass # déjà présente
 
+    # Composite index pour les queries filtrées sur person + account
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_person_account_date ON transactions(person_id, account_id, date);")
     conn.commit()
 
 

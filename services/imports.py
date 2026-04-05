@@ -6,6 +6,12 @@ import pandas as pd
 _logger = logging.getLogger(__name__)
 
 
+def _ensure_person(conn: sqlite3.Connection, name: str) -> int:
+    conn.execute("INSERT OR IGNORE INTO people(name) VALUES (?)", (name,))
+    conn.commit()
+    row = conn.execute("SELECT id FROM people WHERE name = ?", (name,)).fetchone()
+    return int(row[0] if not hasattr(row, "keys") else row["id"])
+
 
 def _read_clean_wide_csv(file) -> pd.DataFrame:
     # sep=None détecte automatiquement ; ou ,
@@ -43,7 +49,7 @@ def _month_key_from_date(date_value) -> str:
     if s == "":
         raise ValueError("Date vide")
 
-    # format attendu: 30/09/2025 (dd/mm/yyyy)
+    # format attendu: 30/09/2025 (dd/mm/yyyy) ou YYYY-MM-DD (Bankin)
     d = pd.to_datetime(s, dayfirst=True, errors="coerce")
     if pd.isna(d):
         raise ValueError(f"Date invalide: {s}")
@@ -104,16 +110,14 @@ def import_wide_csv_to_monthly_table(
             _logger.warning("import_csv_wide: %d montants négatifs dans les dépenses (ignorés)", len(negatifs))
             long = long[long["montant"] >= 0]
 
-    # Option : on supprime l’existant pour cette personne (plus simple et safe)
-    if delete_existing:
-        conn.execute(f"DELETE FROM {table} WHERE person_id = ?", (person_id,))
-        conn.commit()
-
-    # Insert en masse
     rows = [
         (person_id, r["mois"], r["categorie"], float(r["montant"]), import_batch_id)
         for _, r in long.iterrows()
     ]
+
+    # DELETE + INSERT dans la même transaction pour éviter la perte de données en cas d’erreur
+    if delete_existing:
+        conn.execute(f"DELETE FROM {table} WHERE person_id = ?", (person_id,))
 
     conn.executemany(
         f"INSERT INTO {table} (person_id, mois, categorie, montant, import_batch_id) VALUES (?, ?, ?, ?, ?)",
@@ -223,13 +227,6 @@ def map_bankin_to_final(parent_cat: str, cat: str, amount: float) -> str:
     return "Dépenses courantes"
 
 
-def _ensure_person(conn: sqlite3.Connection, name: str) -> int:
-    conn.execute("INSERT OR IGNORE INTO people(name) VALUES (?)", (name,))
-    conn.commit()
-    row = conn.execute("SELECT id FROM people WHERE name = ?", (name,)).fetchone()
-    return int(row[0] if not hasattr(row, "keys") else row["id"])
-
-
 def _ensure_account(conn: sqlite3.Connection, person_id: int, account_name: str) -> int:
     row = conn.execute(
         "SELECT id FROM accounts WHERE person_id = ? AND name = ?",
@@ -283,7 +280,7 @@ def import_bankin_csv(
         conn.execute("DELETE FROM transactions WHERE person_id = ?", (person_id,))
         conn.commit()
 
-    # Pour alimenter depenses/revenus en “mensuel par catégorie”
+    # Pour alimenter depenses/revenus en "mensuel par catégorie"
     monthly_dep = {}  # (mois, categorie_finale) -> sum
     monthly_rev = {}
 

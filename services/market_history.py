@@ -6,6 +6,15 @@ from services import market_repository as mrepo
 
 _logger = logging.getLogger(__name__)
 
+
+def _row_val(row, key: str, idx: int):
+    """Compat sqlite3.Row (accès par clé) et libsql (accès par index tuple)."""
+    try:
+        return row[key]
+    except Exception:
+        return row[idx]
+
+
 def _to_date(d) -> dt.date:
     if isinstance(d, dt.date):
         return d
@@ -133,7 +142,7 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
             (direct_sym, weeks[0], weeks[-1]),
         ).fetchall()
 
-        if rows:
+if rows:
             # Paire directe disponible → stocker (base, quote, rate)
             for r in rows:
                 mrepo.upsert_fx_rate_weekly(conn, base, quote, r["week_date"], float(r["adj_close"]))
@@ -194,7 +203,10 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
 
 def get_price_asof(conn, symbol: str, week_date: str) -> float | None:
     row = mrepo.get_asset_price_asof(conn, symbol, week_date)
-    return float(row["adj_close"]) if row else None
+    if not row:
+        return None
+    # SELECT symbol(0), week_date(1), adj_close(2), currency(3), source(4)
+    return float(_row_val(row, "adj_close", 2))
 
 def get_fx_asof(conn, base_ccy: str, quote_ccy: str, week_date: str,
                 _depth: int = 0) -> float | None:
@@ -211,15 +223,17 @@ def get_fx_asof(conn, base_ccy: str, quote_ccy: str, week_date: str,
     if base_ccy == quote_ccy:
         return 1.0
 
-    # 1. Paire directe
+# 1. Paire directe
     row = mrepo.get_fx_rate_asof(conn, base_ccy, quote_ccy, week_date)
     if row:
-        return float(row["rate"])
+        return float(_row_val(row, "rate", 3))
 
     # 2. Paire inverse
     inv = mrepo.get_fx_rate_asof(conn, quote_ccy, base_ccy, week_date)
-    if inv and float(inv["rate"]) != 0:
-        return 1.0 / float(inv["rate"])
+    if inv:
+        rate_inv = float(_row_val(inv, "rate", 3))
+        if rate_inv != 0:
+            return 1.0 / rate_inv
 
     # 3. Cross-rate via USD (évite la récursion infinie via _depth)
     _PIVOT = "USD"

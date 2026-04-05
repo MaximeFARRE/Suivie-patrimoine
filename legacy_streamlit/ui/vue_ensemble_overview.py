@@ -60,7 +60,10 @@ def _refresh_all_bourse_prices(conn) -> tuple[int, int]:
                 a = conn.execute("SELECT * FROM assets WHERE id = ?;", (aid,)).fetchone()
                 if not a:
                     continue
-                sym = a["symbol"]
+                try:
+                    sym = a["symbol"]
+                except (TypeError, KeyError):
+                    sym = a[1]
                 px, ccy = pricing.fetch_last_price_auto(sym)
                 if px is None:
                     n_fail += 1
@@ -203,7 +206,7 @@ def _milestone_status(value: float, milestones: list[tuple[float, str]]):
 
 
 def _loan_principal_from_monthly_payment(monthly_payment: float, annual_rate_pct: float, duration_years: int) -> float:
-    """Capacité d’emprunt simple via annuité : P = M * (1 - (1+r)^-n) / r."""
+    """Capacité d'emprunt simple via annuité : P = M * (1 - (1+r)^-n) / r."""
     m = float(monthly_payment or 0.0)
     if m <= 0:
         return 0.0
@@ -593,12 +596,12 @@ def _get_cashflow_last12(conn, person_id: int):
 
 
 def afficher_vue_ensemble_overview(conn, person_id: int):
-    st.subheader("Vue d’ensemble")
+    st.subheader("Vue d'ensemble")
 
     # ─────────────────────────────────────────────
     # Agrégations
     # ─────────────────────────────────────────────
-    # Liquidités : même logique que l’onglet « Liquidités »
+    # Liquidités : même logique que l'onglet « Liquidités »
     bank_cash, bourse_cash, pe_cash, liquidites_total = _compute_liquidites_like_overview(conn, person_id)
 
     # Bourse : on garde la valo titres (holdings)
@@ -737,9 +740,9 @@ def afficher_vue_ensemble_overview(conn, person_id: int):
     with m2:
         st.metric("Patrimoine brut (période)", _fmt_eur(last_brut), f"{_fmt_eur(delta_brut)} ({pct_brut:+.1f}%)")
 
-    # Si une seule snapshot -> tu n’auras qu’un point, c’est normal
+    # Si une seule snapshot -> tu n'auras qu'un point, c'est normal
     if len(df_h) < 2:
-        st.info("Tu n’as qu’une seule snapshot : le graphe affiche un point. Dès demain (ou après plusieurs snapshots), tu auras une courbe.")
+        st.info("Tu n'as qu'une seule snapshot : le graphe affiche un point. Dès demain (ou après plusieurs snapshots), tu auras une courbe.")
         return
 
     # Graphe
@@ -868,10 +871,54 @@ def afficher_vue_ensemble_overview(conn, person_id: int):
     st.divider()
 
     # ─────────────────────────────────────────────
-    # Mini détail liquidités (sans refaire l’onglet dédié)
+    # Mini détail liquidités (sans refaire l'onglet dédié)
     # ─────────────────────────────────────────────
     st.markdown("### Résumé liquidités")
     a, b, c = st.columns(3)
     a.metric("Banque", _fmt_eur(bank_cash))
     b.metric("Bourse (cash)", _fmt_eur(bourse_cash))
     c.metric("PE (cash)", _fmt_eur(pe_cash))
+
+    st.divider()
+
+    # ─────────────────────────────────────────────
+    # Export PDF
+    # ─────────────────────────────────────────────
+    st.markdown("### 📄 Export PDF")
+    with st.expander("Générer un bilan PDF", expanded=False):
+        period_pdf = st.selectbox(
+            "Fenêtre historique",
+            [30, 60, 90, 180],
+            index=2,
+            format_func=lambda x: f"{x} jours",
+            key=f"pdf_period_{person_id}",
+        )
+        if st.button("📄 Générer et télécharger le bilan", key=f"pdf_btn_{person_id}"):
+            try:
+                from services.pdf_export import generate_patrimoine_pdf
+                # Récupère le nom de la personne
+                try:
+                    row = conn.execute("SELECT name FROM people WHERE id=?", (int(person_id),)).fetchone()
+                    pname = row["name"] if row else f"Personne {person_id}"
+                except Exception:
+                    try:
+                        pname = row[0] if row else f"Personne {person_id}"
+                    except Exception:
+                        pname = f"Personne {person_id}"
+                pdf_bytes = generate_patrimoine_pdf(
+                    conn,
+                    person_id=person_id,
+                    person_name=pname,
+                    period_days=int(period_pdf),
+                )
+                st.download_button(
+                    label="⬇️ Télécharger le PDF",
+                    data=pdf_bytes,
+                    file_name=f"bilan_{pname.lower().replace(' ', '_')}.pdf",
+                    mime="application/pdf",
+                    key=f"pdf_dl_{person_id}",
+                )
+            except ImportError:
+                st.error("fpdf2 n'est pas installé. Lance : pip install fpdf2")
+            except Exception as e:
+                st.error(f"Erreur lors de la génération du PDF : {e}")
