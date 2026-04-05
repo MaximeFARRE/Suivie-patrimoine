@@ -527,9 +527,9 @@ class DataTableWidget(QWidget):
             # L'insérer avant la table (position 0 du layout)
             layout = self.layout()
             layout.insertWidget(0, self._filter_bar)
+            self._filter_bar.filters_changed.connect(self._on_advanced_filter_changed)
 
         self._filter_bar.set_config(config)
-        self._filter_bar.filters_changed.connect(self._on_advanced_filter_changed)
 
         # Masquer la barre de recherche simple pour éviter la duplication
         self._search_bar.hide()
