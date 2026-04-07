@@ -6,22 +6,6 @@ from typing import Dict, List, Optional, Tuple
 from services import repositories as repo
 
 
-# ---------- Helpers perf ----------
-def _has_column(conn, table_name: str, column_name: str) -> bool:
-    try:
-        rows = conn.execute(f"PRAGMA table_info({table_name});").fetchall()
-    except Exception:
-        return False
-    for row in rows:
-        try:
-            if str(row["name"]) == column_name:
-                return True
-        except Exception:
-            if len(row) > 1 and str(row[1]) == column_name:
-                return True
-    return False
-
-
 def _pct(a: float, b: float) -> Optional[float]:
     """Perf % entre a (base) et b (final)."""
     if a is None or b is None:
@@ -136,21 +120,12 @@ def get_last_common_week(conn, person_ids: List[int]) -> Optional[pd.Timestamp]:
 
 
 def get_person_snapshot_at_week(conn, person_id: int, week: pd.Timestamp) -> Optional[Dict]:
-    has_immo = _has_column(conn, "patrimoine_snapshots_weekly", "immobilier_value")
-    immo_select = "immobilier_value" if has_immo else "0.0 AS immobilier_value"
-    df = pd.read_sql_query(
-        """
-        SELECT week_date, patrimoine_net, patrimoine_brut, liquidites_total,
-               bourse_holdings, pe_value, ent_value, {immo_select}, credits_remaining
-        FROM patrimoine_snapshots_weekly
-        WHERE person_id=? AND week_date=?
-        """.format(immo_select=immo_select),
-        conn,
-        params=(int(person_id), week.strftime("%Y-%m-%d")),
-    )
-    if df is None or df.empty:
-        return None
-    return df.iloc[0].to_dict()
+    """
+    Snapshot d'une personne à une semaine précise.
+    Délègue à la source officielle ``snapshots.get_person_snapshot_at_week``.
+    """
+    from services import snapshots as wk_snap
+    return wk_snap.get_person_snapshot_at_week(conn, person_id=person_id, week_date=week)
 
 
 # ---------- Dashboard computations ----------

@@ -1066,3 +1066,100 @@ def get_latest_person_snapshot(conn, person_id: int) -> dict | None:
         "ent_value":        _val("ent_value"),
         "credits_remaining": _val("credits_remaining"),
     }
+
+
+def get_person_snapshot_at_week(
+    conn,
+    person_id: int,
+    week_date: "pd.Timestamp | str",
+) -> "dict | None":
+    """
+    Retourne le snapshot hebdomadaire d'une personne à une semaine précise.
+
+    Symétrique à ``get_latest_person_snapshot`` mais filtré sur une date donnée
+    plutôt que sur le dernier enregistrement.
+
+    Paramètres
+    ----------
+    week_date : pd.Timestamp ou str (YYYY-MM-DD)
+        La semaine exacte souhaitée.
+
+    Retourne un dictionnaire avec les mêmes clés que ``get_latest_person_snapshot``:
+        week_date           str   (format YYYY-MM-DD)
+        patrimoine_net      float
+        patrimoine_brut     float
+        liquidites_total    float
+        bourse_holdings     float
+        pe_value            float
+        ent_value           float
+        immobilier_value    float
+        credits_remaining   float
+
+    Retourne None si aucun snapshot n'existe pour cette semaine.
+    """
+    if person_id is None:
+        _logger.warning("get_person_snapshot_at_week: person_id est None")
+        return None
+
+    # Normalisation de la date en chaîne YYYY-MM-DD
+    try:
+        if isinstance(week_date, str):
+            week_str = week_date
+        else:
+            week_str = pd.Timestamp(week_date).strftime("%Y-%m-%d")
+    except Exception:
+        _logger.warning(
+            "get_person_snapshot_at_week: week_date invalide (%r) pour person_id=%s",
+            week_date, person_id,
+        )
+        return None
+
+    try:
+        row = conn.execute(
+            """
+            SELECT week_date, patrimoine_net, patrimoine_brut,
+                   liquidites_total, bourse_holdings, immobilier_value,
+                   pe_value, ent_value, credits_remaining
+            FROM patrimoine_snapshots_weekly
+            WHERE person_id = ? AND week_date = ?
+            LIMIT 1
+            """,
+            (int(person_id), week_str),
+        ).fetchone()
+    except Exception:
+        _logger.error(
+            "get_person_snapshot_at_week: erreur lecture pour person_id=%s week_date=%s",
+            person_id, week_str, exc_info=True,
+        )
+        return None
+
+    if row is None:
+        _logger.info(
+            "get_person_snapshot_at_week: aucun snapshot pour person_id=%s semaine=%s",
+            person_id, week_str,
+        )
+        return None
+
+    def _val(key: str) -> float:
+        """Extrait une valeur numérique de la Row SQLite avec fallback à 0.0."""
+        try:
+            v = row[key]
+            return float(v) if v is not None else 0.0
+        except (KeyError, IndexError, TypeError, ValueError):
+            _logger.warning(
+                "get_person_snapshot_at_week: colonne '%s' absente ou invalide "
+                "pour person_id=%s semaine=%s", key, person_id, week_str,
+            )
+            return 0.0
+
+    return {
+        "week_date":         str(row["week_date"]) if row["week_date"] else None,
+        "patrimoine_net":    _val("patrimoine_net"),
+        "patrimoine_brut":   _val("patrimoine_brut"),
+        "liquidites_total":  _val("liquidites_total"),
+        "bourse_holdings":   _val("bourse_holdings"),
+        "immobilier_value":  _val("immobilier_value"),
+        "pe_value":          _val("pe_value"),
+        "ent_value":         _val("ent_value"),
+        "credits_remaining": _val("credits_remaining"),
+    }
