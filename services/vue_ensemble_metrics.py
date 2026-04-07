@@ -53,12 +53,8 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
 
     # ── 1. Snapshots hebdomadaires ────────────────────────────────────────
     try:
-        rows = conn.execute(
-            "SELECT * FROM patrimoine_snapshots_weekly "
-            "WHERE person_id = ? ORDER BY week_date",
-            (person_id,),
-        ).fetchall()
-        df_snap = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
+        from services.snapshots import get_person_weekly_series
+        df_snap = get_person_weekly_series(conn, person_id)
     except Exception as exc:
         logger.warning("get_vue_ensemble_metrics: lecture snapshots échouée : %s", exc)
         df_snap = pd.DataFrame()
@@ -66,7 +62,7 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
     if df_snap.empty:
         return m
 
-    # Valeurs courantes par défaut (avant parsing date, pour robustesse).
+    # week_date est déjà datetime (via get_person_weekly_series)
     last = df_snap.iloc[-1]
     m["net"] = _sf(last.get("patrimoine_net"))
     m["brut"] = _sf(last.get("patrimoine_brut"))
@@ -76,37 +72,25 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
     m["pe_value"] = _sf(last.get("pe_value"))
     m["ent_value"] = _sf(last.get("ent_value"))
     m["immo_value"] = _sf(last.get("immobilier_value"))
-    m["week_date"] = str(last.get("week_date", "—"))
+    m["week_date"] = pd.Timestamp(last["week_date"]).strftime("%Y-%m-%d")
     m["asof_date"] = m["week_date"]
 
     # ── 2. Patrimoine net historique ──────────────────────────────────────
     anchor_dt = None
     try:
-        df_snap["_dt"] = pd.to_datetime(df_snap["week_date"], errors="coerce")
-        df_snap = df_snap.dropna(subset=["_dt"]).sort_values("_dt")
-        if df_snap.empty:
-            return m
-
-        last = df_snap.iloc[-1]
-        anchor_dt = pd.Timestamp(last["_dt"])
-        m["net"] = _sf(last.get("patrimoine_net"))
-        m["brut"] = _sf(last.get("patrimoine_brut"))
-        m["liq"] = _sf(last.get("liquidites_total"))
-        m["bourse"] = _sf(last.get("bourse_holdings"))
-        m["credits"] = _sf(last.get("credits_remaining"))
-        m["pe_value"] = _sf(last.get("pe_value"))
-        m["ent_value"] = _sf(last.get("ent_value"))
-        m["immo_value"] = _sf(last.get("immobilier_value"))
-        m["week_date"] = str(last.get("week_date", "—"))
+        anchor_dt = pd.Timestamp(last["week_date"])
         m["asof_date"] = anchor_dt.date().isoformat()
 
         def _hist_net(weeks_back: int) -> float | None:
             target = anchor_dt - pd.Timedelta(weeks=weeks_back)
-            past = df_snap[df_snap["_dt"] <= target]
+            past = df_snap[df_snap["week_date"] <= target]
             return _opt(past.iloc[-1]["patrimoine_net"]) if not past.empty else None
 
         m["net_13w"] = _hist_net(13)
         m["net_52w"] = _hist_net(52)
+        # _dt : alias pour rétrocompatibilité avec vue_ensemble_panel (graphique)
+        df_snap = df_snap.copy()
+        df_snap["_dt"] = df_snap["week_date"]
         m["df_snap"] = df_snap  # pour le graphique ligne dans le panel
     except Exception as exc:
         logger.warning("get_vue_ensemble_metrics: historique net échoué : %s", exc)
