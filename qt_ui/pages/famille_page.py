@@ -408,59 +408,13 @@ class FamilleDashboardPanel(QWidget):
         df_people_prev: pd.DataFrame | None = None,
     ) -> None:
         """AM-06 : Treemap allocation détaillée par personne et catégorie."""
-        if df_people is None or df_people.empty:
-            return
+        from services import family_dashboard as fd
 
-        category_cols = {
-            "Liquidités": "Liquidités (€)",
-            "Bourse": "Bourse (€)",
-            "Private Equity": "PE (€)",
-            "Entreprises": "Entreprises (€)",
-            "Immobilier": "Immobilier (€)",
-        }
-
-        prev_map: dict[tuple[str, str], float] = {}
-        if df_people_prev is not None and not df_people_prev.empty:
-            for _, row in df_people_prev.iterrows():
-                name = str(row.get("Personne", ""))
-                for category, col in category_cols.items():
-                    prev_map[(name, category)] = float(row.get(col, 0.0) or 0.0)
-
-        rows = []
-        for _, row in df_people.iterrows():
-            person = str(row.get("Personne", ""))
-            person_total = 0.0
-            values = {}
-            for category, col in category_cols.items():
-                value = max(0.0, float(row.get(col, 0.0) or 0.0))
-                values[category] = value
-                person_total += value
-            if person_total <= 0:
-                continue
-
-            for category, value in values.items():
-                if value <= 0:
-                    continue
-                prev_val = prev_map.get((person, category))
-                rows.append(
-                    {
-                        "Portefeuille": "Famille",
-                        "Personne": person,
-                        "Catégorie": category,
-                        "Valeur": value,
-                        "Part personne (%)": value / person_total * 100.0,
-                        "var_txt": _fmt_var_pct(_compute_var_pct(value, prev_val)) if prev_val is not None else "n/a",
-                    }
-                )
-
-        tree_df = pd.DataFrame(rows)
+        tree_df = fd.prepare_family_treemap_data(df_people, df_people_prev)
         if tree_df.empty:
             return
 
-        total = float(tree_df["Valeur"].sum())
-        tree_df["Part famille (%)"] = (
-            tree_df["Valeur"] / total * 100.0
-        ).round(2) if total > 0 else 0.0
+        tree_df["var_txt"] = tree_df["var_pct"].apply(_fmt_var_pct)
 
         fig_tree = px.treemap(
             tree_df,
