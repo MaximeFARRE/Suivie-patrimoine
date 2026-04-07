@@ -425,3 +425,114 @@ def prepare_family_alloc_pie_data(
     df["part_pct"] = (df["Valeur"] / total * 100.0).round(2) if total > 0 else 0.0
 
     return df[_COLS].reset_index(drop=True)
+
+
+# Mapping catégorie → colonne dans df_people (sortie de compute_people_table).
+# Distinct de ALLOC_CATEGORY_MAP qui pointe sur les colonnes de la série famille.
+_TREEMAP_CATEGORY_COLS: Dict[str, str] = {
+    "Liquidités":     "Liquidités (€)",
+    "Bourse":         "Bourse (€)",
+    "Private Equity": "PE (€)",
+    "Entreprises":    "Entreprises (€)",
+    "Immobilier":     "Immobilier (€)",
+}
+
+
+def prepare_family_treemap_data(
+    df_people: pd.DataFrame,
+    df_people_prev: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    """
+    Prépare le DataFrame pour le treemap d'allocation détaillée par personne
+    et catégorie.
+
+    Transforme les données de la table personnes (sortie de ``compute_people_table``)
+    en format plat prêt pour ``px.treemap`` — logique autrefois inline dans
+    ``_build_allocation_treemap``.
+
+    Paramètres
+    ----------
+    df_people      : DataFrame courant (semaine de référence).
+    df_people_prev : DataFrame semaine précédente (optionnel, pour les variations).
+
+    Retourne un DataFrame avec les colonnes :
+        Portefeuille        str   (toujours « Famille »)
+        Personne            str
+        Catégorie           str
+        Valeur              float (> 0)
+        Part personne (%)   float
+        Part famille (%)    float
+        var_pct             float ou None (variation vs semaine précédente)
+
+    Retourne un DataFrame vide (avec les colonnes) si l'entrée est vide ou invalide.
+    """
+    _COLS = [
+        "Portefeuille", "Personne", "Catégorie",
+        "Valeur", "Part personne (%)", "Part famille (%)", "var_pct",
+    ]
+    empty = pd.DataFrame(columns=_COLS)
+
+    if df_people is None or df_people.empty:
+        _logger.info("prepare_family_treemap_data: df_people vide")
+        return empty
+
+    # Vérification défensive des colonnes attendues
+    missing_cols = [col for col in _TREEMAP_CATEGORY_COLS.values() if col not in df_people.columns]
+    if missing_cols:
+        _logger.warning(
+            "prepare_family_treemap_data: colonnes absentes dans df_people : %s",
+            missing_cols,
+        )
+
+    # Construction du prev_map : (personne, catégorie) → valeur semaine précédente
+    prev_map: Dict[tuple, float] = {}
+    if df_people_prev is not None and not df_people_prev.empty:
+        for _, row in df_people_prev.iterrows():
+            name = str(row.get("Personne", ""))
+            for category, col in _TREEMAP_CATEGORY_COLS.items():
+                prev_map[(name, category)] = float(row.get(col, 0.0) or 0.0)
+
+    # Construction des lignes du treemap
+    rows = []
+    for _, row in df_people.iterrows():
+        person = str(row.get("Personne", ""))
+
+        # Agrégation par catégorie pour cette personne
+        values: Dict[str, float] = {}
+        person_total = 0.0
+        for category, col in _TREEMAP_CATEGORY_COLS.items():
+            value = max(0.0, float(row.get(col, 0.0) or 0.0))
+            values[category] = value
+            person_total += value
+
+        if person_total <= 0:
+            _logger.debug(
+                "prepare_family_treemap_data: personne '%s' ignorée (total = 0)", person
+            )
+            continue
+
+        for category, value in values.items():
+            if value <= 0:
+                continue
+            prev_val = prev_map.get((person, category))
+            var_pct = _pct(prev_val, value) if prev_val is not None else None
+            rows.append({
+                "Portefeuille":      "Famille",
+                "Personne":          person,
+                "Catégorie":         category,
+                "Valeur":            value,
+                "Part personne (%)": round(value / person_total * 100.0, 2),
+                "var_pct":           var_pct,
+            })
+
+    if not rows:
+        _logger.info("prepare_family_treemap_data: aucune ligne générée (données vides ?)")
+        return empty
+
+    tree_df = pd.DataFrame(rows)
+    total = float(tree_df["Valeur"].sum())
+    tree_df["Part famille (%)"] = (
+        tree_df["Valeur"] / total * 100.0
+    ).round(2) if total > 0 else 0.0
+
+    return tree_df[_COLS].reset_index(drop=True)
