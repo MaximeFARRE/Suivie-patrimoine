@@ -46,10 +46,17 @@ Conséquences :
 | Projections patrimoine | `services.projections.run_projection` | OK |
 | Base de projection | `services.projections.get_projection_base_for_scope` | OK |
 | Milestones natives | `services.native_milestones.build_native_milestones_for_scope` | OK |
+| Rendement & risque portefeuille | `services.bourse_advanced_analytics.get_risk_return_payload` | OK |
+| Corrélations & diversification | `services.bourse_advanced_analytics.get_correlation_payload` | OK |
+| Contribution au risque | `services.bourse_advanced_analytics.get_risk_contribution_payload` | OK |
+| VaR & Expected Shortfall | `services.bourse_advanced_analytics.get_var_es_payload` | OK |
+| Frontière efficiente | `services.bourse_advanced_analytics.get_efficient_frontier_payload` | OK |
+| Comparaison benchmark | `services.bourse_advanced_analytics.get_benchmark_comparison_payload` | OK |
 
 Notes de transition :
 - `services.portfolio.compute_positions_v2_fx` reste un moteur interne utilisé via `bourse_analytics`.
 - `services.revenus_repository.compute_taux_epargne_mensuel` est un chemin legacy (compatibilité), à ne plus brancher directement dans l'UI.
+- `services.bourse_advanced_analytics` est un service dédié aux analytics avancés, consommé uniquement par `bourse_global_panel.py`. Il s'appuie sur `bourse_analytics` et `market_history` pour les données brutes.
 
 ---
 

@@ -4,6 +4,7 @@ Panel Bourse Global — remplace ui/bourse_global_overview.py
 import logging
 import datetime
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -13,9 +14,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QDate
 
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, LoadingOverlay
+from qt_ui.widgets import (
+    PlotlyView, DataTableWidget, KpiCard, LoadingOverlay, CollapsibleSection,
+)
 from qt_ui.theme import (
-    BG_PRIMARY, BORDER_SUBTLE, TEXT_SECONDARY, TEXT_MUTED,
+    BG_PRIMARY, BG_CARD, BORDER_SUBTLE, TEXT_SECONDARY, TEXT_MUTED, TEXT_PRIMARY,
     STYLE_BTN_PRIMARY, STYLE_TITLE_XL, STYLE_SECTION,
     STYLE_STATUS, COLOR_SUCCESS, COLOR_ERROR,
     plotly_layout, plotly_time_series_layout,
@@ -366,6 +369,41 @@ class BourseGlobalPanel(QWidget):
         ])
         layout.addWidget(self._table_diag)
 
+        # ── Analytics Avancés (accordéons, tout fermé par défaut) ──────────
+        layout.addWidget(_sep())
+        lbl_analytics = QLabel("📊  Analytics Avancés")
+        lbl_analytics.setStyleSheet(STYLE_TITLE_XL)
+        layout.addWidget(lbl_analytics)
+        lbl_analytics_sub = QLabel(
+            "Métriques d'ingénierie financière — cliquez sur une section pour l'ouvrir"
+        )
+        lbl_analytics_sub.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+        layout.addWidget(lbl_analytics_sub)
+
+        # État de chargement lazy : une seule fois par section
+        self._analytics_loaded: dict[str, bool] = {}
+
+        self._section_risk = self._build_analytics_section(
+            layout, "📈 Rendement & Risque", "risk_return"
+        )
+        self._section_corr = self._build_analytics_section(
+            layout, "🔗 Corrélations & Diversification", "correlation"
+        )
+        self._section_contrib = self._build_analytics_section(
+            layout, "⚖️ Contribution au Risque", "risk_contribution"
+        )
+        self._section_var = self._build_analytics_section(
+            layout, "🎯 VaR & Expected Shortfall", "var_es"
+        )
+        self._section_frontier = self._build_analytics_section(
+            layout, "🌐 Frontière Efficiente", "efficient_frontier"
+        )
+        self._section_benchmark = self._build_analytics_section(
+            layout, "📊 Comparaison Benchmark", "benchmark"
+        )
+
+        layout.addStretch()
+
         # ── Overlay de chargement (sur le widget externe, pas le scroll) ───
         self._overlay = LoadingOverlay(self)
 
@@ -434,6 +472,9 @@ class BourseGlobalPanel(QWidget):
     # ── Chargement des données ────────────────────────────────────────────────
 
     def _load_data(self) -> None:
+        # Réinitialiser le cache analytics pour forcer le rechargement
+        self._analytics_loaded = {}
+
         # ── 1. Activation des Skeletons ──────────────────────────────────
         all_widgets = self._kpis_top + self._kpis_bot + [self._table_pos, self._table_diag]
         for w in all_widgets:
@@ -763,6 +804,466 @@ class BourseGlobalPanel(QWidget):
             self._chart_alloc.set_loading(False)
 
             self._overlay.stop()
+
+    # ── Analytics — construction et chargement lazy ─────────────────────────
+
+    def _build_analytics_section(
+        self, parent_layout: QVBoxLayout, title: str, section_key: str
+    ) -> CollapsibleSection:
+        """Crée une section accordéon et connecte le signal d'ouverture."""
+        section = CollapsibleSection(title)
+        content_layout = QVBoxLayout()
+
+        # Placeholder "Chargement…"
+        placeholder = QLabel("⏳ Ouvrez la section pour charger les données…")
+        placeholder.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 8px;")
+        placeholder.setObjectName(f"placeholder_{section_key}")
+        content_layout.addWidget(placeholder)
+
+        section.set_content_layout(content_layout)
+        section.toggled.connect(lambda opened, k=section_key: self._on_analytics_toggled(k, opened))
+        parent_layout.addWidget(section)
+        return section
+
+    def _on_analytics_toggled(self, section_key: str, opened: bool) -> None:
+        """Charge les données la première fois qu'une section est ouverte."""
+        if not opened:
+            return
+        if self._analytics_loaded.get(section_key, False):
+            return
+
+        self._analytics_loaded[section_key] = True
+
+        loaders = {
+            "risk_return": self._load_risk_return_section,
+            "correlation": self._load_correlation_section,
+            "risk_contribution": self._load_risk_contribution_section,
+            "var_es": self._load_var_es_section,
+            "efficient_frontier": self._load_efficient_frontier_section,
+            "benchmark": self._load_benchmark_section,
+        }
+        loader = loaders.get(section_key)
+        if loader:
+            try:
+                loader()
+            except Exception as e:
+                logger.error("Erreur chargement analytics '%s': %s", section_key, e, exc_info=True)
+
+    def _get_section_content_layout(self, section: CollapsibleSection) -> QVBoxLayout:
+        """Retourne le layout de contenu d'une section et supprime le placeholder."""
+        content = section._content_widget
+        layout = content.layout()
+        # Supprimer le placeholder
+        for i in reversed(range(layout.count())):
+            widget = layout.itemAt(i).widget()
+            if widget and widget.objectName().startswith("placeholder_"):
+                widget.deleteLater()
+        return layout
+
+    @staticmethod
+    def _analytics_error_label(message: str) -> QLabel:
+        """Crée un label d'erreur/état vide pour les sections analytics."""
+        lbl = QLabel(f"⚠️ {message}")
+        lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 12px;")
+        lbl.setWordWrap(True)
+        return lbl
+
+    @staticmethod
+    def _analytics_kpi_row(items: list[tuple[str, str]]) -> QHBoxLayout:
+        """Crée une ligne de KPIs simples (label : valeur)."""
+        row = QHBoxLayout()
+        row.setSpacing(20)
+        for label_text, value_text in items:
+            pair = QVBoxLayout()
+            pair.setSpacing(2)
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
+            val = QLabel(str(value_text))
+            val.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+            pair.addWidget(lbl)
+            pair.addWidget(val)
+            row.addLayout(pair)
+        row.addStretch()
+        return row
+
+    # ── 1. Rendement & Risque ─────────────────────────────────────────────
+
+    def _load_risk_return_section(self) -> None:
+        """Charge les KPIs rendement/risque dans la section accordéon."""
+        from services.bourse_advanced_analytics import get_risk_return_payload
+
+        payload = get_risk_return_payload(self._conn, self._person_id)
+        layout = self._get_section_content_layout(self._section_risk)
+
+        if "error" in payload:
+            layout.addWidget(self._analytics_error_label(payload["error"]))
+            return
+
+        # Ligne 1 — Rendement
+        cagr = payload.get("cagr_pct")
+        cagr_text = f"{cagr:+.2f} %" if cagr is not None else "N/A"
+        mean_ret = payload.get("mean_return_ann_pct", 0)
+        layout.addLayout(self._analytics_kpi_row([
+            ("CAGR", cagr_text),
+            ("Rendement moy. annualisé", f"{mean_ret:+.2f} %"),
+            ("Points de données", str(payload.get("data_points", 0))),
+            ("Période", f"{payload.get('period_start', '?')} → {payload.get('period_end', '?')}"),
+        ]))
+
+        # Ligne 2 — Risque
+        vol = payload.get("volatility_ann_pct", 0)
+        sharpe = payload.get("sharpe")
+        sharpe_text = f"{sharpe:.3f}" if sharpe is not None else "N/A"
+        beta = payload.get("beta")
+        beta_text = f"{beta:.3f}" if beta is not None else "N/A (benchmark absent)"
+        layout.addLayout(self._analytics_kpi_row([
+            ("Volatilité annualisée", f"{vol:.2f} %"),
+            ("Ratio de Sharpe", sharpe_text),
+            ("Beta vs MSCI World", beta_text),
+        ]))
+
+        # Ligne 3 — Drawdown
+        dd = payload.get("max_drawdown_pct", 0)
+        dd_start = payload.get("drawdown_start", "—")
+        dd_end = payload.get("drawdown_end", "—")
+        recovery = payload.get("recovery_days")
+        recovery_text = f"{recovery} jours" if recovery is not None else "Non récupéré"
+        layout.addLayout(self._analytics_kpi_row([
+            ("Max Drawdown", f"{dd:.2f} %"),
+            ("Drawdown", f"{dd_start} → {dd_end}"),
+            ("Récupération", recovery_text),
+        ]))
+
+        # Info méthodologique
+        info = QLabel("ℹ️ Sharpe calculé avec Rf=3%. Volatilité = σ weekly × √52. Beta vs URTH (MSCI World).")
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px; padding-top: 6px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+    # ── 2. Corrélations & Diversification ─────────────────────────────────
+
+    def _load_correlation_section(self) -> None:
+        """Charge la heatmap de corrélation dans la section accordéon."""
+        from services.bourse_advanced_analytics import get_correlation_payload
+
+        payload = get_correlation_payload(self._conn, self._person_id)
+        layout = self._get_section_content_layout(self._section_corr)
+
+        if "error" in payload:
+            layout.addWidget(self._analytics_error_label(payload["error"]))
+            return
+
+        corr_matrix = payload["matrix"]
+        tickers = payload["tickers"]
+        avg_corr = payload.get("avg_correlation", 0)
+        div_ratio = payload.get("diversification_ratio")
+
+        # KPIs
+        div_text = f"{div_ratio:.2f}" if div_ratio is not None else "N/A"
+        layout.addLayout(self._analytics_kpi_row([
+            ("Corrélation moyenne", f"{avg_corr:.3f}"),
+            ("Ratio de diversification", div_text),
+            ("Actifs analysés", str(payload.get("n_assets", 0))),
+        ]))
+
+        # Top paires corrélées
+        top_pairs = payload.get("top_correlated_pairs", [])
+        if top_pairs:
+            pairs_text = " · ".join([f"{a}/{b}: {c:.2f}" for a, b, c in top_pairs[:5]])
+            lbl_pairs = QLabel(f"🔗 Top corrélations : {pairs_text}")
+            lbl_pairs.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; padding: 4px 0;")
+            lbl_pairs.setWordWrap(True)
+            layout.addWidget(lbl_pairs)
+
+        # Heatmap Plotly
+        chart_corr = PlotlyView(min_height=350)
+        fig = go.Figure(data=go.Heatmap(
+            z=corr_matrix.values,
+            x=tickers,
+            y=tickers,
+            colorscale="RdBu_r",
+            zmin=-1, zmax=1,
+            text=np.round(corr_matrix.values, 2),
+            texttemplate="%{text}",
+            textfont=dict(size=10),
+            hovertemplate="%{x} / %{y}<br>Corrélation: %{z:.3f}<extra></extra>",
+        ))
+        fig.update_layout(
+            **plotly_layout(margin=dict(l=60, r=20, t=20, b=60)),
+            xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
+            yaxis=dict(tickfont=dict(size=10)),
+        )
+        chart_corr.set_figure(fig)
+        layout.addWidget(chart_corr)
+
+        info = QLabel("ℹ️ Corrélation de Pearson sur rendements log-weekly. Ratio diversification > 1 = bonne diversification.")
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+    # ── 3. Contribution au Risque ─────────────────────────────────────────
+
+    def _load_risk_contribution_section(self) -> None:
+        """Charge la contribution au risque de chaque actif."""
+        from services.bourse_advanced_analytics import get_risk_contribution_payload
+
+        payload = get_risk_contribution_payload(self._conn, self._person_id)
+        layout = self._get_section_content_layout(self._section_contrib)
+
+        if "error" in payload:
+            layout.addWidget(self._analytics_error_label(payload["error"]))
+            return
+
+        contrib_df = payload["contributions"]
+        vol_ann = payload.get("portfolio_vol_ann_pct", 0)
+
+        layout.addLayout(self._analytics_kpi_row([
+            ("Volatilité portefeuille (ann.)", f"{vol_ann:.2f} %"),
+        ]))
+
+        # Bar chart horizontal — contribution au risque vs poids
+        chart_contrib = PlotlyView(min_height=max(250, len(contrib_df) * 28))
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=contrib_df["ticker"], x=contrib_df["weight_pct"],
+            name="Poids (%)", orientation="h",
+            marker_color="#60a5fa",
+            hovertemplate="%{y}<br>Poids: %{x:.1f}%<extra></extra>",
+        ))
+        fig.add_trace(go.Bar(
+            y=contrib_df["ticker"], x=contrib_df["risk_contrib_pct"],
+            name="Contribution risque (%)", orientation="h",
+            marker_color="#f87171",
+            hovertemplate="%{y}<br>Risque: %{x:.1f}%<extra></extra>",
+        ))
+        fig.update_layout(
+            **plotly_layout(margin=dict(l=80, r=20, t=30, b=10)),
+            barmode="group",
+            yaxis=dict(autorange="reversed"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        chart_contrib.set_figure(fig)
+        layout.addWidget(chart_contrib)
+
+        info = QLabel(
+            "ℹ️ La contribution au risque montre qu'un actif peut représenter "
+            "peu en poids mais beaucoup en risque (et inversement)."
+        )
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+    # ── 4. VaR & Expected Shortfall ───────────────────────────────────────
+
+    def _load_var_es_section(self) -> None:
+        """Charge les métriques VaR et ES."""
+        from services.bourse_advanced_analytics import get_var_es_payload
+
+        payload = get_var_es_payload(self._conn, self._person_id)
+        layout = self._get_section_content_layout(self._section_var)
+
+        if "error" in payload:
+            layout.addWidget(self._analytics_error_label(payload["error"]))
+            return
+
+        ptf_val = payload.get("portfolio_value_eur", 0)
+        horizon = payload.get("horizon", "1 semaine")
+
+        # Ligne 1 — VaR
+        layout.addLayout(self._analytics_kpi_row([
+            (f"VaR 95% ({horizon})", f"{payload['var_95_pct']:.2f} %"),
+            (f"VaR 99% ({horizon})", f"{payload['var_99_pct']:.2f} %"),
+            ("VaR 95% (EUR)", f"{payload['var_95_eur']:,.0f} €"),
+            ("VaR 99% (EUR)", f"{payload['var_99_eur']:,.0f} €"),
+        ]))
+
+        # Ligne 2 — ES / CVaR
+        layout.addLayout(self._analytics_kpi_row([
+            (f"ES/CVaR 95% ({horizon})", f"{payload['es_95_pct']:.2f} %"),
+            (f"ES/CVaR 99% ({horizon})", f"{payload['es_99_pct']:.2f} %"),
+        ]))
+
+        # Ligne 3 — Paramétrique
+        layout.addLayout(self._analytics_kpi_row([
+            ("VaR 95% (param.)", f"{payload.get('var_95_param_pct', 0):.2f} %"),
+            ("VaR 99% (param.)", f"{payload.get('var_99_param_pct', 0):.2f} %"),
+            ("Observations", str(payload.get("n_observations", 0))),
+        ]))
+
+        info = QLabel(
+            f"ℹ️ Méthode primaire : historique (percentile des rendements observés). "
+            f"Paramétrique : hypothèse de distribution normale. "
+            f"Horizon : {horizon}. Valeur portefeuille : {ptf_val:,.0f} €."
+        )
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+    # ── 5. Frontière Efficiente ────────────────────────────────────────────
+
+    def _load_efficient_frontier_section(self) -> None:
+        """Charge le graphe de la frontière efficiente."""
+        from services.bourse_advanced_analytics import get_efficient_frontier_payload
+
+        payload = get_efficient_frontier_payload(self._conn, self._person_id)
+        layout = self._get_section_content_layout(self._section_frontier)
+
+        if "error" in payload:
+            layout.addWidget(self._analytics_error_label(payload["error"]))
+            return
+
+        frontier = payload["frontier_points"]
+        current = payload["current_portfolio"]
+        min_var = payload["min_variance"]
+        max_sharpe = payload["max_sharpe"]
+
+        # KPIs
+        layout.addLayout(self._analytics_kpi_row([
+            ("Portefeuille actuel", f"Vol {current['vol']:.1f}% / Ret {current['ret']:.1f}%"),
+            ("Variance minimale", f"Vol {min_var['vol']:.1f}% / Ret {min_var['ret']:.1f}%"),
+            ("Sharpe maximal", f"Vol {max_sharpe['vol']:.1f}% / Ret {max_sharpe['ret']:.1f}%"),
+        ]))
+
+        # Scatter plot
+        chart_frontier = PlotlyView(min_height=380)
+        fig = go.Figure()
+
+        # Frontière
+        if frontier:
+            frontier_vol = [p["vol"] for p in frontier]
+            frontier_ret = [p["ret"] for p in frontier]
+            fig.add_trace(go.Scatter(
+                x=frontier_vol, y=frontier_ret,
+                mode="lines", name="Frontière efficiente",
+                line=dict(color="#60a5fa", width=2),
+                hovertemplate="Vol: %{x:.1f}%<br>Ret: %{y:.1f}%<extra>Frontière</extra>",
+            ))
+
+        # Portefeuille actuel
+        fig.add_trace(go.Scatter(
+            x=[current["vol"]], y=[current["ret"]],
+            mode="markers", name="Portefeuille actuel",
+            marker=dict(color="#f59e0b", size=14, symbol="star",
+                        line=dict(color="white", width=2)),
+            hovertemplate=f"<b>Actuel</b><br>Vol: {current['vol']:.1f}%<br>Ret: {current['ret']:.1f}%<extra></extra>",
+        ))
+
+        # Variance minimale
+        fig.add_trace(go.Scatter(
+            x=[min_var["vol"]], y=[min_var["ret"]],
+            mode="markers", name="Variance minimale",
+            marker=dict(color="#22c55e", size=12, symbol="diamond",
+                        line=dict(color="white", width=2)),
+            hovertemplate=f"<b>Min Variance</b><br>Vol: {min_var['vol']:.1f}%<br>Ret: {min_var['ret']:.1f}%<extra></extra>",
+        ))
+
+        # Sharpe max
+        fig.add_trace(go.Scatter(
+            x=[max_sharpe["vol"]], y=[max_sharpe["ret"]],
+            mode="markers", name="Sharpe maximal",
+            marker=dict(color="#ef4444", size=12, symbol="triangle-up",
+                        line=dict(color="white", width=2)),
+            hovertemplate=f"<b>Max Sharpe</b><br>Vol: {max_sharpe['vol']:.1f}%<br>Ret: {max_sharpe['ret']:.1f}%<extra></extra>",
+        ))
+
+        fig.update_layout(
+            **plotly_layout(margin=dict(l=50, r=20, t=30, b=50)),
+            xaxis=dict(title="Volatilité annualisée (%)", showgrid=True, gridcolor="#1e2538"),
+            yaxis=dict(title="Rendement annualisé (%)", showgrid=True, gridcolor="#1e2538"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        chart_frontier.set_figure(fig)
+        layout.addWidget(chart_frontier)
+
+        # Poids optimaux
+        weights_text_parts = []
+        for label, data in [("Min Var", min_var), ("Max Sharpe", max_sharpe)]:
+            top_weights = sorted(data["weights"].items(), key=lambda x: -x[1])[:5]
+            parts = ", ".join([f"{t}: {w:.0f}%" for t, w in top_weights])
+            weights_text_parts.append(f"{label} → {parts}")
+        weights_info = QLabel("🏆 " + " | ".join(weights_text_parts))
+        weights_info.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px;")
+        weights_info.setWordWrap(True)
+        layout.addWidget(weights_info)
+
+        info = QLabel(
+            "ℹ️ Optimisation SLSQP (scipy). Contraintes : long-only, somme poids = 100%. "
+            "Basé sur rendements et covariance weekly annualisés."
+        )
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+    # ── 6. Comparaison Benchmark ──────────────────────────────────────────
+
+    def _load_benchmark_section(self) -> None:
+        """Charge la comparaison avec le benchmark."""
+        from services.bourse_advanced_analytics import get_benchmark_comparison_payload
+
+        payload = get_benchmark_comparison_payload(self._conn, self._person_id)
+        layout = self._get_section_content_layout(self._section_benchmark)
+
+        if "error" in payload:
+            layout.addWidget(self._analytics_error_label(payload["error"]))
+            return
+
+        bench_sym = payload.get("benchmark_symbol", "URTH")
+
+        # KPIs comparatifs
+        ptf_ret = payload.get("portfolio_return_ann_pct", 0)
+        bench_ret = payload.get("benchmark_return_ann_pct", 0)
+        ptf_vol = payload.get("portfolio_vol_ann_pct", 0)
+        bench_vol = payload.get("benchmark_vol_ann_pct", 0)
+        alpha = payload.get("alpha_pct", 0)
+        te = payload.get("tracking_error_pct", 0)
+
+        layout.addLayout(self._analytics_kpi_row([
+            ("Rendement portefeuille", f"{ptf_ret:+.2f} %/an"),
+            (f"Rendement {bench_sym}", f"{bench_ret:+.2f} %/an"),
+            ("Alpha", f"{alpha:+.2f} %"),
+        ]))
+        layout.addLayout(self._analytics_kpi_row([
+            ("Volatilité portefeuille", f"{ptf_vol:.2f} %"),
+            (f"Volatilité {bench_sym}", f"{bench_vol:.2f} %"),
+            ("Tracking Error", f"{te:.2f} %"),
+            ("Semaines comparées", str(payload.get("n_weeks", 0))),
+        ]))
+
+        # Line chart normalisé base 100
+        norm_series = payload.get("series")
+        if norm_series is not None and not norm_series.empty:
+            chart_bench = PlotlyView(min_height=320)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=norm_series["date"], y=norm_series["portfolio_norm"],
+                mode="lines", name="Portefeuille",
+                line=dict(color="#4ade80", width=2),
+                hovertemplate="<b>%{x|%d %b %Y}</b><br>%{y:.1f}<extra>Portefeuille</extra>",
+            ))
+            fig.add_trace(go.Scatter(
+                x=norm_series["date"], y=norm_series["benchmark_norm"],
+                mode="lines", name=bench_sym,
+                line=dict(color="#60a5fa", width=2, dash="dot"),
+                hovertemplate="<b>%{x|%d %b %Y}</b><br>%{y:.1f}<extra>" + bench_sym + "</extra>",
+            ))
+            # Ligne base 100
+            fig.add_hline(y=100, line_dash="dash", line_color="#475569", line_width=1)
+            fig.update_layout(
+                **plotly_time_series_layout(margin=dict(l=10, r=10, t=30, b=10)),
+                yaxis=dict(title="Base 100", showgrid=True, gridcolor="#1e2538"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                hovermode="x unified",
+            )
+            chart_bench.set_figure(fig)
+            layout.addWidget(chart_bench)
+
+        info = QLabel(
+            f"ℹ️ Comparaison vs {bench_sym} (MSCI World). "
+            f"Performance normalisée base 100. Alpha = excès de rendement annualisé."
+        )
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
 
 
 def _safe_float(v) -> float:
