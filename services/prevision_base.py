@@ -50,7 +50,7 @@ def _get_aggregated_debts_schedule(conn, person_ids: List[int], horizon_years: i
             
     return total_crd
 
-def build_prevision_base_for_scope(conn, scope_type: str, scope_id: int) -> PrevisionBase:
+def build_prevision_base_for_scope(conn, scope_type: str, scope_id) -> PrevisionBase:
     """
     Construit la base patrimoniale de départ pour une projection,
     en respectant strictement les sources de vérité existantes (SSOT).
@@ -99,8 +99,9 @@ def build_prevision_base_for_scope(conn, scope_type: str, scope_id: int) -> Prev
     elif scope_type_lower == "family":
         from services.family_dashboard import get_family_series, compute_allocations_family, compute_family_kpis
         from services.cashflow import compute_savings_metrics
-        
-        df_family = get_family_series(conn, family_id=scope_id)
+
+        family_id = int(scope_id) if scope_id is not None else 1
+        df_family = get_family_series(conn, family_id=family_id)
         if df_family is not None and not df_family.empty:
             kpis = compute_family_kpis(df_family)
             allocs = compute_allocations_family(df_family)
@@ -118,7 +119,7 @@ def build_prevision_base_for_scope(conn, scope_type: str, scope_id: int) -> Prev
             # et le computed savings metric ne marche bien que pour 'person'.
             # On utilise le cashflow_for_scope générique.
             from services.cashflow import get_cashflow_for_scope
-            df_cf = get_cashflow_for_scope(conn, "family", scope_id)
+            df_cf = get_cashflow_for_scope(conn, "family", family_id)
             if df_cf is not None and not df_cf.empty:
                 last_12 = df_cf.tail(12)
                 base_kwargs["current_savings_per_year"] = float(last_12["savings"].mean() * 12) if not last_12.empty else 0.0
