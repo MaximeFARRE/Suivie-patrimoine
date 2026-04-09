@@ -5,6 +5,27 @@ from .prevision_models import PrevisionBase
 
 logger = logging.getLogger(__name__)
 
+
+def _get_fire_annual_expenses(conn, scope_type: str, scope_id) -> float:
+    """
+    Retourne les dépenses annuelles moyennes (base de calcul FIRE)
+    à partir du cashflow des 12 derniers mois disponibles.
+    """
+    try:
+        from services.cashflow import get_cashflow_for_scope
+        df_cf = get_cashflow_for_scope(conn, scope_type, scope_id)
+        if df_cf is None or df_cf.empty:
+            return 0.0
+        last_12 = df_cf.tail(12)
+        if "expenses" not in last_12.columns:
+            return 0.0
+        avg_monthly = float(last_12["expenses"].mean())
+        return avg_monthly * 12.0
+    except Exception as exc:
+        logger.warning("Impossible de calculer fire_annual_expenses pour %s=%s : %s",
+                       scope_type, scope_id, exc)
+        return 0.0
+
 def _get_aggregated_debts_schedule(conn, person_ids: List[int], horizon_years: int = 30) -> pd.Series:
     """
     Agrège les restes à vivre (CRD) de tous les crédits actifs pour une liste de personnes.
@@ -138,6 +159,11 @@ def build_prevision_base_for_scope(conn, scope_type: str, scope_id) -> Prevision
     # Champs non supportés en V1
     warnings.append("Crypto n'est pas encore directement géré par une agrégation SSOT, forcé à 0.0")
     warnings.append("Revenus passifs totaux non réconciliés SSOT pour base prevision, forcé à 0.0")
+
+    # Dépenses annuelles pour le calcul FIRE
+    base_kwargs["fire_annual_expenses"] = _get_fire_annual_expenses(
+        conn, scope_type_lower, scope_id
+    )
 
     # Écriture
     base = PrevisionBase(
