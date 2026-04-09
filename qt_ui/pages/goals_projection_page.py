@@ -62,6 +62,7 @@ from services.native_milestones import (
     get_featured_milestone_for_category,
     get_scope_milestone_metrics,
 )
+from qt_ui.panels.prevision_avancee_panel import PrevisionAvanceePanel
 from utils.format_monnaie import money
 
 logger = logging.getLogger(__name__)
@@ -347,10 +348,12 @@ class GoalsProjectionPage(QWidget):
         self._panel_projection = self._build_projection_tab()
         self._panel_goals = self._build_goals_tab()
         self._panel_scenarios = self._build_scenarios_tab()
+        self._panel_prevision = PrevisionAvanceePanel(self._conn)
 
         self._tabs.addTab(self._panel_projection, "Projection")
         self._tabs.addTab(self._panel_goals, "Objectifs")
         self._tabs.addTab(self._panel_scenarios, "Scénarios")
+        self._tabs.addTab(self._panel_prevision, "Prévision avancée")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -410,6 +413,9 @@ class GoalsProjectionPage(QWidget):
             self._refresh_goals_tab()
         elif idx == 2:
             self._refresh_scenarios_tab()
+        elif idx == 3:
+            self._panel_prevision.set_scope(self._scope_type, self._scope_id)
+            self._panel_prevision.refresh()
 
     def _build_projection_tab(self) -> QWidget:
         w = QWidget()
