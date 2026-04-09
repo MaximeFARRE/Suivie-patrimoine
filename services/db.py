@@ -23,6 +23,7 @@ MIG_VER_IMPORT_BATCHES = 9002
 MIG_VER_ADD_IMMO_COLUMNS = 9003
 MIG_VER_ADD_CREDITS_PAYER_ACCOUNT = 9004
 MIG_VER_ADD_TX_PERSON_ACCOUNT_INDEX = 9005
+MIG_VER_ADD_PRESET_VOL_COLUMNS = 9006
 
 # ──────────────────────────────────────────────────────────────
 # Compat libsql ↔ sqlite3 : DictRow + WrappedCursor
@@ -363,12 +364,33 @@ def _migrate_add_tx_person_account_index(conn) -> None:
         )
 
 
+def _migrate_add_preset_vol_columns(conn) -> None:
+    """Ajoute les colonnes de volatilité par classe d'actif sur simulation_preset_settings."""
+    if not _table_exists(conn, "simulation_preset_settings"):
+        return
+    _VOL_COLUMNS = {
+        "vol_liquidites_pct":   1.0,
+        "vol_bourse_pct":      15.0,
+        "vol_immobilier_pct":   5.0,
+        "vol_pe_pct":          20.0,
+        "vol_entreprises_pct": 15.0,
+        "vol_crypto_pct":      50.0,
+    }
+    for col, default in _VOL_COLUMNS.items():
+        if not _column_exists(conn, "simulation_preset_settings", col):
+            conn.execute(
+                f"ALTER TABLE simulation_preset_settings "
+                f"ADD COLUMN {col} REAL DEFAULT {default};"
+            )
+
+
 _CODE_MIGRATIONS: list[tuple[int, str, Callable]] = [
     (MIG_VER_ADD_TR_PHONE, "add people.tr_phone", _migrate_add_tr_phone),
     (MIG_VER_IMPORT_BATCHES, "add import_batches + import_batch_id refs", _migrate_import_batches),
     (MIG_VER_ADD_IMMO_COLUMNS, "add immobilier_value columns on snapshot tables", _migrate_add_immobilier_columns),
     (MIG_VER_ADD_CREDITS_PAYER_ACCOUNT, "add credits.payer_account_id", _migrate_add_credits_payer_account),
     (MIG_VER_ADD_TX_PERSON_ACCOUNT_INDEX, "add idx_tx_person_account_date", _migrate_add_tx_person_account_index),
+    (MIG_VER_ADD_PRESET_VOL_COLUMNS, "add vol_* columns on simulation_preset_settings", _migrate_add_preset_vol_columns),
 ]
 
 

@@ -379,16 +379,25 @@ class SettingsPage(QWidget):
         _PRESET_LABELS = {"pessimiste": "Pessimiste", "realiste": "Réaliste", "optimiste": "Optimiste"}
 
         _FIELDS = [
-            ("return_liquidites_pct",  "Liquidités / épargne (%)",       -20.0, 50.0, " %"),
-            ("return_bourse_pct",      "Bourse (ETF, actions) (%)",       -20.0, 50.0, " %"),
-            ("return_immobilier_pct",  "Immobilier locatif (%)",          -20.0, 50.0, " %"),
-            ("return_pe_pct",          "Private Equity (%)",              -20.0, 50.0, " %"),
-            ("return_entreprises_pct", "Entreprises (%)",                 -20.0, 50.0, " %"),
-            ("inflation_pct",          "Inflation (%)",                    -5.0, 20.0, " %"),
-            ("income_growth_pct",      "Croissance revenus (%)",          -20.0, 20.0, " %"),
-            ("expense_growth_pct",     "Croissance dépenses (%)",         -20.0, 20.0, " %"),
-            ("fire_multiple",          "Multiple FIRE",                     1.0, 200.0, ""),
-            ("savings_factor",         "Facteur épargne (×)",               0.0,   5.0, " ×"),
+            # ── Rendements attendus ──────────────────────────────────────────────
+            ("return_liquidites_pct",  "Rendement Liquidités (%)",         -20.0, 50.0, " %"),
+            ("return_bourse_pct",      "Rendement Bourse (%)",             -20.0, 50.0, " %"),
+            ("return_immobilier_pct",  "Rendement Immobilier (%)",         -20.0, 50.0, " %"),
+            ("return_pe_pct",          "Rendement Private Equity (%)",     -20.0, 50.0, " %"),
+            ("return_entreprises_pct", "Rendement Entreprises (%)",        -20.0, 50.0, " %"),
+            # ── Volatilités (pour Monte Carlo) ───────────────────────────────────
+            ("vol_liquidites_pct",     "Volatilité Liquidités (%)",          0.0, 50.0, " %"),
+            ("vol_bourse_pct",         "Volatilité Bourse (%)",              0.0, 80.0, " %"),
+            ("vol_immobilier_pct",     "Volatilité Immobilier (%)",          0.0, 50.0, " %"),
+            ("vol_pe_pct",             "Volatilité Private Equity (%)",      0.0, 80.0, " %"),
+            ("vol_entreprises_pct",    "Volatilité Entreprises (%)",         0.0, 80.0, " %"),
+            ("vol_crypto_pct",         "Volatilité Crypto (%)",              0.0, 200.0, " %"),
+            # ── Macro ────────────────────────────────────────────────────────────
+            ("inflation_pct",          "Inflation (%)",                      -5.0, 20.0, " %"),
+            ("income_growth_pct",      "Croissance revenus (%)",            -20.0, 20.0, " %"),
+            ("expense_growth_pct",     "Croissance dépenses (%)",           -20.0, 20.0, " %"),
+            ("fire_multiple",          "Multiple FIRE",                        1.0, 200.0, ""),
+            ("savings_factor",         "Facteur épargne (×)",                  0.0,   5.0, " ×"),
         ]
 
         # {preset_key: {field: QDoubleSpinBox}}
