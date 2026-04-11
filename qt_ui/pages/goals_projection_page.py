@@ -51,8 +51,9 @@ from services.goals_projection_repository import (
 from services.projections import (
     ScenarioParams, build_standard_scenarios, compute_weighted_return,
     estimate_fire_reach_date, get_primary_residence_value_for_scope,
-    get_projection_base_for_scope, run_projection,
+    get_projection_base_for_scope,
 )
+from services.projection_service import ProjectionService
 from services.simulation_presets_repository import (
     get_all_presets, initialize_default_presets, PRESET_DEFAULTS,
 )
@@ -1189,7 +1190,14 @@ class GoalsProjectionPage(QWidget):
 
         params = self._build_projection_params()
         try:
-            self._projection_df = run_projection(self._base_data, params)
+            exc_rp = self._chk_exclude_rp.isChecked()
+            self._projection_df = ProjectionService.generate_projection(
+                conn=self._conn,
+                scope_type=self._scope_type,
+                scope_id=self._scope_id,
+                engine_type="legacy",
+                options={"params": params, "exclude_primary_residence": exc_rp}
+            )
             if self._projection_df.empty:
                 self._set_projection_empty_state("Projection indisponible pour ce scope.")
                 return
@@ -1199,7 +1207,13 @@ class GoalsProjectionPage(QWidget):
                     self._base_data, int(params.horizon_years),
                     presets=self._presets_cache or None,
                 ):
-                    self._standard_projection_results[sc.label] = run_projection(self._base_data, sc)
+                    self._standard_projection_results[sc.label] = ProjectionService.generate_projection(
+                        conn=self._conn,
+                        scope_type=self._scope_type,
+                        scope_id=self._scope_id,
+                        engine_type="legacy",
+                        options={"params": sc, "exclude_primary_residence": exc_rp}
+                    )
             self._update_weighted_return_label()
 
             self._update_projection_kpis(params)

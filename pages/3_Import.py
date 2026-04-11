@@ -1,3 +1,12 @@
+"""
+LEGACY - Streamlit uniquement.
+
+Ce fichier n'est pas utilisé par l'application Desktop Qt.
+Le chemin actif d'import Desktop est : ``qt_ui/pages/import_page.py``.
+
+Conservé temporairement pour historique/migration ; ne pas utiliser pour le flux Qt.
+"""
+
 import streamlit as st
 import pandas as pd
 
@@ -7,8 +16,9 @@ from services.credits import CreditParams, build_amortissement, replace_amortiss
 
 PEOPLE = ["Papa", "Maman", "Maxime", "Valentin"]
 
-st.set_page_config(page_title="Import", layout="wide")
-st.title("Importer / Configurer")
+st.set_page_config(page_title="Import (Legacy Streamlit)", layout="wide")
+st.title("Importer / Configurer (Legacy Streamlit)")
+st.caption("Version legacy Streamlit. Pour l'app Desktop, utiliser l'écran Qt d'import.")
 
 conn = cached_conn()
 person = st.selectbox("Personne", PEOPLE)
