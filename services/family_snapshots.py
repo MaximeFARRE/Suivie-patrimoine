@@ -22,7 +22,12 @@ def _now_paris_iso() -> str:
 
 
 def list_family_weekly_snapshots(conn, family_id: int = 1) -> pd.DataFrame:
-    return pd.read_sql_query(
+    _COLS = [
+        "week_date", "created_at", "mode",
+        "patrimoine_net", "patrimoine_brut", "liquidites_total",
+        "bourse_holdings", "pe_value", "ent_value", "immobilier_value", "credits_remaining",
+    ]
+    rows = conn.execute(
         """
         SELECT week_date, created_at, mode,
                patrimoine_net, patrimoine_brut, liquidites_total,
@@ -31,9 +36,9 @@ def list_family_weekly_snapshots(conn, family_id: int = 1) -> pd.DataFrame:
         WHERE family_id = ?
         ORDER BY week_date ASC
         """,
-        conn,
-        params=(int(family_id),),
-    )
+        (int(family_id),),
+    ).fetchall()
+    return pd.DataFrame(rows, columns=_COLS) if rows else pd.DataFrame(columns=_COLS)
 
 
 def _normalize_family_weekly_series(df: pd.DataFrame) -> pd.DataFrame:

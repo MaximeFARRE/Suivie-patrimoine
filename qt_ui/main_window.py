@@ -308,9 +308,10 @@ class MainWindow(QMainWindow):
         self.show_page("famille")
 
         # ── Rebuild automatique au lancement (AM-30) ──────────────────────
-        # Déclenché 500ms après le show() pour laisser l'UI se rendre d'abord.
+        # Déclenché (par défaut 500ms) après le show() pour laisser l'UI se rendre d'abord.
         self._rebuild_thread: AutoRebuildThread | None = None
-        QTimer.singleShot(500, self._start_auto_rebuild)
+        delay_ms = SettingsPage.get_rebuild_delay_ms()
+        QTimer.singleShot(delay_ms, self._start_auto_rebuild)
 
     @staticmethod
     def _row_get(row, key: str, idx: int = 0):

@@ -167,7 +167,23 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
 
     df_cf = m.get("df_cashflow", pd.DataFrame())
     if not df_cf.empty:
-        last12 = df_cf.tail(12)
+        # Sécurise les KPI sur 12 mois calendaires complets (mois manquants = 0).
+        df_kpi = df_cf.copy()
+        df_kpi["_mois_dt"] = pd.to_datetime(df_kpi["mois"], errors="coerce").dt.to_period("M").dt.to_timestamp()
+        df_kpi = df_kpi.dropna(subset=["_mois_dt"]).copy()
+        if not df_kpi.empty:
+            last_m = df_kpi["_mois_dt"].max()
+            idx = pd.date_range(start=last_m - pd.DateOffset(months=11), end=last_m, freq="MS")
+            last12 = (
+                df_kpi.set_index("_mois_dt")
+                .reindex(idx, fill_value=0.0)
+                .reset_index(drop=True)
+            )
+            for col in ["revenus", "depenses", "epargne"]:
+                last12[col] = pd.to_numeric(last12[col], errors="coerce").fillna(0.0)
+        else:
+            last12 = pd.DataFrame(columns=["revenus", "depenses", "epargne"])
+
         m["epargne_12m"]       = float(last12["epargne"].sum())
         m["depenses_moy_12m"]  = float(last12["depenses"].mean())
         m["capacite_epargne_avg"] = float(last12["epargne"].mean())

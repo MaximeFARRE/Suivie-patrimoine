@@ -109,57 +109,6 @@ def _backup_database():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    files_to_backup = [
-        ("patrimoine.db",           f"patrimoine_{timestamp}.db"),
-        ("patrimoine_turso.db",     f"patrimoine_turso_{timestamp}.db"),
-        ("patrimoine_turso.db-info", f"patrimoine_turso_{timestamp}.db-info"),
-    ]
-
-    backed_up = False
-    for filename, destname in files_to_backup:
-        src = _APP_DIR / filename
-        if not src.exists():
-            continue
-        dest = backup_dir / destname
-        try:
-            if src.is_dir():
-                shutil.copytree(str(src), str(dest), dirs_exist_ok=True)
-            else:
-                shutil.copy2(str(src), str(dest))
-            logger.info("Sauvegarde DB → %s", dest)
-            backed_up = True
-        except Exception as e:
-            logger.error("Échec sauvegarde %s : %s", filename, e)
-
-    if not backed_up:
-        return
-
-    # Rotation : ne garder que les 10 dernières de chaque type principal
-    for prefix in ["patrimoine_2", "patrimoine_turso_2"]:
-        backups = sorted(
-            [p for p in backup_dir.glob(f"{prefix}*.db") if p.is_file()],
-            key=lambda p: p.name
-        )
-        while len(backups) > 10:
-            old = backups.pop(0)
-            try:
-                old.unlink()
-                # Supprimer le .db-info associé si présent
-                for ext in [".db-info"]:
-                    companion = backup_dir / (old.stem + ext)
-                    if companion.exists():
-                        if companion.is_dir():
-                            shutil.rmtree(str(companion))
-                        else:
-                            companion.unlink()
-                logger.info("Ancienne sauvegarde supprimée : %s", old.name)
-            except Exception:
-                pass
-
-
-def main():
-    # Configuration Qt
-    if os.environ.get("PATRIMOINE_NO_SANDBOX") == "1":
         os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox")
 
     app = QApplication(sys.argv)

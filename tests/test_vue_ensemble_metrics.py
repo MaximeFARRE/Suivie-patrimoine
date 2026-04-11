@@ -105,6 +105,34 @@ def test_vue_ensemble_metrics_nominal_kpis(conn_with_person):
     assert math.isfinite(m["cagr_pct"])
 
 
+def test_vue_ensemble_metrics_kpis_include_missing_months_as_zero(conn_with_person):
+    conn = conn_with_person
+
+    _insert_snapshot(conn, 1, "2026-01-05", net=1000.0)
+
+    for mois, rev, dep in [
+        ("2025-03-01", 1000.0, 800.0),  # +200
+        ("2025-12-01", 1200.0, 1000.0),  # +200
+    ]:
+        conn.execute(
+            "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, ?, 'Salaire', ?)",
+            (mois, rev),
+        )
+        conn.execute(
+            "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, ?, 'Vie', ?)",
+            (mois, dep),
+        )
+
+    conn.commit()
+    m = get_vue_ensemble_metrics(conn, 1)
+
+    # Fenêtre KPI = 12 mois calendaires (2025-02 à 2026-01), dont 10 mois à 0.
+    assert m["epargne_12m"] == pytest.approx(400.0)
+    assert m["capacite_epargne_avg"] == pytest.approx(400.0 / 12.0)
+    assert m["depenses_moy_12m"] == pytest.approx((800.0 + 1000.0) / 12.0)
+    assert m["taux_epargne_avg"] == pytest.approx((400.0 / 2200.0) * 100.0)
+
+
 def test_vue_ensemble_panel_subtitle_matches_formula():
     panel_path = Path(__file__).parent.parent / "qt_ui" / "panels" / "vue_ensemble_panel.py"
     text = panel_path.read_text(encoding="utf-8")

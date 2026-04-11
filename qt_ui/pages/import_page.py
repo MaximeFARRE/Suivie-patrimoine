@@ -1075,15 +1075,14 @@ class ImportPage(QScrollArea):
         """Recharge les comptes PEA/CTO pour la personne sélectionnée."""
         combo.clear()
         try:
-            df = pd.read_sql_query(
+            rows = self._conn.execute(
                 """SELECT id, name, account_type FROM accounts
                    WHERE person_id = ? AND account_type IN ('PEA', 'CTO')
                    ORDER BY account_type, name""",
-                self._conn,
-                params=[person_id],
-            )
-            for _, r in df.iterrows():
-                combo.addItem(f"{r['name']} ({r['account_type']})", int(r["id"]))
+                (person_id,),
+            ).fetchall()
+            for row in rows:
+                combo.addItem(f"{row[1]} ({row[2]})", int(row[0]))
 
             # Charger le téléphone sauvegardé
             from services.tr_import import get_tr_phone
@@ -1458,24 +1457,22 @@ class ImportPage(QScrollArea):
                 self._panel_tr._refresh_accounts(person_id)
 
             # Comptes crédit
-            df_credit = pd.read_sql_query(
+            rows_credit = self._conn.execute(
                 "SELECT id, name FROM accounts WHERE person_id = ? AND account_type = 'CREDIT' ORDER BY name",
-                self._conn, params=[person_id]
-            )
+                (person_id,),
+            ).fetchall()
             self._credit_account_combo.clear()
-            if not df_credit.empty:
-                for _, r in df_credit.iterrows():
-                    self._credit_account_combo.addItem(f"{r['name']} (id={r['id']})", int(r["id"]))
+            for row in rows_credit:
+                self._credit_account_combo.addItem(f"{row[1]} (id={row[0]})", int(row[0]))
 
             # Comptes banque
-            df_banque = pd.read_sql_query(
+            rows_banque = self._conn.execute(
                 "SELECT id, name FROM accounts WHERE person_id = ? AND account_type = 'BANQUE' ORDER BY name",
-                self._conn, params=[person_id]
-            )
+                (person_id,),
+            ).fetchall()
             self._payer_account_combo.clear()
-            if not df_banque.empty:
-                for _, r in df_banque.iterrows():
-                    self._payer_account_combo.addItem(f"{r['name']} (id={r['id']})", int(r["id"]))
+            for row in rows_banque:
+                self._payer_account_combo.addItem(f"{row[1]} (id={row[0]})", int(row[0]))
         except Exception:
             pass
 

@@ -352,7 +352,7 @@ def _immobilier_value_asof_eur(conn, person_id: int, week_date: str) -> float:
         GROUP BY a.id
         HAVING qty > 0.0001
         """,
-        (int(person_id), wd.strftime("%Y-%m-%d")),
+        (int(person_id), wd),
     ).fetchall()
 
     total_scpi = 0.0
@@ -989,7 +989,7 @@ def get_person_weekly_series(conn, person_id: int) -> pd.DataFrame:
     empty = pd.DataFrame(columns=PERSON_WEEKLY_COLUMNS)
 
     try:
-        df = pd.read_sql_query(
+        rows = conn.execute(
             """
             SELECT week_date,
                    patrimoine_net,
@@ -1004,9 +1004,9 @@ def get_person_weekly_series(conn, person_id: int) -> pd.DataFrame:
             WHERE person_id = ?
             ORDER BY week_date ASC
             """,
-            conn,
-            params=(int(person_id),),
-        )
+            (int(person_id),),
+        ).fetchall()
+        df = pd.DataFrame(rows, columns=PERSON_WEEKLY_COLUMNS) if rows else pd.DataFrame(columns=PERSON_WEEKLY_COLUMNS)
     except Exception:
         _logger.error(
             "get_person_weekly_series: erreur lecture snapshots pour person_id=%s",
