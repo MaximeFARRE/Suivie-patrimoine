@@ -313,7 +313,8 @@ def build_amortissement(params: CreditParams) -> List[Dict[str, Any]]:
             mensualite = float(mensualite_calc) + assurance_mois
             interets = crd * r_m
             principal_part = float(mensualite_calc) - interets
-            capital_amorti = max(principal_part, 0.0)
+            # Empêche d'amortir plus que le capital restant (Bug 9)
+            capital_amorti = max(min(principal_part, crd), 0.0)
             crd = max(crd - capital_amorti, 0.0)
 
         rows.append({

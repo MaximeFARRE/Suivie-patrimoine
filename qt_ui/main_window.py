@@ -46,6 +46,13 @@ class AutoRebuildThread(QThread):
     finished_ok = pyqtSignal()
     finished_err = pyqtSignal(str)
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+
     def run(self) -> None:
         try:
             import sqlite3
@@ -70,6 +77,10 @@ class AutoRebuildThread(QThread):
 
             total = len(people)
             for i, (_, person) in enumerate(people.iterrows(), start=1):
+                if self._is_cancelled:
+                    logger.info("AutoRebuildThread cancelled before person")
+                    break
+                
                 pid = int(person["id"])
                 name = str(person.get("name", f"#{pid}"))
                 self.progress.emit(
@@ -81,6 +92,7 @@ class AutoRebuildThread(QThread):
                         person_id=pid,
                         safety_weeks=4,
                         fallback_lookback_days=90,
+                        cancel_check=lambda: self._is_cancelled
                     )
                     logger.info(
                         "AutoRebuild %s : %s",
@@ -762,6 +774,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self._rebuild_thread is not None and self._rebuild_thread.isRunning():
+            self._rebuild_thread.cancel()
             self._rebuild_thread.quit()
             self._rebuild_thread.wait()
         super().closeEvent(event)

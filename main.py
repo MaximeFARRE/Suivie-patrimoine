@@ -17,25 +17,49 @@ sys.path.insert(0, str(_APP_DIR))
 
 # ── Logging persistant ────────────────────────────────────────────────────
 _USER_DATA_DIR = Path.home() / ".patrimoine"
-_USER_DATA_DIR.mkdir(exist_ok=True)
-
 _LOG_DIR = _USER_DATA_DIR / "logs"
-_LOG_DIR.mkdir(exist_ok=True)
+
+
+def _build_logging_handlers():
+    """Construit des handlers robustes même si le log principal est inaccessible."""
+    candidates = [
+        _LOG_DIR,
+        _APP_DIR / ".patrimoine" / "logs",
+        Path.cwd() / ".patrimoine" / "logs",
+    ]
+    for log_dir in candidates:
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+
+        for name in ("patrimoine.log", f"patrimoine_{os.getpid()}.log"):
+            log_path = log_dir / name
+            try:
+                file_handler = RotatingFileHandler(
+                    log_path,
+                    maxBytes=5 * 1024 * 1024,   # 5 MB par fichier
+                    backupCount=5,              # 5 fichiers max
+                    encoding="utf-8",
+                )
+                return [file_handler, logging.StreamHandler(sys.stderr)], log_dir, log_path
+            except OSError:
+                continue
+
+    # Dernier recours : logs uniquement en stderr.
+    return [logging.StreamHandler(sys.stderr)], None, None
+
+
+_LOG_HANDLERS, _LOG_DIR, _ACTIVE_LOG_PATH = _build_logging_handlers()
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    handlers=[
-        RotatingFileHandler(
-            _LOG_DIR / "patrimoine.log",
-            maxBytes=5 * 1024 * 1024,   # 5 MB par fichier
-            backupCount=5,              # 5 fichiers max
-            encoding="utf-8",
-        ),
-        logging.StreamHandler(sys.stderr),
-    ],
+    handlers=_LOG_HANDLERS,
 )
 logger = logging.getLogger("patrimoine")
+if _ACTIVE_LOG_PATH is None:
+    logger.warning("Aucun fichier de log accessible, fallback sur stderr uniquement.")
 logger.info("═" * 60)
 logger.info("Démarrage de Patrimoine Desktop")
 
@@ -66,8 +90,9 @@ def _global_exception_handler(exc_type, exc_value, exc_tb):
         msg.setWindowTitle("Erreur inattendue")
         msg.setText("Une erreur inattendue s'est produite.")
         msg.setDetailedText(tb_text)
+        log_location = str(_ACTIVE_LOG_PATH) if _ACTIVE_LOG_PATH else "stderr (console)"
         msg.setInformativeText(
-            f"L'erreur a été enregistrée dans :\n{_LOG_DIR / 'patrimoine.log'}"
+            f"L'erreur a été enregistrée dans :\n{log_location}"
         )
         msg.exec()
     except Exception:
@@ -134,7 +159,8 @@ def _backup_database():
 
 def main():
     # Configuration Qt
-    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox")
+    if os.environ.get("PATRIMOINE_NO_SANDBOX") == "1":
+        os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox")
 
     app = QApplication(sys.argv)
     app.setApplicationName("Patrimoine Desktop")

@@ -104,7 +104,15 @@ def _bank_cash_asof_eur(conn, person_id: int, week_date: str,
             if df is not None and not df.empty:
                 total_native += _sum_cash_native(df)
 
-        total_eur += market_history.convert_weekly(conn, float(total_native), acc_ccy, "EUR", week_date)
+        converted = market_history.convert_weekly(conn, float(total_native), acc_ccy, "EUR", week_date)
+        if converted is None:
+            _logger.warning(
+                "_bank_cash_asof_eur: taux %s→EUR introuvable pour week=%s "
+                "(compte %s exclu du snapshot — snapshot potentiellement incomplet)",
+                acc_ccy, week_date, acc_id,
+            )
+            continue
+        total_eur += converted
 
     return float(round(total_eur, 2))
 
@@ -137,7 +145,15 @@ def _bourse_cash_and_holdings_eur_asof(conn, person_id: int, week_date: str) -> 
         df = df.dropna(subset=["date"])
         df = df[df["date"] <= pd.to_datetime(week_date)]
         cash_native = _broker_cash_asof_native(df)
-        cash_eur += market_history.convert_weekly(conn, cash_native, acc_ccy, "EUR", week_date)
+        converted_cash = market_history.convert_weekly(conn, cash_native, acc_ccy, "EUR", week_date)
+        if converted_cash is None:
+            _logger.warning(
+                "_bourse_cash_and_holdings_eur_asof: taux %s→EUR introuvable pour week=%s "
+                "(cash compte %s exclu du snapshot — snapshot potentiellement incomplet)",
+                acc_ccy, week_date, acc_id,
+            )
+            continue
+        cash_eur += converted_cash
 
     holdings_eur = 0.0
     if pos is not None and not pos.empty:
@@ -151,7 +167,15 @@ def _bourse_cash_and_holdings_eur_asof(conn, person_id: int, week_date: str) -> 
             if px is None:
                 continue
             value_native = qty * float(px)
-            holdings_eur += market_history.convert_weekly(conn, value_native, asset_ccy, "EUR", week_date)
+            converted_holding = market_history.convert_weekly(conn, value_native, asset_ccy, "EUR", week_date)
+            if converted_holding is None:
+                _logger.warning(
+                    "_bourse_cash_and_holdings_eur_asof: taux %s→EUR introuvable pour week=%s "
+                    "(actif %s exclu du snapshot — snapshot potentiellement incomplet)",
+                    asset_ccy, week_date, sym,
+                )
+                continue
+            holdings_eur += converted_holding
 
     return float(round(cash_eur, 2)), float(round(holdings_eur, 2))
 
@@ -228,34 +252,38 @@ def _enterprise_value_asof_eur(conn, person_id: int, week_date: str) -> float:
         return 0.0
 
     total = 0.0
-    wd = pd.to_datetime(week_date)
+    wd = pd.to_datetime(week_date).strftime("%Y-%m-%d")
+    eids = [int(eid) for eid in pos["enterprise_id"].unique()]
+
+    if not eids:
+        return 0.0
+
+    placeholders = ",".join(["?"] * len(eids))
+    q = f"""
+        SELECT enterprise_id, valuation_eur, debt_eur
+        FROM (
+            SELECT enterprise_id, valuation_eur, debt_eur,
+                   ROW_NUMBER() OVER(PARTITION BY enterprise_id ORDER BY effective_date DESC, id DESC) as rn
+            FROM enterprise_history
+            WHERE enterprise_id IN ({placeholders})
+              AND effective_date <= ?
+        )
+        WHERE rn = 1
+    """
+    params = tuple(eids) + (wd,)
+    
+    rows = conn.execute(q, params).fetchall()
+    hist_map = {}
+    for r in rows:
+        hist_map[int(r["enterprise_id"])] = (float(r["valuation_eur"] or 0.0), float(r["debt_eur"] or 0.0))
 
     for _, r in pos.iterrows():
         eid = int(r["enterprise_id"])
         pct = float(r.get("pct") or 0.0) / 100.0
 
-        # dernière ligne d'historique <= week_date (sinon fallback sur enterprises table)
-        row = conn.execute(
-            """
-            SELECT valuation_eur, debt_eur
-            FROM enterprise_history
-            WHERE enterprise_id = ?
-              AND effective_date <= ?
-            ORDER BY effective_date DESC, id DESC
-            LIMIT 1
-            """,
-            (eid, wd.strftime("%Y-%m-%d")),
-        ).fetchone()
-
-        if row:
-            try:
-                valuation = float(row["valuation_eur"])
-                debt = float(row["debt_eur"])
-            except (TypeError, KeyError):
-                valuation = float(row[0] or 0.0)
-                debt = float(row[1] or 0.0)
+        if eid in hist_map:
+            valuation, debt = hist_map[eid]
         else:
-            # fallback "actuel"
             valuation = float(r.get("valuation_eur") or 0.0)
             debt = float(r.get("debt_eur") or 0.0)
 
@@ -271,33 +299,38 @@ def _immobilier_value_asof_eur(conn, person_id: int, week_date: str) -> float:
     # 1. Biens directs
     shares = immo_repo.list_positions_for_person(conn, person_id)
     total_direct = 0.0
-    wd = pd.to_datetime(week_date)
+    wd = pd.to_datetime(week_date).strftime("%Y-%m-%d")
 
     if shares is not None and not shares.empty:
-        for _, r in shares.iterrows():
-            property_id = int(r["property_id"])
-            pct = float(r.get("pct", 100.0)) / 100.0
+        pids = [int(pid) for pid in shares["property_id"].unique()]
+        if pids:
+            placeholders = ",".join(["?"] * len(pids))
+            q = f"""
+                SELECT property_id, valuation_eur
+                FROM (
+                    SELECT property_id, valuation_eur,
+                           ROW_NUMBER() OVER(PARTITION BY property_id ORDER BY effective_date DESC, id DESC) as rn
+                    FROM immobilier_history
+                    WHERE property_id IN ({placeholders})
+                      AND effective_date <= ?
+                )
+                WHERE rn = 1
+            """
+            params = tuple(pids) + (wd,)
+            rows = conn.execute(q, params).fetchall()
+            hist_map = {int(r["property_id"]): float(r["valuation_eur"] or 0.0) for r in rows}
 
-            # Latest valuation from history <= week_date
-            row = conn.execute(
-                """
-                SELECT valuation_eur
-                FROM immobilier_history
-                WHERE property_id = ?
-                  AND effective_date <= ?
-                ORDER BY effective_date DESC, id DESC
-                LIMIT 1
-                """,
-                (property_id, wd.strftime("%Y-%m-%d")),
-            ).fetchone()
+            for _, r in shares.iterrows():
+                property_id = int(r["property_id"])
+                pct = float(r.get("pct", 100.0)) / 100.0
 
-            if row:
-                valo = float(row["valuation_eur"])
-            else:
-                # Fallback to current valuation from immobiliers table
-                valo = float(r.get("valuation_eur") or 0.0)
+                if property_id in hist_map:
+                    valo = hist_map[property_id]
+                else:
+                    # Fallback to current valuation from immobiliers table
+                    valo = float(r.get("valuation_eur") or 0.0)
 
-            total_direct += valo * pct
+                total_direct += valo * pct
 
     # 2. SCPI automatiques (via transactions)
     # On recalcule les positions à la date T
@@ -349,6 +382,13 @@ def _credits_remaining_asof(conn, person_id: int, week_date: str) -> float:
 # Snapshot write
 # --------------------
 def upsert_weekly_snapshot(conn, person_id: int, week_date: str, mode: str, payload: dict) -> None:
+    import math
+    pn = float(payload.get("patrimoine_net", 0.0))
+    if math.isnan(pn):
+        import logging
+        logging.getLogger(__name__).warning("Snapshot for person %s on %s has missing prices (NaN). Skipping insert.", person_id, week_date)
+        return
+
     conn.execute(
         """
         INSERT INTO patrimoine_snapshots_weekly(
@@ -606,6 +646,7 @@ def rebuild_snapshots_person_from_last(
     person_id: int,
     safety_weeks: int = 4,
     fallback_lookback_days: int = 90,
+    cancel_check = None,
 ) -> dict:
     """
     Rebuild "quotidien" ultra rapide :
@@ -688,15 +729,20 @@ def rebuild_snapshots_person_from_last(
         market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
 
     # 4) Traitement :
-    # - Toujours recalculer toutes les semaines dans weeks (petit volume, rapide)
-    #   (car on inclut la fenêtre de sécurité)
     n_ok = 0
     for wd in weeks:
+        if cancel_check and cancel_check():
+            import logging
+            logging.getLogger(__name__).info("Rebuild cancelled. Processed %d/%d weeks.", n_ok, len(weeks))
+            break
         payload = compute_weekly_snapshot_person(conn, person_id, wd)
         upsert_weekly_snapshot(conn, person_id, wd, mode="REBUILD", payload=payload)
         n_ok += 1
 
-    conn.commit()
+    if not (cancel_check and cancel_check()):
+        conn.commit()
+    else:
+        conn.rollback()
 
     return {
         "did_run": True,

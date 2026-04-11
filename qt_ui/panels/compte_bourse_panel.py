@@ -30,6 +30,10 @@ class PriceRefreshThread(QThread):
         super().__init__()
         self._account_id = account_id
         self._account_ccy = account_ccy
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
         from services import repositories as repo
@@ -39,6 +43,8 @@ class PriceRefreshThread(QThread):
         with get_conn() as local_conn:
             asset_ids = repo.list_account_asset_ids(local_conn, account_id=self._account_id)
             for aid in asset_ids:
+                if self._is_cancelled:
+                    break
                 a = local_conn.execute("SELECT symbol FROM assets WHERE id = ?", (aid,)).fetchone()
                 if not a:
                     continue

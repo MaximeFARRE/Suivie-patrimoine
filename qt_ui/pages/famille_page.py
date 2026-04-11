@@ -55,6 +55,10 @@ class RebuildFamilleThread(QThread):
     def __init__(self, person_ids: list):
         super().__init__()
         self._person_ids = person_ids
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
         try:
@@ -62,6 +66,9 @@ class RebuildFamilleThread(QThread):
             from services import family_snapshots as fs
             from services.db import get_conn
             with get_conn() as local_conn:
+                if self._is_cancelled:
+                    self.finished.emit("Annulé")
+                    return
                 res = fs.rebuild_family_weekly(
                     local_conn, person_ids=self._person_ids,
                     lookback_days=90, family_id=1
@@ -81,6 +88,10 @@ class RebuildAllThread(QThread):
         super().__init__()
         self._person_ids = person_ids
         self._safety_weeks = safety_weeks
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
         try:
@@ -91,11 +102,15 @@ class RebuildAllThread(QThread):
             total = len(self._person_ids)
             with get_conn() as local_conn:
                 for i, pid in enumerate(self._person_ids):
+                    if self._is_cancelled:
+                        msgs.append("Annulé")
+                        break
                     self.progress.emit(f"Rebuild personne {i+1}/{total}...")
                     r = wk_snap.rebuild_snapshots_person_from_last(
                         local_conn, person_id=pid,
                         safety_weeks=self._safety_weeks,
-                        fallback_lookback_days=90
+                        fallback_lookback_days=90,
+                        cancel_check=lambda: self._is_cancelled
                     )
                     msgs.append(str(r))
                 try:
@@ -510,15 +525,17 @@ class FamilleDashboardPanel(QWidget):
                 if top_net is not None and len(top_net) > 0:
                     html_parts.append("<b>🥇 Patrimoine net (Top 3)</b><br>")
                     for i, row in top_net.iterrows():
+                        import html
                         m = medals[i] if i < 3 else "•"
-                        html_parts.append(f"{m} <b>{row['Personne']}</b> — {money(float(row['Net (€)']))}<br>")
+                        html_parts.append(f"{m} <b>{html.escape(str(row['Personne']))}</b> — {money(float(row['Net (€)']))}<br>")
 
                 top3 = boards.get("top_perf_3m", [])
                 if top3:
                     html_parts.append("<br><b>🚀 Progression 3 mois (Top 3)</b><br>")
                     for i, (name, val) in enumerate(top3):
+                        import html
                         m = medals[i]
-                        html_parts.append(f"{m} <b>{name}</b> — {val:.1f}%<br>")
+                        html_parts.append(f"{m} <b>{html.escape(str(name))}</b> — {val:.1f}%<br>")
 
                 self._leaderboard_label.setText("".join(html_parts))
 

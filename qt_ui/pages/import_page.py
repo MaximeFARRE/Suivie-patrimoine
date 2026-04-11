@@ -545,6 +545,9 @@ class ImportPage(QScrollArea):
         def _log(msg: str, color: str = "#94a3b8") -> None:
             from services.tr_import import strip_ansi
             clean = strip_ansi(msg).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            pin = tr_pin_edit.text().strip()
+            if pin and len(pin) >= 4:
+                clean = clean.replace(pin, "****")
             log_edit.append(f'<span style="color:{color}">{clean}</span>')
 
         def _get_person_id() -> int | None:
@@ -591,6 +594,10 @@ class ImportPage(QScrollArea):
 
             _log(f"Connexion à Trade Republic… (Web Login)", "#60a5fa")
 
+            # Note (Bug 6): Le module pytr (via pytr login) ne permet techniquement 
+            # pas de lire le code PIN via stdin, variables d'environnement ou fichier.
+            # Il doit transiter par l'argument `--pin`. Le PIN est censuré des logs applicatifs
+            # mais pourrait apparaître très brièvement dans les gestionnaires de processus OS.
             pytr_args = ["login", "-n", phone, "-p", pin, "--store_credentials"]
 
             from services.tr_import import PytrProcess

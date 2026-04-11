@@ -160,11 +160,33 @@ _STYLE_FILTER_COMBO = f"""
     QComboBox {{
         background: {BG_CARD}; color: {TEXT_SECONDARY};
         border: 1px solid {BORDER_DEFAULT}; border-radius: 4px;
-        padding: 2px 6px; font-size: 12px; min-width: 90px;
+        padding: 4px 8px; font-size: 13px; min-width: 130px;
     }}
     QComboBox:focus {{ border: 1px solid {ACCENT_BLUE}; }}
-    QComboBox QAbstractItemView {{ background: {BG_CARD}; color: white; }}
-    QComboBox::drop-down {{ border: none; }}
+    QComboBox::drop-down {{ border: none; width: 20px; }}
+    QComboBox QAbstractItemView {{
+        background: #1e2538;
+        color: #e2e8f0;
+        border: 1px solid {BORDER_DEFAULT};
+        border-radius: 4px;
+        padding: 4px;
+        min-width: 200px;
+        font-size: 13px;
+        outline: none;
+    }}
+    QComboBox QAbstractItemView::item {{
+        padding: 6px 12px;
+        min-height: 28px;
+        border-radius: 3px;
+    }}
+    QComboBox QAbstractItemView::item:hover {{
+        background: {ACCENT_BLUE};
+        color: white;
+    }}
+    QComboBox QAbstractItemView::item:selected {{
+        background: {ACCENT_BLUE};
+        color: white;
+    }}
 """
 
 _STYLE_FILTER_SPIN = f"""
@@ -284,6 +306,8 @@ class FilterBar(QWidget):
                 lbl.setStyleSheet(_STYLE_FILTER_LABEL)
                 combo = QComboBox()
                 combo.setStyleSheet(_STYLE_FILTER_COMBO)
+                combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+                combo.view().setMinimumWidth(200)
                 combo.addItem("Tous")
                 combo.currentTextChanged.connect(self.filters_changed)
                 self._row1.addWidget(lbl)

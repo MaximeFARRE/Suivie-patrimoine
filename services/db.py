@@ -150,14 +150,13 @@ class SyncedLibsqlConn:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        # Si pas d'erreur, on commit+sync
         if exc_type is None:
             try:
                 self.commit()
             except Exception:
                 pass
-        # ⚠️ On ne ferme PAS ici : singleton partagé.
-        # La fermeture se fait via close_connection() à l'arrêt de l'app.
+        
+        self.close()
         return False
 
 
@@ -177,7 +176,7 @@ def get_conn():
         conn.execute("PRAGMA cache_size = -64000;")  # 64 MB de cache
         conn.execute("PRAGMA synchronous = NORMAL;")  # Bon compromis perf/sécurité
         _logger.info("Connexion SQLite locale : %s (WAL activé)", DB_PATH)
-        return conn
+        return SyncedLibsqlConn(conn)
 
     # 3) Embedded replica: fichier local + sync_url vers Turso
     replica_path = str(DB_PATH).replace(".db", "_turso.db")

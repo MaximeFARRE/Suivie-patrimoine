@@ -119,9 +119,21 @@ def compute_positions_v2_fx(conn, tx_df: pd.DataFrame, latest_prices: pd.DataFra
 
     out["asset_ccy"] = out.apply(pick_ccy, axis=1)
 
+    import logging
+    _log = logging.getLogger(__name__)
+
+    def _convert_or_nan(amount, from_ccy, to_ccy):
+        if pd.isna(amount):
+            return amount
+        res = fx.convert(conn, amount, from_ccy, to_ccy)
+        if res is None:
+            _log.warning("FX: Unable to convert %s from %s to %s - generating NaN", amount, from_ccy, to_ccy)
+            return float('nan')
+        return res
+
     # Conversion PRU + last_price en devise compte
-    out["pru"] = out.apply(lambda r: fx.convert(conn, r["pru"], r["asset_ccy"], account_ccy), axis=1)
-    out["last_price"] = out.apply(lambda r: fx.convert(conn, r["last_price"], r["asset_ccy"], account_ccy), axis=1)
+    out["pru"] = out.apply(lambda r: _convert_or_nan(r["pru"], r["asset_ccy"], account_ccy), axis=1)
+    out["last_price"] = out.apply(lambda r: _convert_or_nan(r["last_price"], r["asset_ccy"], account_ccy), axis=1)
 
     # Recalcul value & pnl_latent après conversion
     out["value"] = out["quantity"] * out["last_price"]

@@ -102,17 +102,22 @@ class CollapsibleSection(QFrame):
         arrow = "▼" if self._is_expanded else "▶"
         self._toggle_btn.setText(f"  {arrow}  {self._title_text}")
 
-        # Calcul de la hauteur cible
-        content_height = self._content_widget.sizeHint().height()
-        start_height = self._content_widget.maximumHeight()
-        end_height = content_height if self._is_expanded else 0
+        # Émettre d'abord le signal pour que le contenu soit chargé
+        # (chargement lazy) avant de calculer la hauteur cible.
+        self.toggled.emit(self._is_expanded)
 
-        # Animation fluide
+        if self._is_expanded:
+            # On anime vers une valeur très grande : le widget prendra
+            # la place dont il a besoin sans être bridé par le maximumHeight.
+            start_height = 0
+            end_height = 16_000  # QWIDGETSIZE_MAX pratique — jamais atteint réellement
+        else:
+            start_height = self._content_widget.height()
+            end_height = 0
+
         self._animation = QPropertyAnimation(self._content_widget, b"maximumHeight")
-        self._animation.setDuration(250)
+        self._animation.setDuration(280)
         self._animation.setStartValue(start_height)
         self._animation.setEndValue(end_height)
         self._animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self._animation.start()
-
-        self.toggled.emit(self._is_expanded)
