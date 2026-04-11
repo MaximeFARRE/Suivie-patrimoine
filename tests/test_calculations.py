@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 from services.calculations import solde_compte, cashflow_mois
+from services.global_search_service import query_global_search
 
 
 def _tx(*rows):
@@ -51,3 +52,39 @@ def test_cashflow_mois_vide():
     tx = _tx(("2025-01-15", "DEPOT", 1000.0))
     # aucune opération en mars
     assert cashflow_mois(tx, 2025, 3) == pytest.approx(0.0)
+
+
+def test_global_search_service_empty_query_returns_empty(conn):
+    assert query_global_search(conn, "   ") == []
+
+
+def test_global_search_service_returns_expected_payload_shapes(conn):
+    conn.execute("INSERT INTO people(name) VALUES ('Alice')")
+    conn.execute(
+        "INSERT INTO accounts(person_id, name, account_type, institution, currency) "
+        "VALUES (1, 'PEA Alice', 'PEA', 'BourseDirect', 'EUR')"
+    )
+    conn.execute(
+        "INSERT INTO assets(symbol, name, asset_type, currency) "
+        "VALUES ('AI', 'Air Liquide', 'action', 'EUR')"
+    )
+    conn.execute(
+        """
+        INSERT INTO transactions(
+            date, person_id, account_id, type, asset_id, amount, category, note
+        ) VALUES ('2026-01-10', 1, 1, 'ACHAT', 1, 1234.5, 'Invest', 'Achat AI')
+        """
+    )
+    conn.commit()
+
+    results_people = query_global_search(conn, "alice")
+    kinds_people = {item["kind"] for item in results_people}
+    assert {"person", "account", "transaction"}.issubset(kinds_people)
+
+    results_assets = query_global_search(conn, "ai")
+    kinds_assets = {item["kind"] for item in results_assets}
+    assert "asset" in kinds_assets
+
+    tx = next(item for item in results_people if item["kind"] == "transaction")
+    assert tx["amount"] == "1 234.50"
+    assert "🧾 Transaction #" in tx["label"]
