@@ -158,6 +158,12 @@ def compute_positions_valued_asof(conn, person_id: int, asof_week_date: str) -> 
 
         value_native = qty * float(px)
         value_eur = market_history.convert_weekly(conn, value_native, ccy, "EUR", asof_week_date)
+        if value_eur is None:
+            logger.warning(
+                "compute_positions_valued_asof: FX %s→EUR manquant pour %s @ %s, position ignorée.",
+                ccy, ticker, asof_week_date,
+            )
+            continue
 
         rows.append({
             "ticker": ticker,
@@ -165,7 +171,7 @@ def compute_positions_valued_asof(conn, person_id: int, asof_week_date: str) -> 
             "devise": ccy,
             "quantite": qty,
             "prix_weekly": float(px),
-            "valeur_eur": float(round(value_eur, 2)),
+            "valeur_eur": round(float(value_eur), 2),
         })
 
     out = pd.DataFrame(rows)
@@ -279,6 +285,12 @@ def compute_accounts_breakdown_asof(conn, person_id: int, asof_week_date: str) -
             px = market_history.get_price_asof(conn, ticker, asof_week_date) or 0.0
             value_native = qty * float(px)
             value_eur = market_history.convert_weekly(conn, value_native, ccy, "EUR", asof_week_date)
+            if value_eur is None:
+                logger.warning(
+                    "compute_accounts_breakdown_asof: FX %s→EUR manquant pour %s @ %s, ignoré des holdings.",
+                    ccy, ticker, asof_week_date,
+                )
+                continue
             holdings_by_acc[aid] = holdings_by_acc.get(aid, 0.0) + float(value_eur)
 
     # Cash par compte (en EUR)
@@ -299,16 +311,22 @@ def compute_accounts_breakdown_asof(conn, person_id: int, asof_week_date: str) -
             cash_native = _broker_cash_asof_native(df)
 
         cash_eur = market_history.convert_weekly(conn, cash_native, acc_ccy, "EUR", asof_week_date)
+        if cash_eur is None:
+            logger.warning(
+                "compute_accounts_breakdown_asof: FX %s→EUR manquant pour cash du compte %s @ %s, ignoré.",
+                acc_ccy, acc_name, asof_week_date,
+            )
+            continue
         hold_eur = float(holdings_by_acc.get(acc_id, 0.0))
-        total_eur = float(cash_eur + hold_eur)
+        total_eur = float(cash_eur) + hold_eur
 
         rows.append({
             "Compte": acc_name,
             "Type": acc_type,
             "Devise": acc_ccy,
             "Cash (EUR)": round(float(cash_eur), 2),
-            "Holdings (EUR)": round(float(hold_eur), 2),
-            "Total (EUR)": round(float(total_eur), 2),
+            "Holdings (EUR)": round(hold_eur, 2),
+            "Total (EUR)": round(total_eur, 2),
         })
 
     out = pd.DataFrame(rows).sort_values("Total (EUR)", ascending=False).reset_index(drop=True)
@@ -357,7 +375,14 @@ def compute_invested_amount_eur_asof(conn, person_id: int, asof_week_date: str) 
         sells = df[df["type"] == "VENTE"]
 
         invested_native = float(buys["amount"].sum() + buys["fees"].sum()) - float(sells["amount"].sum() - sells["fees"].sum())
-        total_eur += market_history.convert_weekly(conn, invested_native, acc_ccy, "EUR", asof_week_date)
+        converted = market_history.convert_weekly(conn, invested_native, acc_ccy, "EUR", asof_week_date)
+        if converted is None:
+            logger.warning(
+                "compute_invested_amount_eur_asof: FX %s→EUR manquant pour compte %s @ %s, ignoré.",
+                acc_ccy, acc_id, asof_week_date,
+            )
+            continue
+        total_eur += converted
 
     return float(round(total_eur, 2))
 
@@ -457,8 +482,13 @@ def compute_passive_income_history(conn, person_id: int) -> pd.DataFrame:
                 continue
             
             date_str = r["date"].strftime("%Y-%m-%d")
-            # Convert API
             amt_eur = market_history.convert_weekly(conn, amt_native, acc_ccy, "EUR", date_str)
+            if amt_eur is None:
+                logger.warning(
+                    "compute_passive_income_history: FX %s→EUR manquant pour %s @ %s, ignoré.",
+                    acc_ccy, r["type"], date_str,
+                )
+                continue
             rows.append({
                 "date": date_str,
                 "month": r["date"].strftime("%Y-%m"),
@@ -512,8 +542,14 @@ def compute_invested_series(conn, person_id: int) -> pd.DataFrame:
         combined = pd.concat([buys[["date", "net_native"]], sells[["date", "net_native"]]])
 
         if acc_ccy != "EUR":
-            rate = float(fx.ensure_fx_rate(conn, acc_ccy, "EUR") or 1.0)
-            combined["net_eur"] = combined["net_native"] * rate
+            rate = fx.ensure_fx_rate(conn, acc_ccy, "EUR")
+            if rate is None:
+                logger.warning(
+                    "compute_invested_series: FX %s→EUR introuvable pour compte %s, ignoré de la série.",
+                    acc_ccy, acc_id,
+                )
+                continue
+            combined["net_eur"] = combined["net_native"] * float(rate)
         else:
             combined["net_eur"] = combined["net_native"]
 

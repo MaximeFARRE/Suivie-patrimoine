@@ -6,7 +6,12 @@ from utils.validators import sens_flux
 
 logger = logging.getLogger(__name__)
 
-def _fx_to_eur(conn, amount: float, ccy: str) -> float:
+def _fx_to_eur(conn, amount: float, ccy: str) -> float | None:
+    """
+    Convertit amount depuis ccy vers EUR via la base de données.
+    Essaie la paire directe (ccy→EUR) puis inverse (EUR→ccy).
+    Retourne None si aucun taux n'est disponible — jamais de fallback silencieux.
+    """
     ccy = (ccy or "EUR").upper()
     if ccy == "EUR":
         return float(amount)
@@ -22,7 +27,11 @@ def _fx_to_eur(conn, amount: float, ccy: str) -> float:
         if abs(rate) > 1e-12:
             return float(amount) / rate
 
-    return float(amount)
+    logger.warning(
+        "_fx_to_eur: taux %s→EUR introuvable en DB. Retourne None (pas de fallback).",
+        ccy,
+    )
+    return None
 
 def _bank_balance_from_tx(tx_df: pd.DataFrame) -> float:
     if tx_df is None or tx_df.empty:
@@ -64,7 +73,14 @@ def _compute_liquidites_like_overview(conn, person_id: int):
                 for _, r in tx.iterrows():
                     total_native += float(r.get("amount", 0.0) or 0.0) * sens_flux(str(r.get("type", "")))
 
-        bank_total_eur += float(_fx_to_eur(conn, total_native, acc_ccy))
+        eur = _fx_to_eur(conn, total_native, acc_ccy)
+        if eur is None:
+            logger.warning(
+                "_compute_liquidites: FX %s→EUR indisponible pour compte %s, ignoré du total.",
+                acc_ccy, acc_id,
+            )
+            continue
+        bank_total_eur += eur
 
     bank_total_eur = round(float(bank_total_eur), 2)
 
@@ -91,7 +107,14 @@ def _compute_liquidites_like_overview(conn, person_id: int):
             cash_native -= float(df.loc[df["type"] == "FRAIS", "amount"].sum())
             cash_native -= float(df["fees"].sum())
 
-        bourse_total_eur += float(_fx_to_eur(conn, cash_native, acc_ccy))
+        eur = _fx_to_eur(conn, cash_native, acc_ccy)
+        if eur is None:
+            logger.warning(
+                "_compute_liquidites: FX %s→EUR indisponible pour compte bourse %s, ignoré du total.",
+                acc_ccy, acc_id,
+            )
+            continue
+        bourse_total_eur += eur
 
     bourse_total_eur = round(float(bourse_total_eur), 2)
 
