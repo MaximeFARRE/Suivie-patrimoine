@@ -6,6 +6,7 @@ des transactions Trade Republic (via pytr), et de configurer des crédits.
 import os
 import tempfile
 import pandas as pd
+from services import import_lookup_service as lookup
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QCheckBox, QGroupBox, QLineEdit, QDoubleSpinBox,
@@ -174,10 +175,7 @@ class ImportPage(QScrollArea):
                 from services.imports import import_wide_csv_to_monthly_table
                 from services.import_history import create_batch, close_batch
                 import os
-                pid = self._conn.execute(
-                    "SELECT id FROM people WHERE name = ?", (person,)
-                ).fetchone()
-                pid = int(pid[0]) if pid else None
+                pid = lookup.get_person_id_by_name(self._conn, person)
                 itype = "DEPENSES" if table_type == "depenses" else "REVENUS"
                 batch_id = create_batch(
                     self._conn,
@@ -273,10 +271,7 @@ class ImportPage(QScrollArea):
                 from services.imports import import_bankin_csv
                 from services.import_history import create_batch, close_batch
                 import os
-                pid = self._conn.execute(
-                    "SELECT id FROM people WHERE name = ?", (person,)
-                ).fetchone()
-                pid = int(pid[0]) if pid else None
+                pid = lookup.get_person_id_by_name(self._conn, person)
                 batch_id = create_batch(
                     self._conn,
                     import_type="BANKIN",
@@ -552,12 +547,7 @@ class ImportPage(QScrollArea):
 
         def _get_person_id() -> int | None:
             person = self._person_combo.currentText()
-            row = self._conn.execute(
-                "SELECT id FROM people WHERE name = ?", (person,)
-            ).fetchone()
-            if not row:
-                return None
-            return int(row[0] if not hasattr(row, "keys") else row["id"])
+            return lookup.get_person_id_by_name(self._conn, person)
 
         def _save_phone() -> None:
             pid = _get_person_id()
@@ -1075,14 +1065,9 @@ class ImportPage(QScrollArea):
         """Recharge les comptes PEA/CTO pour la personne sélectionnée."""
         combo.clear()
         try:
-            rows = self._conn.execute(
-                """SELECT id, name, account_type FROM accounts
-                   WHERE person_id = ? AND account_type IN ('PEA', 'CTO')
-                   ORDER BY account_type, name""",
-                (person_id,),
-            ).fetchall()
-            for row in rows:
-                combo.addItem(f"{row[1]} ({row[2]})", int(row[0]))
+            accounts = lookup.list_accounts_by_types(self._conn, person_id, ["PEA", "CTO"])
+            for acc in accounts:
+                combo.addItem(f"{acc['name']} ({acc['account_type']})", int(acc["id"]))
 
             # Charger le téléphone sauvegardé
             from services.tr_import import get_tr_phone
@@ -1447,32 +1432,25 @@ class ImportPage(QScrollArea):
     def _on_person_changed(self) -> None:
         person = self._person_combo.currentText()
         try:
-            row = self._conn.execute("SELECT id FROM people WHERE name = ?", (person,)).fetchone()
-            if not row:
+            person_id = lookup.get_person_id_by_name(self._conn, person)
+            if person_id is None:
                 return
-            person_id = int(row[0] if not hasattr(row, '__getitem__') else row["id"])
 
             # Refresh TR accounts
             if hasattr(self._panel_tr, "_refresh_accounts"):
                 self._panel_tr._refresh_accounts(person_id)
 
             # Comptes crédit
-            rows_credit = self._conn.execute(
-                "SELECT id, name FROM accounts WHERE person_id = ? AND account_type = 'CREDIT' ORDER BY name",
-                (person_id,),
-            ).fetchall()
+            credit_accounts = lookup.list_accounts_by_types(self._conn, person_id, ["CREDIT"])
             self._credit_account_combo.clear()
-            for row in rows_credit:
-                self._credit_account_combo.addItem(f"{row[1]} (id={row[0]})", int(row[0]))
+            for acc in credit_accounts:
+                self._credit_account_combo.addItem(f"{acc['name']} (id={acc['id']})", int(acc["id"]))
 
             # Comptes banque
-            rows_banque = self._conn.execute(
-                "SELECT id, name FROM accounts WHERE person_id = ? AND account_type = 'BANQUE' ORDER BY name",
-                (person_id,),
-            ).fetchall()
+            banque_accounts = lookup.list_accounts_by_types(self._conn, person_id, ["BANQUE"])
             self._payer_account_combo.clear()
-            for row in rows_banque:
-                self._payer_account_combo.addItem(f"{row[1]} (id={row[0]})", int(row[0]))
+            for acc in banque_accounts:
+                self._payer_account_combo.addItem(f"{acc['name']} (id={acc['id']})", int(acc["id"]))
         except Exception:
             pass
 
@@ -1482,12 +1460,11 @@ class ImportPage(QScrollArea):
     def _on_save_credit(self) -> None:
         person = self._person_combo.currentText()
         try:
-            row = self._conn.execute("SELECT id FROM people WHERE name = ?", (person,)).fetchone()
-            if not row:
+            person_id = lookup.get_person_id_by_name(self._conn, person)
+            if person_id is None:
                 self._credit_result.setStyleSheet("color: #ef4444; font-size: 12px;")
                 self._credit_result.setText("Personne introuvable.")
                 return
-            person_id = int(row[0] if not hasattr(row, '__getitem__') else row["id"])
 
             account_id = self._credit_account_combo.currentData()
             if account_id is None:
