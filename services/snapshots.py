@@ -39,6 +39,45 @@ def _list_weeks(start: dt.date, end: dt.date) -> list[str]:
         cur += dt.timedelta(days=7)
     return out
 
+
+def _collect_person_market_sync_inputs(conn, person_id: int) -> tuple[list[str], list[tuple[str, str]]]:
+    """Construit les symboles et paires FX à synchroniser pour une personne."""
+    tx = repo.list_transactions(conn, person_id=person_id, limit=300000)
+    symbols: list[str] = []
+    pairs: set[tuple[str, str]] = set()
+
+    if tx is not None and not tx.empty:
+        tx2 = tx[tx["asset_symbol"].notna()].copy()
+        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
+
+        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
+        if asset_ids:
+            q = ",".join(["?"] * len(asset_ids))
+            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
+            for r in rows:
+                ccy = (r["currency"] or "EUR").upper()
+                if ccy != "EUR":
+                    pairs.add((ccy, "EUR"))
+
+    accounts = repo.list_accounts(conn, person_id=person_id)
+    if accounts is not None and not accounts.empty:
+        for _, acc in accounts.iterrows():
+            ccy = str(acc.get("currency") or "EUR").upper()
+            if ccy != "EUR":
+                pairs.add((ccy, "EUR"))
+
+    pairs.add(("USD", "EUR"))
+    return symbols, sorted(list(pairs))
+
+
+def _sync_person_market_data_for_weeks(conn, person_id: int, week_start: str, week_end: str) -> None:
+    """Synchronise les historiques marché utiles au rebuild entre deux semaines incluses."""
+    symbols, pairs = _collect_person_market_sync_inputs(conn, person_id)
+    if symbols:
+        market_history.sync_asset_prices_weekly(conn, symbols, week_start, week_end)
+    if pairs:
+        market_history.sync_fx_weekly(conn, pairs, week_start, week_end)
+
 # --------------------
 # CASH BANQUE as-of
 # --------------------
@@ -471,43 +510,11 @@ def rebuild_snapshots_person(conn, person_id: int, lookback_days: int = 90) -> d
     if not weeks:
         return {"did_run": False, "reason": "no_weeks"}
 
-    # tickers + devises depuis assets liés aux transactions
-    tx = repo.list_transactions(conn, person_id=person_id, limit=300000)
-    symbols = []
-    pairs = set()
-
-    if tx is not None and not tx.empty:
-        tx2 = tx[tx["asset_symbol"].notna()].copy()
-        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
-
-        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
-        if asset_ids:
-            q = ",".join(["?"] * len(asset_ids))
-            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
-            for r in rows:
-                ccy = (r["currency"] or "EUR").upper()
-                if ccy != "EUR":
-                    pairs.add((ccy, "EUR"))
-
-    # AJOUT: On s'assure que les devises des comptes eux-mêmes sont incluses
-    accounts = repo.list_accounts(conn, person_id=person_id)
-    if accounts is not None and not accounts.empty:
-        for _, acc in accounts.iterrows():
-            ccy = str(acc.get("currency") or "EUR").upper()
-            if ccy != "EUR":
-                pairs.add((ccy, "EUR"))
-
-    # AJOUT: Toujours synchroniser l'USD pour permettre le pivot (ex: COP → USD → EUR)
-    pairs.add(("USD", "EUR"))
-
-    # Import weekly market data
-    if symbols:
-        market_history.sync_asset_prices_weekly(conn, symbols, weeks[0], weeks[-1])
-    if pairs:
-        market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
+    _sync_person_market_data_for_weeks(conn, person_id, weeks[0], weeks[-1])
 
     # Cache des transactions bancaires par account_id (évite N*W requêtes SQL)
     bank_tx_cache: dict[int, pd.DataFrame] = {}
+    accounts = repo.list_accounts(conn, person_id=person_id)
     if accounts is not None and not accounts.empty:
         bank_accs = accounts[accounts["account_type"].astype(str).str.upper() == "BANQUE"]
         for _, acc in bank_accs.iterrows():
@@ -588,38 +595,7 @@ def rebuild_snapshots_person_missing_only(
     if not todo:
         return {"did_run": False, "reason": "nothing_to_do", "n_missing": 0, "n_recalc": 0}
 
-    # --- Même logique que rebuild_snapshots_person pour récupérer tickers + FX
-    tx = repo.list_transactions(conn, person_id=person_id, limit=300000)
-    symbols = []
-    pairs = set()
-
-    if tx is not None and not tx.empty:
-        tx2 = tx[tx["asset_symbol"].notna()].copy()
-        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
-
-        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
-        if asset_ids:
-            q = ",".join(["?"] * len(asset_ids))
-            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
-            for r in rows:
-                ccy = (r["currency"] or "EUR").upper()
-                if ccy != "EUR":
-                    pairs.add((ccy, "EUR"))
-
-    # AJOUT: ensure account currencies + USD pivot
-    accounts = repo.list_accounts(conn, person_id=person_id)
-    if accounts is not None and not accounts.empty:
-        for _, acc in accounts.iterrows():
-            ccy = str(acc.get("currency") or "EUR").upper()
-            if ccy != "EUR":
-                pairs.add((ccy, "EUR"))
-    pairs.add(("USD", "EUR"))
-
-    # Import weekly market data (sur l'intervalle global, simple et safe)
-    if symbols:
-        market_history.sync_asset_prices_weekly(conn, symbols, weeks[0], weeks[-1])
-    if pairs:
-        market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
+    _sync_person_market_data_for_weeks(conn, person_id, weeks[0], weeks[-1])
 
     # 4) upsert uniquement semaines todo
     n_ok = 0
@@ -641,6 +617,31 @@ def rebuild_snapshots_person_missing_only(
         "n_ok": n_ok,
     }
 
+
+def _get_last_snapshot_week_ts(conn, person_id: int) -> "pd.Timestamp | None":
+    """Retourne la dernière week_date snapshot d'une personne (ou None)."""
+    row = conn.execute(
+        "SELECT MAX(week_date) AS d FROM patrimoine_snapshots_weekly WHERE person_id=?",
+        (int(person_id),),
+    ).fetchone()
+    if not row:
+        return None
+
+    try:
+        raw = row["d"]
+    except (TypeError, KeyError):
+        raw = row[0]
+
+    if not raw:
+        return None
+
+    try:
+        val = pd.to_datetime(raw, errors="coerce")
+        return None if pd.isna(val) else val
+    except Exception:
+        return None
+
+
 def rebuild_snapshots_person_from_last(
     conn,
     person_id: int,
@@ -660,25 +661,7 @@ def rebuild_snapshots_person_from_last(
     end = market_history.week_start(_today_paris_date())
 
     # 1) Dernière snapshot existante
-    row = conn.execute(
-        "SELECT MAX(week_date) AS d FROM patrimoine_snapshots_weekly WHERE person_id=?",
-        (int(person_id),),
-    ).fetchone()
-
-    last_week = None
-    _d_val = None
-    if row:
-        try:
-            _d_val = row["d"]
-        except (TypeError, KeyError):
-            _d_val = row[0]
-    if row and _d_val:
-        try:
-            last_week = pd.to_datetime(_d_val, errors="coerce")
-            if pd.isna(last_week):
-                last_week = None
-        except Exception:
-            last_week = None
+    last_week = _get_last_snapshot_week_ts(conn, person_id)
 
     # 2) Définir start
     if last_week is None:
@@ -696,37 +679,7 @@ def rebuild_snapshots_person_from_last(
     if not weeks:
         return {"did_run": False, "reason": "no_weeks", "mode": mode}
 
-    # 3) Import marché (comme rebuild_snapshots_person) sur la période utile
-    tx = repo.list_transactions(conn, person_id=person_id, limit=300000)
-    symbols = []
-    pairs = set()
-
-    if tx is not None and not tx.empty:
-        tx2 = tx[tx["asset_symbol"].notna()].copy()
-        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
-
-        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
-        if asset_ids:
-            q = ",".join(["?"] * len(asset_ids))
-            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
-            for r in rows:
-                ccy = (r["currency"] or "EUR").upper()
-                if ccy != "EUR":
-                    pairs.add((ccy, "EUR"))
-
-    # AJOUT: ensure account currencies + USD pivot
-    accounts = repo.list_accounts(conn, person_id=person_id)
-    if accounts is not None and not accounts.empty:
-        for _, acc in accounts.iterrows():
-            ccy = str(acc.get("currency") or "EUR").upper()
-            if ccy != "EUR":
-                pairs.add((ccy, "EUR"))
-    pairs.add(("USD", "EUR"))
-
-    if symbols:
-        market_history.sync_asset_prices_weekly(conn, symbols, weeks[0], weeks[-1])
-    if pairs:
-        market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
+    _sync_person_market_data_for_weeks(conn, person_id, weeks[0], weeks[-1])
 
     # 4) Traitement :
     n_ok = 0
@@ -883,37 +836,7 @@ def rebuild_snapshots_person_backdated_aware(
     if not weeks:
         return {"did_run": False, "mode": "BACKDATED_AWARE", "reason": "no_weeks", "person_id": int(person_id)}
 
-    # 5) Import marché sur l'intervalle utile (même logique que tes autres rebuild)
-    tx_all = repo.list_transactions(conn, person_id=person_id, limit=300000)
-    symbols = []
-    pairs = set()
-
-    if tx_all is not None and not tx_all.empty:
-        tx2 = tx_all[tx_all["asset_symbol"].notna()].copy()
-        symbols = sorted(set([str(s).strip() for s in tx2["asset_symbol"].tolist() if str(s).strip()]))
-
-        asset_ids = sorted(set([int(x) for x in tx2["asset_id"].dropna().astype(int).tolist()]))
-        if asset_ids:
-            q = ",".join(["?"] * len(asset_ids))
-            rows = conn.execute(f"SELECT id, currency FROM assets WHERE id IN ({q})", tuple(asset_ids)).fetchall()
-            for r in rows:
-                ccy = (r["currency"] or "EUR").upper()
-                if ccy != "EUR":
-                    pairs.add((ccy, "EUR"))
-
-    # AJOUT: ensure account currencies + USD pivot
-    accounts = repo.list_accounts(conn, person_id=person_id)
-    if accounts is not None and not accounts.empty:
-        for _, acc in accounts.iterrows():
-            ccy = str(acc.get("currency") or "EUR").upper()
-            if ccy != "EUR":
-                pairs.add((ccy, "EUR"))
-    pairs.add(("USD", "EUR"))
-
-    if symbols:
-        market_history.sync_asset_prices_weekly(conn, symbols, weeks[0], weeks[-1])
-    if pairs:
-        market_history.sync_fx_weekly(conn, sorted(list(pairs)), weeks[0], weeks[-1])
+    _sync_person_market_data_for_weeks(conn, person_id, weeks[0], weeks[-1])
 
     # 6) Recalc weeks
     n_ok = 0
@@ -963,6 +886,39 @@ PERSON_WEEKLY_COLUMNS = [
     "immobilier_value",
     "credits_remaining",
 ]
+
+
+def _snapshot_row_to_dict(
+    row,
+    *,
+    person_id: int,
+    week_str: str | None = None,
+    warn_invalid_fields: bool = False,
+) -> dict:
+    """Convertit une row snapshot SQLite en payload métier normalisé."""
+    def _val(key: str) -> float:
+        try:
+            v = row[key]
+            return float(v) if v is not None else 0.0
+        except (KeyError, IndexError, TypeError, ValueError):
+            if warn_invalid_fields:
+                _logger.warning(
+                    "get_person_snapshot_at_week: colonne '%s' absente ou invalide "
+                    "pour person_id=%s semaine=%s", key, person_id, week_str,
+                )
+            return 0.0
+
+    return {
+        "week_date":         str(row["week_date"]) if row["week_date"] else None,
+        "patrimoine_net":    _val("patrimoine_net"),
+        "patrimoine_brut":   _val("patrimoine_brut"),
+        "liquidites_total":  _val("liquidites_total"),
+        "bourse_holdings":   _val("bourse_holdings"),
+        "immobilier_value":  _val("immobilier_value"),
+        "pe_value":          _val("pe_value"),
+        "ent_value":         _val("ent_value"),
+        "credits_remaining": _val("credits_remaining"),
+    }
 
 
 def get_person_weekly_series(conn, person_id: int) -> pd.DataFrame:
@@ -1093,25 +1049,7 @@ def get_latest_person_snapshot(conn, person_id: int) -> dict | None:
         )
         return None
 
-    def _val(key: str) -> float:
-        """Extrait une valeur numérique de la Row SQLite."""
-        try:
-            v = row[key]
-            return float(v) if v is not None else 0.0
-        except (KeyError, IndexError, TypeError, ValueError):
-            return 0.0
-
-    return {
-        "week_date":        str(row["week_date"]) if row["week_date"] else None,
-        "patrimoine_net":   _val("patrimoine_net"),
-        "patrimoine_brut":  _val("patrimoine_brut"),
-        "liquidites_total": _val("liquidites_total"),
-        "bourse_holdings":  _val("bourse_holdings"),
-        "immobilier_value": _val("immobilier_value"),
-        "pe_value":         _val("pe_value"),
-        "ent_value":        _val("ent_value"),
-        "credits_remaining": _val("credits_remaining"),
-    }
+    return _snapshot_row_to_dict(row, person_id=int(person_id))
 
 
 def get_person_snapshot_at_week(
@@ -1186,26 +1124,9 @@ def get_person_snapshot_at_week(
         )
         return None
 
-    def _val(key: str) -> float:
-        """Extrait une valeur numérique de la Row SQLite avec fallback à 0.0."""
-        try:
-            v = row[key]
-            return float(v) if v is not None else 0.0
-        except (KeyError, IndexError, TypeError, ValueError):
-            _logger.warning(
-                "get_person_snapshot_at_week: colonne '%s' absente ou invalide "
-                "pour person_id=%s semaine=%s", key, person_id, week_str,
-            )
-            return 0.0
-
-    return {
-        "week_date":         str(row["week_date"]) if row["week_date"] else None,
-        "patrimoine_net":    _val("patrimoine_net"),
-        "patrimoine_brut":   _val("patrimoine_brut"),
-        "liquidites_total":  _val("liquidites_total"),
-        "bourse_holdings":   _val("bourse_holdings"),
-        "immobilier_value":  _val("immobilier_value"),
-        "pe_value":          _val("pe_value"),
-        "ent_value":         _val("ent_value"),
-        "credits_remaining": _val("credits_remaining"),
-    }
+    return _snapshot_row_to_dict(
+        row,
+        person_id=int(person_id),
+        week_str=week_str,
+        warn_invalid_fields=True,
+    )

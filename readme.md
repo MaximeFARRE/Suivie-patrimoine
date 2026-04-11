@@ -1,4 +1,4 @@
-﻿# Patrimoine Desktop
+# Patrimoine Desktop
 
 ## 1. Presentation du projet
 Application desktop PyQt6 de suivi de patrimoine personnel/familial.
@@ -145,7 +145,6 @@ CHECKLIST_QUALITE.md         # garde-fous qualite
   - `qt_ui/pages/import_page.py`,
   - `qt_ui/pages/goals_projection_page.py`,
   - `services/vue_ensemble_metrics.py`.
-- Presence de deux fichiers README (`README.md` et `readme.md`) a aligner/simplifier.
 
 ## 12. Priorites actuelles du projet
 1. Unifier la source de verite des projections (facade unique puis migration UI).

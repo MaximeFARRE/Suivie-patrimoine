@@ -1,4 +1,4 @@
-﻿# Architecture - Patrimoine Desktop
+# Architecture - Patrimoine Desktop
 
 Dernière mise à jour: 2026-04-11
 Périmètre: architecture réellement observée dans le code actuel.
@@ -246,10 +246,7 @@ Sensibles = impact fort + risque de régression:
 2. Taille et couplage des modules clés
 - objectifs/projections/import/snapshots concentrent beaucoup de responsabilités.
 
-3. Cohérence documentaire et nomenclature
-- historique de docs avec noms proches (`SOURCES_DE_VERITE` vs `SOURCE_DE_VERITE`).
-
-4. Paramétrage applicatif
+3. Paramétrage applicatif
 - différences entre options affichées en settings et application effective au runtime.
 
 5. Couverture de tests d'intégration UI
