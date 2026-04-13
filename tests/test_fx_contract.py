@@ -412,6 +412,69 @@ class TestDataQualityFalseZeroRegressions:
             "amount_native": 1000.0,
         }]
 
+
+class TestFxImpactDecomposition:
+    def test_positions_v2_fx_splits_market_and_currency_effects(self, conn):
+        from services import portfolio
+        from services import repositories as repo
+        from services import market_repository as mrepo
+
+        conn.execute(
+            "INSERT INTO assets(id, symbol, name, asset_type, currency) VALUES (1, 'AAA', 'AAA Corp', 'action', 'USD')"
+        )
+        # FX courant (utilisé pour la valorisation live EUR)
+        repo.insert_fx_rate(conn, "USD", "EUR", "2024-02-01", 1.20)
+        # FX au moment de l'achat (utilisé pour fx_moyen_achat)
+        mrepo.upsert_fx_rate_weekly(conn, "USD", "EUR", "2024-01-01", 1.00)
+
+        tx = pd.DataFrame([
+            {
+                "id": 1,
+                "date": "2024-01-01",
+                "type": "ACHAT",
+                "asset_id": 1,
+                "asset_symbol": "AAA",
+                "asset_name": "AAA Corp",
+                "quantity": 10.0,
+                "price": 100.0,     # devise actif (USD)
+                "amount": 1000.0,   # EUR (coût total)
+                "fees": 0.0,
+            }
+        ])
+        latest_prices = pd.DataFrame([{"asset_id": 1, "price": 120.0, "currency": "USD"}])
+
+        out = portfolio.compute_positions_v2_fx(conn, tx, latest_prices, account_ccy="EUR")
+        row = out.iloc[0]
+
+        # valeur actuelle EUR = 10 * 120 * 1.20 = 1440
+        # valeur sans effet change = 10 * 120 * 1.00 = 1200
+        # fx_gain = 240 ; market_gain = 1200 - 1000 = 200 ; total = 440
+        assert float(row["fx_gain_eur"]) == pytest.approx(240.0)
+        assert float(row["market_gain_eur"]) == pytest.approx(200.0)
+        assert float(row["total_gain_eur"]) == pytest.approx(440.0)
+        # Compat rétro
+        assert float(row["pnl_fx"]) == pytest.approx(float(row["fx_gain_eur"]))
+
+    def test_fx_summary_aggregates_by_currency_and_account_with_missing_breakdown(self):
+        from services import bourse_analytics
+
+        df_positions = pd.DataFrame(
+            [
+                {"asset_ccy": "USD", "fx_gain_eur": 120.0, "compte": "CTO 1"},
+                {"asset_ccy": "USD", "fx_gain_eur": None, "compte": "CTO 2"},
+                {"asset_ccy": "GBP", "fx_gain_eur": -30.0, "compte": "PEA"},
+                {"asset_ccy": "EUR", "fx_gain_eur": 0.0, "compte": "PEA"},  # ignoré (EUR)
+            ]
+        )
+
+        res = bourse_analytics.compute_fx_pnl_summary(df_positions)
+        assert res["total_fx_pnl"] == pytest.approx(90.0)
+        assert res["by_currency"]["USD"] == pytest.approx(120.0)
+        assert res["by_currency"]["GBP"] == pytest.approx(-30.0)
+        assert res["by_account"]["CTO 1"] == pytest.approx(120.0)
+        assert res["by_account"]["PEA"] == pytest.approx(-30.0)
+        assert res["missing_breakdown_count"] == 1
+
     def test_live_position_missing_price_is_not_valued_as_zero(self):
         from services import portfolio
 

@@ -301,13 +301,16 @@ class BourseGlobalPanel(QWidget):
         # ── KPI Row 2 — revenus & positions ──────────────────────────────────
         kpi_row2 = QHBoxLayout()
         kpi_row2.setSpacing(10)
-        self._kpi_nb  = KpiCard("Positions ouvertes", "—", emoji="🎯", tone="neutral")
-        self._kpi_div = KpiCard("Dividendes perçus",  "—", emoji="💵", tone="success")
-        self._kpi_int = KpiCard("Intérêts perçus",    "—", emoji="🏦", tone="success")
-        self._kpis_bot = [self._kpi_nb, self._kpi_div, self._kpi_int]
+        self._kpi_nb     = KpiCard("Positions ouvertes", "—", emoji="🎯", tone="neutral")
+        self._kpi_div    = KpiCard("Dividendes perçus",  "—", emoji="💵", tone="success")
+        self._kpi_int    = KpiCard("Intérêts perçus",    "—", emoji="🏦", tone="success")
+        self._kpi_fx_pnl = KpiCard("Effet change",       "—", emoji="💱", tone="neutral")
+        self._kpi_fx_pnl.setToolTip(
+            "Impact de la variation des devises sur la valorisation en euros des actifs non libelles en EUR"
+        )
+        self._kpis_bot = [self._kpi_nb, self._kpi_div, self._kpi_int, self._kpi_fx_pnl]
         for card in self._kpis_bot:
             kpi_row2.addWidget(card, stretch=1)
-        kpi_row2.addStretch(1)
         layout.addLayout(kpi_row2)
 
         layout.addWidget(_sep())
@@ -587,7 +590,8 @@ class BourseGlobalPanel(QWidget):
             from services.bourse_analytics import (
                 get_live_bourse_positions,
                 get_bourse_performance_metrics, compute_invested_series,
-                get_tickers_diagnostic_df, get_bourse_state_asof
+                get_tickers_diagnostic_df, get_bourse_state_asof,
+                compute_fx_pnl_summary,
             )
 
             # ── Comptes bourse ──────────────────────────────────────────────
@@ -603,6 +607,7 @@ class BourseGlobalPanel(QWidget):
 
             metrics = {}
             missing_reasons: list[str] = []
+            fx_pnl_summary: dict = {}
             if self._selected_date:
                 # ── MODE HISTORIQUE ──
                 state = get_bourse_state_asof(self._conn, self._person_id, self._selected_date)
@@ -637,6 +642,7 @@ class BourseGlobalPanel(QWidget):
                     return
                 total_val = _finite_sum(df_all["value"])       if "value"      in df_all.columns else None
                 total_pnl = _finite_sum(df_all["pnl_latent"])  if "pnl_latent" in df_all.columns else None
+                fx_pnl_summary = compute_fx_pnl_summary(df_all)
                 nb_pos    = len(df_all[df_all["quantity"] > 0]) if "quantity"  in df_all.columns else len(df_all)
                 nb_acc    = len(df_b)
                 if "valuation_status" in df_all.columns:
@@ -767,6 +773,32 @@ class BourseGlobalPanel(QWidget):
                 tone="neutral" if total_pnl is None or pd.isna(total_pnl) else ("success" if float(total_pnl) >= 0 else "alert"),
                 details=pnl_details or None,
             )
+
+            # ── KPI Effet change (FX) ─────────────────────────────────────────
+            total_fx_pnl = fx_pnl_summary.get("total_fx_pnl")
+            fx_by_ccy: dict = fx_pnl_summary.get("by_currency", {})
+            missing_fx_breakdown = int(fx_pnl_summary.get("missing_breakdown_count", 0) or 0)
+            if total_fx_pnl is None or (not fx_pnl_summary):
+                self._kpi_fx_pnl.set_content(
+                    "Effet change", "—",
+                    subtitle="Non disponible en mode historique",
+                    emoji="💱", tone="neutral",
+                )
+            else:
+                fx_sign = "+" if float(total_fx_pnl) >= 0 else ""
+                fx_value = f"{fx_sign}{_fmt_eur(total_fx_pnl)}"
+                fx_details = [
+                    (f"Impact {ccy}", f"{'+' if v >= 0 else ''}{_fmt_eur(v)}")
+                    for ccy, v in sorted(fx_by_ccy.items())
+                ]
+                self._kpi_fx_pnl.set_content(
+                    "Effet change",
+                    fx_value,
+                    subtitle="Calcul partiel" if missing_fx_breakdown > 0 else "Impact devise",
+                    emoji="💱",
+                    tone="neutral" if float(total_fx_pnl) == 0 else ("success" if float(total_fx_pnl) > 0 else "alert"),
+                    details=fx_details or None,
+                )
 
             # ── Table des positions (U5) ──────────────────────────────────────
             # On adapte les colonnes selon le mode

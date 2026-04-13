@@ -612,6 +612,69 @@ def compute_invested_series(conn, person_id: int) -> pd.DataFrame:
     return all_tx[["date", "invested_eur"]].reset_index(drop=True)
 
 
+def compute_fx_pnl_summary(df_positions: pd.DataFrame) -> dict:
+    """
+    Calcule l'effet de change (FX) agrégé en EUR.
+
+    Paramètre:
+        df_positions: DataFrame retourné par get_live_bourse_positions.
+                      Colonnes attendues: asset_ccy + fx_gain_eur (fallback pnl_fx).
+
+    Retourne:
+        {
+            "total_fx_pnl": float,             # Effet FX total en EUR
+            "by_currency": dict[str, float],   # Effet FX agrégé par devise
+            "by_account": dict[str, float],    # Effet FX agrégé par compte (si colonne dispo)
+            "missing_breakdown_count": int,    # Nb positions étrangères sans décomposition exploitable
+            "fx_column": str | None,           # Colonne utilisée (fx_gain_eur ou pnl_fx)
+        }
+    """
+    empty = {
+        "total_fx_pnl": 0.0,
+        "by_currency": {},
+        "by_account": {},
+        "missing_breakdown_count": 0,
+        "fx_column": None,
+    }
+    if df_positions is None or df_positions.empty:
+        return empty
+    if "asset_ccy" not in df_positions.columns:
+        return empty
+
+    foreign = df_positions[df_positions["asset_ccy"] != "EUR"].copy()
+    if foreign.empty:
+        return empty
+
+    fx_col = "fx_gain_eur" if "fx_gain_eur" in foreign.columns else ("pnl_fx" if "pnl_fx" in foreign.columns else None)
+    if fx_col is None:
+        return empty
+
+    pnl_series = pd.to_numeric(foreign[fx_col], errors="coerce")
+    total_fx_pnl = float(pnl_series.dropna().sum())
+    missing_breakdown_count = int(pnl_series.isna().sum())
+
+    by_currency = (
+        foreign.assign(_fx_val=pnl_series)
+        .groupby("asset_ccy")["_fx_val"]
+        .sum()
+    )
+    by_account: dict[str, float] = {}
+    if "compte" in foreign.columns:
+        grouped = (
+            foreign.assign(_fx_val=pnl_series)
+            .groupby("compte")["_fx_val"]
+            .sum()
+        )
+        by_account = {str(k): float(v) for k, v in grouped.items()}
+    return {
+        "total_fx_pnl": total_fx_pnl,
+        "by_currency": {str(k): float(v) for k, v in by_currency.items()},
+        "by_account": by_account,
+        "missing_breakdown_count": missing_breakdown_count,
+        "fx_column": fx_col,
+    }
+
+
 def get_bourse_performance_metrics(conn, person_id: int, current_live_value: float | None = None) -> dict:
     """
     Retourne un résumé des métriques boursières globale et YTD ainsi que les DataFrames associées pour l'UI.
@@ -784,7 +847,9 @@ def get_live_bourse_positions(conn, person_id: int) -> pd.DataFrame:
 
     empty_cols = [
         "asset_id", "symbol", "name", "asset_type", "quantity", "pru",
-        "last_price", "value", "pnl_latent", "asset_ccy", "valuation_status", "compte", "type",
+        "last_price", "value", "pnl_latent",
+        "total_gain_eur", "market_gain_eur", "fx_gain_eur", "pnl_fx",
+        "asset_ccy", "valuation_status", "fx_breakdown_status", "compte", "type",
     ]
 
     accounts = repo.list_accounts(conn, person_id=person_id)
@@ -816,7 +881,8 @@ def get_live_bourse_positions(conn, person_id: int) -> pd.DataFrame:
         tx_acc = repo.list_transactions(conn, account_id=account_id, limit=10000)
         prices = repo.get_latest_prices(conn, asset_ids)
 
-        pos = portfolio.compute_positions_v2_fx(conn, tx_acc, prices, acc_ccy)
+        # Vue globale: toutes les valorisations sont consolidées en EUR.
+        pos = portfolio.compute_positions_v2_fx(conn, tx_acc, prices, "EUR")
 
         if pos.empty:
             logger.debug(
@@ -862,7 +928,9 @@ def get_live_bourse_positions_for_account(conn, account_id: int) -> pd.DataFrame
 
     empty_cols = [
         "asset_id", "symbol", "name", "asset_type", "quantity", "pru",
-        "last_price", "value", "pnl_latent", "asset_ccy", "valuation_status",
+        "last_price", "value", "pnl_latent",
+        "total_gain_eur", "market_gain_eur", "fx_gain_eur", "pnl_fx",
+        "asset_ccy", "valuation_status", "fx_breakdown_status",
     ]
 
     # Devise du compte
