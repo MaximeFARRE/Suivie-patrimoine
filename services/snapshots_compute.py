@@ -190,19 +190,23 @@ def _bourse_cash_and_holdings_eur_asof(
             pos2 = pd.DataFrame()
         if not pos2.empty:
             grouped = pos2.groupby(["symbol", "asset_ccy"], as_index=False)["quantity"].sum()
-            price_cache: dict[str, float | None] = {}
+            price_cache: dict[str, tuple[float, str | None] | None] = {}
             for _, r in grouped.iterrows():
                 sym = str(r["symbol"])
                 qty = float(r["quantity"])
-                asset_ccy = str(r["asset_ccy"] or "EUR").upper()
+                asset_ccy_raw = str(r["asset_ccy"] or "").strip().upper()
 
                 if sym not in price_cache:
-                    price_cache[sym] = market_history.get_price_asof(conn, sym, week_date)
-                px = price_cache[sym]
-                if px is None:
+                    price_cache[sym] = market_history.get_price_and_currency_asof(conn, sym, week_date)
+                result = price_cache[sym]
+                if result is None:
                     if _tracker is not None:
                         _tracker["price_missing"] = _tracker.get("price_missing", 0) + 1
                     continue
+
+                px, price_ccy = result
+                # Priorité : devise de l'actif (assets.currency) → devise du tableau de prix → EUR
+                asset_ccy = asset_ccy_raw or price_ccy or "EUR"
 
                 value_native = qty * float(px)
                 converted_holding = _convert_to_eur(value_native, asset_ccy)
