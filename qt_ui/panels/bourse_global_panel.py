@@ -418,10 +418,15 @@ class BourseGlobalPanel(QWidget):
         vbox_alloc.setSpacing(4)
         lbl_alloc = QLabel("Répartition par actif")
         lbl_alloc.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px;")
-        self._chart_alloc = PlotlyView(min_height=260)
+        self._chart_alloc = PlotlyView(min_height=360)
+        lbl_alloc_type = QLabel("Répartition par type d'actif")
+        lbl_alloc_type.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px;")
+        self._chart_alloc_type = PlotlyView(min_height=190)
         vbox_alloc.addWidget(lbl_alloc)
         vbox_alloc.addWidget(self._chart_alloc)
-        table_area.addLayout(vbox_alloc, stretch=2)
+        vbox_alloc.addWidget(lbl_alloc_type)
+        vbox_alloc.addWidget(self._chart_alloc_type)
+        table_area.addLayout(vbox_alloc, stretch=3)
 
         layout.addLayout(table_area)
         layout.addWidget(_sep())
@@ -686,6 +691,7 @@ class BourseGlobalPanel(QWidget):
         self._chart_history.set_loading(True)
         self._chart_income.set_loading(True)
         self._chart_alloc.set_loading(True)
+        self._chart_alloc_type.set_loading(True)
 
         self._overlay.start("Analyse du portefeuille global…", blur=True)
         loaded_ok = False
@@ -1033,10 +1039,25 @@ class BourseGlobalPanel(QWidget):
 
             # ── Pie chart répartition (U6) ────────────────────────────────────
             if "value" in df_all.columns and "symbol" in df_all.columns:
-                df_pie = df_all[df_all["value"] > 0][["symbol", "value"]].copy()
+                if "name" in df_all.columns:
+                    asset_labels = (
+                        df_all["name"]
+                        .fillna("")
+                        .astype(str)
+                        .str.strip()
+                        .mask(lambda s: s == "", df_all["symbol"])
+                    )
+                else:
+                    asset_labels = df_all["symbol"]
+
+                df_pie = (
+                    df_all.assign(asset_label=asset_labels)
+                    .loc[df_all["value"] > 0, ["asset_label", "value"]]
+                    .copy()
+                )
                 if not df_pie.empty:
                     fig_pie = px.pie(
-                        df_pie, names="symbol", values="value", hole=0.42,
+                        df_pie, names="asset_label", values="value", hole=0.38,
                         template="plotly_dark",
                         color_discrete_sequence=px.colors.qualitative.Set3,
                     )
@@ -1047,7 +1068,7 @@ class BourseGlobalPanel(QWidget):
                         pull=[0.04] + [0.0] * (len(df_pie) - 1),
                     )
                     fig_pie.update_layout(
-                        **plotly_layout(margin=dict(l=24, r=24, t=24, b=24)),
+                        **plotly_layout(margin=dict(l=12, r=12, t=24, b=24)),
                         showlegend=False,
                     )
                     self._chart_alloc.set_figure(fig_pie)
@@ -1055,6 +1076,43 @@ class BourseGlobalPanel(QWidget):
                     self._chart_alloc.clear_figure()
             else:
                 self._chart_alloc.clear_figure()
+
+            # ── Pie chart répartition par type d'actif ───────────────────────
+            if "value" in df_all.columns and "asset_type" in df_all.columns:
+                df_type = (
+                    df_all.loc[df_all["value"] > 0, ["asset_type", "value"]]
+                    .copy()
+                )
+                if not df_type.empty:
+                    df_type["asset_type"] = (
+                        df_type["asset_type"]
+                        .fillna("Non renseigné")
+                        .astype(str)
+                        .str.strip()
+                        .replace("", "Non renseigné")
+                    )
+                    fig_type = px.pie(
+                        df_type, names="asset_type", values="value", hole=0.46,
+                        template="plotly_dark",
+                        color_discrete_sequence=px.colors.qualitative.Safe,
+                    )
+                    fig_type.update_traces(
+                        textinfo="percent",
+                        hovertemplate="<b>%{label}</b><br>%{value:,.0f} €<br>%{percent}<extra></extra>",
+                    )
+                    fig_type.update_layout(
+                        **plotly_layout(margin=dict(l=10, r=10, t=24, b=10)),
+                        showlegend=True,
+                        legend=dict(
+                            orientation="h", yanchor="bottom", y=1.02,
+                            xanchor="left", x=0, font=dict(size=10),
+                        ),
+                    )
+                    self._chart_alloc_type.set_figure(fig_type)
+                else:
+                    self._chart_alloc_type.clear_figure()
+            else:
+                self._chart_alloc_type.clear_figure()
 
             # ── Diagnostic Tickers ───────────────────────────────────────────
             df_diag = get_tickers_diagnostic_df(self._conn, self._person_id)
@@ -1082,6 +1140,7 @@ class BourseGlobalPanel(QWidget):
             self._chart_history.set_loading(False)
             self._chart_income.set_loading(False)
             self._chart_alloc.set_loading(False)
+            self._chart_alloc_type.set_loading(False)
 
             self._overlay.stop()
             if loaded_ok:
