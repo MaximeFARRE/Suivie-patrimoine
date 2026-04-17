@@ -77,9 +77,10 @@ def build_pe_positions(projects: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFrame
     out["holding_days"] = (end - out["entry_date"]).dt.days
 
     # PNL/MOIC
-    out["pnl"] = (out["cash_out"] + out["value_used"]) - (out["invested"] + out["fees"])
+    # Les frais sont suivis à titre indicatif uniquement et sont déjà inclus dans invested.
+    out["pnl"] = (out["cash_out"] + out["value_used"]) - out["invested"]
 
-    den = (out["invested"] + out["fees"])
+    den = out["invested"]
     out["moic"] = None
     mask = den > 0
     out.loc[mask, "moic"] = (out.loc[mask, "cash_out"] + out.loc[mask, "value_used"]) / den[mask]
@@ -102,8 +103,9 @@ def compute_pe_kpis(positions: pd.DataFrame) -> dict:
     invested = float(positions["invested"].sum())
     cash_out = float(positions["cash_out"].sum())
     value = float(positions["value_used"].sum())
-    pnl = float((cash_out + value) - (invested + fees))
-    den = invested + fees
+    # Les frais sont uniquement affichés en KPI (déjà inclus dans invested).
+    pnl = float((cash_out + value) - invested)
+    den = invested
     moic = (cash_out + value) / den if den > 0 else None
 
     n_total = int(len(positions))
