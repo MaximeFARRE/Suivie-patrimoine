@@ -202,7 +202,7 @@ class PrivateEquityPanel(QWidget):
         form2.addRow(_form_label("Date :"), self._pe_tx_date)
 
         self._pe_tx_type = QComboBox()
-        self._pe_tx_type.addItems(["INVEST", "VALO", "DISTRIB", "VENTE"])
+        self._pe_tx_type.addItems(["INVEST", "VALO", "DISTRIB", "VENTE", "FEES"])
         self._pe_tx_type.setStyleSheet(STYLE_INPUT_FOCUS)
         self._pe_tx_type.currentTextChanged.connect(self._on_pe_tx_type_changed)
         form2.addRow(_form_label("Type :"), self._pe_tx_type)
