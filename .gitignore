@@ -68,3 +68,8 @@ BACKLOG_GLOBAL.md
 .mypy_cache/
 pytest-cache-files-*/
 test_results.txt
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
