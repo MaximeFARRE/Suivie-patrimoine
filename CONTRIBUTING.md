@@ -1,96 +1,52 @@
 # Contributing to Patrimoine Desktop
 
-Thank you for your interest in contributing. This document covers the conventions and rules to follow.
-
-## Prerequisites
-
-- Python 3.11+
-- A virtual environment (recommended)
+## Setup
 
 ```bash
 python -m venv .venv
-# Windows
-.\.venv\Scripts\Activate.ps1
-# macOS / Linux
-source .venv/bin/activate
-
-pip install -r requirements.txt
+source .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 ```
 
-## Running the app
+## Run
 
 ```bash
-python main.py
+python main.py   # launch the app
+pytest           # run all tests
 ```
-
-## Running the tests
-
-```bash
-pytest
-```
-
-All tests must pass before opening a pull request.
 
 ## Branch naming
 
-| Type | Pattern | Example |
-|---|---|---|
-| Feature | `feat/<short-description>` | `feat/export-pdf` |
-| Bug fix | `fix/<short-description>` | `fix/snapshot-rebuild` |
-| Chore / cleanup | `chore/<short-description>` | `chore/clean-imports` |
-| Documentation | `docs/<short-description>` | `docs/update-architecture` |
+| Type | Pattern |
+|---|---|
+| Feature | `feat/<description>` |
+| Bug fix | `fix/<description>` |
+| Chore | `chore/<description>` |
+| Docs | `docs/<description>` |
 
-**Never commit directly to `main`.**
+Never commit directly to `main`.
 
-## Commit message convention
+## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<type>: <short description>
-
-# Examples:
 feat: add PDF export for credit overview
 fix: correct soft-delete filter in get_transaction
 chore: remove unused imports in main_window
 docs: update ARCHITECTURE.md projection section
 ```
 
-Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`
+## Architecture
 
-## Architecture rules
+This project enforces a strict layered architecture. Before contributing, read [`AGENTS.md`](AGENTS.md) — it contains the full engineering rules, project-specific constraints, and the definition of done.
 
-This project follows a strict layered architecture:
-
-```
-qt_ui/ (pages, panels, widgets)
-  → services/          business logic, KPIs, calculations
-    → repositories/    data access (SQL)
-      → db/            schema and migrations
-```
-
-**Rules:**
-- `qt_ui/` must only handle display and user interaction — no SQL, no business calculations.
-- All business logic (KPIs, aggregations, projections) lives in `services/`.
-- Never duplicate a calculation already present in a service.
-- Never call a private function (`_prefixed`) from outside its module.
-- Before creating a new function, check if one already exists in `services/`.
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture reference.
-
-## Adding a new feature
-
-1. Identify the relevant service in `services/`.
-2. Implement business logic in the service, not in the UI.
-3. Wire the UI panel to call the service.
-4. Add or update tests in `tests/`.
-5. Update `docs/SOURCE_DE_VERITE.md` if you add a new canonical KPI.
+The core law: **`qt_ui/` handles display only — all business logic lives in `services/`.**
 
 ## Pull request checklist
 
-- [ ] Tests pass (`pytest`)
-- [ ] No SQL or business logic added directly in `qt_ui/`
+- [ ] `pytest` passes
+- [ ] No SQL or KPI logic added to `qt_ui/`
 - [ ] No unused imports introduced
 - [ ] `docs/ARCHITECTURE.md` updated if architecture changed
-- [ ] Commit messages follow the convention above
+- [ ] Commits follow the convention above
