@@ -55,8 +55,13 @@ db/
 tests/
   test_*.py                      # tests surtout orientés services
 
-legacy/
-  3_Import_streamlit.py          # ancien écran Streamlit isolé
+docs/
+  ARCHITECTURE.md                # ce document
+  SOURCE_DE_VERITE.md            # fonctions canoniques par domaine
+  CONTEXT.md                     # contexte technique détaillé
+
+scripts/
+  patrimoine.spec                # spec PyInstaller
 ```
 
 ## 3. Description des couches
