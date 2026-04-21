@@ -53,6 +53,7 @@ build/
 # Fichiers de travail personnels
 plan_prevision.md
 prevision.md
+TODO.md
 
 # Audits, rapports et docs de pilotage
 AUDIT_*.md
