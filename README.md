@@ -60,8 +60,8 @@ All data is stored locally in a SQLite database. An optional remote replica via 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/MaximeFARRE/Suivie-patrimoine.git
-cd Suivie-patrimoine
+git clone https://github.com/MaximeFARRE/portfolio-tracker.git
+cd portfolio-tracker
 
 # 2. Create a virtual environment
 python -m venv .venv
