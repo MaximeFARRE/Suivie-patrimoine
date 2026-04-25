@@ -2,26 +2,52 @@
 Panel d'un compte Crédit — remplace ui/credit_dashboard.py
 Correctif : ajout de l'onglet Configuration pour créer/éditer le crédit.
 """
+
 import logging
+from datetime import datetime
+
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
 import pytz
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar,
-    QFormLayout, QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox, QPushButton,
-    QDateEdit, QCheckBox, QScrollArea, QMessageBox,
-)
-from qt_ui.components.animated_tab import AnimatedTabWidget
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
-from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
+from qt_ui.components.animated_tab import AnimatedTabWidget
 from qt_ui.panels.saisie_panel import SaisiePanel
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS, STYLE_BTN_DANGER,
-    STYLE_INPUT_FOCUS, STYLE_SECTION, STYLE_TITLE, STYLE_STATUS,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_TAB_INNER,
-    STYLE_PROGRESS, STYLE_FORM_LABEL, COLOR_SUCCESS, plotly_layout,
+    BG_PRIMARY,
+    COLOR_SUCCESS,
+    STYLE_BTN_DANGER,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_FORM_LABEL,
+    STYLE_INPUT_FOCUS,
+    STYLE_PROGRESS,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_TAB_INNER,
+    STYLE_TITLE,
+    plotly_layout,
 )
+from qt_ui.widgets import DataTableWidget, MetricLabel, PlotlyView
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +98,9 @@ class CompteCreditPanel(QWidget):
         dash_v.setSpacing(10)
 
         kpi_row = QHBoxLayout()
-        self._kpi_crd     = MetricLabel("CRD actuel", "—")
-        self._kpi_mensu   = MetricLabel("Mensualité théorique", "—")
-        self._kpi_cout    = MetricLabel("Coût réel (mois)", "—")
+        self._kpi_crd = MetricLabel("CRD actuel", "—")
+        self._kpi_mensu = MetricLabel("Mensualité théorique", "—")
+        self._kpi_cout = MetricLabel("Coût réel (mois)", "—")
         self._kpi_restant = MetricLabel("Mois restants", "—")
         for w in (self._kpi_crd, self._kpi_mensu, self._kpi_cout, self._kpi_restant):
             kpi_row.addWidget(w)
@@ -103,10 +129,12 @@ class CompteCreditPanel(QWidget):
         dash_v.addWidget(lbl_amort)
         self._table_amort = DataTableWidget()
         self._table_amort.setMinimumHeight(250)
-        self._table_amort.set_filter_config([
-            {"col": "date_echeance", "kind": "date_range",   "label": "Date échéance"},
-            {"col": "capital",       "kind": "number_range", "label": "Capital"},
-        ])
+        self._table_amort.set_filter_config(
+            [
+                {"col": "date_echeance", "kind": "date_range", "label": "Date échéance"},
+                {"col": "capital", "kind": "number_range", "label": "Capital"},
+            ]
+        )
         dash_v.addWidget(self._table_amort)
         dash_v.addStretch()
         tabs.addTab(dash, "📊  Tableau de bord")
@@ -121,11 +149,13 @@ class CompteCreditPanel(QWidget):
         hist_v = QVBoxLayout(hist)
         self._hist_table = DataTableWidget()
         self._hist_table.setMinimumHeight(350)
-        self._hist_table.set_filter_config([
-            {"col": "type",   "kind": "combo",        "label": "Type"},
-            {"col": "date",   "kind": "date_range",   "label": "Date"},
-            {"col": "amount", "kind": "number_range", "label": "Montant"},
-        ])
+        self._hist_table.set_filter_config(
+            [
+                {"col": "type", "kind": "combo", "label": "Type"},
+                {"col": "date", "kind": "date_range", "label": "Date"},
+                {"col": "amount", "kind": "number_range", "label": "Montant"},
+            ]
+        )
         hist_v.addWidget(self._hist_table)
         tabs.addTab(hist, "📋  Historique")
 
@@ -287,9 +317,7 @@ class CompteCreditPanel(QWidget):
             confirm.setInformativeText(
                 "Cette action supprimera aussi toutes les transactions associées et est irréversible."
             )
-            confirm.setStandardButtons(
-                QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes
-            )
+            confirm.setStandardButtons(QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes)
             btn_delete = confirm.button(QMessageBox.StandardButton.Yes)
             if btn_delete is not None:
                 btn_delete.setText("Supprimer")
@@ -308,6 +336,7 @@ class CompteCreditPanel(QWidget):
             )
 
             from services import snapshots as wk_snap
+
             wk_snap.rebuild_snapshots_person_from_last(
                 self._conn,
                 person_id=self._person_id,
@@ -319,10 +348,7 @@ class CompteCreditPanel(QWidget):
             QMessageBox.information(
                 self,
                 "Compte supprimé",
-                (
-                    f"Le compte « {account_name} » a été supprimé.\n"
-                    f"Transactions supprimées : {tx_deleted}."
-                ),
+                (f"Le compte « {account_name} » a été supprimé.\n" f"Transactions supprimées : {tx_deleted}."),
             )
             self.account_deleted.emit(int(self._person_id), int(self._account_id))
         except Exception as e:
@@ -339,6 +365,7 @@ class CompteCreditPanel(QWidget):
     def _load_config(self) -> None:
         try:
             from services.credits import get_credit_by_account
+
             c = get_credit_by_account(self._conn, account_id=self._account_id)
             if c is None:
                 return  # Formulaire vide = nouveau crédit
@@ -358,6 +385,7 @@ class CompteCreditPanel(QWidget):
             if date_str:
                 try:
                     import datetime as dt
+
                     d = dt.date.fromisoformat(date_str[:10])
                     self._cfg_date_debut.setDate(QDate(d.year, d.month, d.day))
                 except Exception as e:
@@ -371,21 +399,22 @@ class CompteCreditPanel(QWidget):
     def _save_credit(self) -> None:
         try:
             from services.credits import upsert_credit
+
             data = {
-                "person_id":                     self._person_id,
-                "account_id":                    self._account_id,
-                "nom":                           self._cfg_nom.text().strip() or None,
-                "banque":                        self._cfg_banque.text().strip() or None,
-                "type_credit":                   self._cfg_type.currentText(),
-                "capital_emprunte":              self._cfg_capital.value(),
-                "taux_nominal":                  self._cfg_taux.value(),
-                "taeg":                          self._cfg_taeg.value(),
-                "duree_mois":                    self._cfg_duree.value(),
-                "mensualite_theorique":          self._cfg_mensu.value(),
+                "person_id": self._person_id,
+                "account_id": self._account_id,
+                "nom": self._cfg_nom.text().strip() or None,
+                "banque": self._cfg_banque.text().strip() or None,
+                "type_credit": self._cfg_type.currentText(),
+                "capital_emprunte": self._cfg_capital.value(),
+                "taux_nominal": self._cfg_taux.value(),
+                "taeg": self._cfg_taeg.value(),
+                "duree_mois": self._cfg_duree.value(),
+                "mensualite_theorique": self._cfg_mensu.value(),
                 "assurance_mensuelle_theorique": self._cfg_assurance.value(),
-                "date_debut":                    self._cfg_date_debut.date().toString("yyyy-MM-dd"),
-                "actif":                         1 if self._cfg_actif.isChecked() else 0,
-                "payer_account_id":              None,
+                "date_debut": self._cfg_date_debut.date().toString("yyyy-MM-dd"),
+                "actif": 1 if self._cfg_actif.isChecked() else 0,
+                "payer_account_id": None,
             }
             upsert_credit(self._conn, data)
             self._cfg_status.setStyleSheet(STYLE_STATUS_SUCCESS)
@@ -399,9 +428,12 @@ class CompteCreditPanel(QWidget):
     def _generate_amortissement(self) -> None:
         try:
             from services.credits import (
-                get_credit_by_account, build_amortissement,
-                replace_amortissement, CreditParams,
+                CreditParams,
+                build_amortissement,
+                get_credit_by_account,
+                replace_amortissement,
             )
+
             # Sauvegarder d'abord pour s'assurer que la fiche existe
             self._save_credit()
 
@@ -433,9 +465,11 @@ class CompteCreditPanel(QWidget):
     def _load_dashboard(self) -> None:
         try:
             from services.credits import (
-                get_credit_by_account, get_amortissements,
-                get_crd_a_date, get_credit_dates,
                 cout_reel_mois_credit_via_bankin,
+                get_amortissements,
+                get_crd_a_date,
+                get_credit_by_account,
+                get_credit_dates,
             )
 
             today = _now_paris_date()
@@ -448,21 +482,19 @@ class CompteCreditPanel(QWidget):
 
             credit_id = int(c["id"])
             capital_init = float(c.get("capital_emprunte") or 0.0)
-            mensu_theo = (
-                float(c.get("mensualite_theorique") or 0.0)
-                + float(c.get("assurance_mensuelle_theorique") or 0.0)
+            mensu_theo = float(c.get("mensualite_theorique") or 0.0) + float(
+                c.get("assurance_mensuelle_theorique") or 0.0
             )
 
             crd_today = float(get_crd_a_date(self._conn, credit_id=credit_id, date_ref=str(today)))
             capital_rembourse = max(0.0, capital_init - crd_today)
-            cout_reel = float(cout_reel_mois_credit_via_bankin(
-                self._conn, credit_id=credit_id, mois_yyyy_mm_01=mois_courant
-            ))
+            cout_reel = float(
+                cout_reel_mois_credit_via_bankin(self._conn, credit_id=credit_id, mois_yyyy_mm_01=mois_courant)
+            )
             dates = get_credit_dates(self._conn, credit_id=credit_id)
             date_fin = dates.get("date_fin")
             mois_restants = (
-                max(0, (date_fin.year - today.year) * 12 + (date_fin.month - today.month))
-                if date_fin else None
+                max(0, (date_fin.year - today.year) * 12 + (date_fin.month - today.month)) if date_fin else None
             )
 
             prog = (capital_rembourse / capital_init) if capital_init > 0 else 0.0
@@ -471,9 +503,7 @@ class CompteCreditPanel(QWidget):
             self._kpi_crd.set_content("CRD actuel", f"{crd_today:,.2f} €".replace(",", " "))
             self._kpi_mensu.set_content("Mensualité théorique", f"{mensu_theo:,.2f} €".replace(",", " "))
             self._kpi_cout.set_content("Coût réel (mois)", f"{cout_reel:,.2f} €".replace(",", " "))
-            self._kpi_restant.set_content(
-                "Mois restants", str(mois_restants) if mois_restants is not None else "—"
-            )
+            self._kpi_restant.set_content("Mois restants", str(mois_restants) if mois_restants is not None else "—")
             self._prog_bar.setValue(int(prog * 100))
             self._prog_pct.setText(f"{prog * 100:.1f}%")
 
@@ -484,18 +514,30 @@ class CompteCreditPanel(QWidget):
                 amort["crd"] = pd.to_numeric(amort["crd"], errors="coerce").fillna(0.0)
 
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=amort["date_echeance"], y=amort["crd"],
-                    mode="lines", name="CRD", line=dict(color="#60a5fa")
-                ))
-                fig.add_trace(go.Scatter(
-                    x=[pd.to_datetime(today)], y=[crd_today],
-                    mode="markers", name="Aujourd'hui",
-                    marker=dict(color="red", size=10)
-                ))
-                fig.update_layout(**plotly_layout(
-                    xaxis_title="Date", yaxis_title="CRD (€)",
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=amort["date_echeance"],
+                        y=amort["crd"],
+                        mode="lines",
+                        name="CRD",
+                        line=dict(color="#60a5fa"),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=[pd.to_datetime(today)],
+                        y=[crd_today],
+                        mode="markers",
+                        name="Aujourd'hui",
+                        marker=dict(color="red", size=10),
+                    )
+                )
+                fig.update_layout(
+                    **plotly_layout(
+                        xaxis_title="Date",
+                        yaxis_title="CRD (€)",
+                    )
+                )
                 self._chart_crd.set_figure(fig)
                 self._table_amort.set_dataframe(amort)
 
@@ -508,6 +550,7 @@ class CompteCreditPanel(QWidget):
         try:
             from services import repositories as repo
             from utils.libelles import afficher_type_operation
+
             tx = repo.list_transactions(self._conn, account_id=self._account_id, limit=5000)
             if tx is not None and not tx.empty:
                 if "type" in tx.columns:

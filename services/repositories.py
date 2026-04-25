@@ -1,6 +1,7 @@
 import sqlite3
-import pandas as pd
 from typing import Optional
+
+import pandas as pd
 
 
 def df_from_rows(rows, columns=None) -> pd.DataFrame:
@@ -24,7 +25,16 @@ def list_people(conn: sqlite3.Connection) -> pd.DataFrame:
 # -------- Accounts --------
 def list_accounts(conn: sqlite3.Connection, person_id: Optional[int] = None) -> pd.DataFrame:
     # Ordre aligné sur le schema : id, person_id, name, account_type, subtype, institution, currency, created_at
-    cols = ["id", "person_id", "name", "account_type", "subtype", "institution", "currency", "created_at"]
+    cols = [
+        "id",
+        "person_id",
+        "name",
+        "account_type",
+        "subtype",
+        "institution",
+        "currency",
+        "created_at",
+    ]
     if person_id is None:
         rows = conn.execute("SELECT * FROM accounts ORDER BY person_id, id;").fetchall()
     else:
@@ -52,17 +62,14 @@ def create_account(
     conn.commit()
     return int(cur.lastrowid)
 
+
 def get_account(conn: sqlite3.Connection, account_id: int) -> Optional[dict]:
-    df = pd.read_sql_query(
-        "SELECT * FROM accounts WHERE id = ?", conn, params=(int(account_id),)
-    )
+    df = pd.read_sql_query("SELECT * FROM accounts WHERE id = ?", conn, params=(int(account_id),))
     return df.iloc[0].to_dict() if not df.empty else None
 
 
 def get_account_currency(conn: sqlite3.Connection, account_id: int) -> str:
-    df = pd.read_sql_query(
-        "SELECT currency FROM accounts WHERE id = ?", conn, params=(int(account_id),)
-    )
+    df = pd.read_sql_query("SELECT currency FROM accounts WHERE id = ?", conn, params=(int(account_id),))
     if df.empty:
         return "EUR"
     val = df.iloc[0]["currency"]
@@ -168,6 +175,7 @@ def create_asset(conn: sqlite3.Connection, symbol: str, name: str, asset_type: s
     conn.commit()
     return int(cur.lastrowid)
 
+
 def update_asset_currency(conn: sqlite3.Connection, asset_id: int, currency: str) -> None:
     conn.execute("UPDATE assets SET currency = ? WHERE id = ?;", (currency.upper(), asset_id))
     conn.commit()
@@ -203,9 +211,7 @@ def update_asset(conn: sqlite3.Connection, asset_id: int, name: str, symbol: str
     old_symbol = row["symbol"] if hasattr(row, "keys") else row[0]
 
     if symbol != old_symbol:
-        conflict = conn.execute(
-            "SELECT id FROM assets WHERE symbol = ? AND id != ?;", (symbol, asset_id)
-        ).fetchone()
+        conflict = conn.execute("SELECT id FROM assets WHERE symbol = ? AND id != ?;", (symbol, asset_id)).fetchone()
         if conflict is not None:
             raise ValueError(f"Le symbole '{symbol}' est déjà utilisé par un autre actif.")
         conn.execute(
@@ -252,6 +258,7 @@ def insert_fx_rate(conn: sqlite3.Connection, base_ccy: str, quote_ccy: str, asof
     )
     conn.commit()
 
+
 # -------- Transactions --------
 def list_transactions(
     conn: sqlite3.Connection,
@@ -262,10 +269,28 @@ def list_transactions(
     include_deleted: bool = False,
 ) -> pd.DataFrame:
     cols = [
-        "id", "date", "person_id", "account_id", "type", "asset_id", "quantity", "price",
-        "fees", "amount", "category", "note", "import_batch_id", "created_at",
-        "is_hidden_from_cashflow", "is_internal_transfer", "deleted_at", "analysis_state",
-        "asset_symbol", "asset_name", "account_name", "person_name",
+        "id",
+        "date",
+        "person_id",
+        "account_id",
+        "type",
+        "asset_id",
+        "quantity",
+        "price",
+        "fees",
+        "amount",
+        "category",
+        "note",
+        "import_batch_id",
+        "created_at",
+        "is_hidden_from_cashflow",
+        "is_internal_transfer",
+        "deleted_at",
+        "analysis_state",
+        "asset_symbol",
+        "asset_name",
+        "account_name",
+        "person_name",
     ]
 
     base = """
@@ -402,6 +427,7 @@ def _sync_bankin_monthly_if_needed(conn: sqlite3.Connection, tx_row: dict | None
     if person_id is None or month_key is None:
         return
     from services.imports import sync_bankin_monthly_tables
+
     sync_bankin_monthly_tables(conn, int(person_id), months=[month_key])
 
 
@@ -552,7 +578,9 @@ def hard_delete_transaction(conn: sqlite3.Connection, tx_id: int) -> None:
     conn.commit()
     _sync_bankin_monthly_if_needed(conn, tx)
 
+
 # -------- Pricing / Prices --------
+
 
 def list_account_asset_ids(conn: sqlite3.Connection, account_id: int) -> list[int]:
     """
@@ -570,7 +598,14 @@ def list_account_asset_ids(conn: sqlite3.Connection, account_id: int) -> list[in
     return [int(r["asset_id"]) for r in rows if r["asset_id"] is not None]
 
 
-def upsert_price(conn: sqlite3.Connection, asset_id: int, date: str, price: float, currency: str = "EUR", source: str = "AUTO") -> None:
+def upsert_price(
+    conn: sqlite3.Connection,
+    asset_id: int,
+    date: str,
+    price: float,
+    currency: str = "EUR",
+    source: str = "AUTO",
+) -> None:
     """
     Insert ou remplace un prix (asset_id, date) unique.
     """
@@ -618,6 +653,7 @@ def get_latest_prices(conn: sqlite3.Connection, asset_ids: list[int]) -> pd.Data
 # BANQUE container -> sous-comptes (NOUVEAU, n'impacte pas l'existant)
 # -------------------------------------------------------------------
 
+
 def link_subaccount_to_bank(conn, bank_account_id: int, sub_account_id: int, subtype: str) -> None:
     subtype = (subtype or "").lower().strip()
     conn.execute(
@@ -631,7 +667,14 @@ def link_subaccount_to_bank(conn, bank_account_id: int, sub_account_id: int, sub
 
 
 def list_bank_subaccounts(conn, bank_account_id: int) -> pd.DataFrame:
-    _COLS = ["sub_account_id", "subtype", "account_name", "account_type", "account_currency", "institution"]
+    _COLS = [
+        "sub_account_id",
+        "subtype",
+        "account_name",
+        "account_type",
+        "account_currency",
+        "institution",
+    ]
     rows = conn.execute(
         """
         SELECT b.sub_account_id,
@@ -743,10 +786,20 @@ def upsert_patrimoine_snapshot(
         ;
         """,
         (
-            person_id, snapshot_date, created_at, mode,
-            float(patrimoine_net), float(patrimoine_brut),
-            float(liquidites_total), float(bank_cash), float(bourse_cash), float(pe_cash),
-            float(bourse_holdings), float(pe_value), float(ent_value), float(credits_remaining),
+            person_id,
+            snapshot_date,
+            created_at,
+            mode,
+            float(patrimoine_net),
+            float(patrimoine_brut),
+            float(liquidites_total),
+            float(bank_cash),
+            float(bourse_cash),
+            float(pe_cash),
+            float(bourse_holdings),
+            float(pe_value),
+            float(ent_value),
+            float(credits_remaining),
             notes,
         ),
     )

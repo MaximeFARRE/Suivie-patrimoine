@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import datetime as dt
 import logging
 import threading
 from typing import Iterable
+
 from services import market_repository as mrepo
 
 _logger = logging.getLogger(__name__)
@@ -34,8 +36,10 @@ def _to_date(d) -> dt.date:
         return d
     return dt.date.fromisoformat(str(d))
 
+
 def week_start(d: dt.date) -> dt.date:
     return d - dt.timedelta(days=d.weekday())  # lundi
+
 
 def _week_list(start: dt.date, end: dt.date) -> list[str]:
     s = week_start(start)
@@ -46,6 +50,7 @@ def _week_list(start: dt.date, end: dt.date) -> list[str]:
         out.append(cur.isoformat())
         cur += dt.timedelta(days=7)
     return out
+
 
 def sync_asset_prices_weekly(conn, symbols: Iterable[str], start_date: str, end_date: str) -> dict:
     symbols = [s.strip() for s in (symbols or []) if str(s).strip()]
@@ -71,7 +76,7 @@ def sync_asset_prices_weekly(conn, symbols: Iterable[str], start_date: str, end_
     n_rows = 0
 
     import pandas as pd
-    
+
     # yfinance peut retourner un DataFrame vide si aucune donnée n'est trouvée
     if data is None or data.empty:
         return {"did_run": True, "n_rows": 0, "reason": "yfinance_empty"}
@@ -100,7 +105,7 @@ def sync_asset_prices_weekly(conn, symbols: Iterable[str], start_date: str, end_
                 if candidate in sub.columns:
                     col_to_use = candidate
                     break
-            
+
             if col_to_use:
                 s = sub[col_to_use].dropna()
                 for idx, px in s.items():
@@ -113,8 +118,10 @@ def sync_asset_prices_weekly(conn, symbols: Iterable[str], start_date: str, end_
     conn.commit()
     return {"did_run": True, "n_rows": n_rows}
 
+
 def fx_pair_to_yf_symbol(base_ccy: str, quote_ccy: str) -> str:
     return f"{base_ccy.upper()}{quote_ccy.upper()}=X"
+
 
 def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date: str) -> dict:
     """
@@ -130,11 +137,9 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
         return {"did_run": False, "n_rows": 0, "reason": "no_pairs"}
 
     # Télécharger direct ET inverse pour maximiser la couverture yfinance
-    all_symbols = list({
-        sym
-        for base, quote in pairs
-        for sym in (fx_pair_to_yf_symbol(base, quote), fx_pair_to_yf_symbol(quote, base))
-    })
+    all_symbols = list(
+        {sym for base, quote in pairs for sym in (fx_pair_to_yf_symbol(base, quote), fx_pair_to_yf_symbol(quote, base))}
+    )
     sync_asset_prices_weekly(conn, all_symbols, start_date, end_date)
 
     start = _to_date(start_date)
@@ -147,8 +152,8 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
     pivot_pairs_extra: set[tuple[str, str]] = set()
 
     for base, quote in pairs:
-        direct_sym  = fx_pair_to_yf_symbol(base, quote)   # ex: COPEUR=X
-        inverse_sym = fx_pair_to_yf_symbol(quote, base)   # ex: EURCOP=X
+        direct_sym = fx_pair_to_yf_symbol(base, quote)  # ex: COPEUR=X
+        inverse_sym = fx_pair_to_yf_symbol(quote, base)  # ex: EURCOP=X
 
         rows = conn.execute(
             "SELECT week_date, adj_close FROM asset_prices_weekly "
@@ -170,9 +175,9 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
             ).fetchall()
             if inv_rows:
                 _logger.info(
-                    "sync_fx_weekly: paire %s absente sur yfinance, "
-                    "stockage de l'inverse %s.",
-                    direct_sym, inverse_sym,
+                    "sync_fx_weekly: paire %s absente sur yfinance, " "stockage de l'inverse %s.",
+                    direct_sym,
+                    inverse_sym,
                 )
                 for r in inv_rows:
                     mrepo.upsert_fx_rate_weekly(conn, quote, base, r["week_date"], float(r["adj_close"]))
@@ -185,22 +190,24 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
                     _logger.info(
                         "sync_fx_weekly: ni %s ni %s disponibles sur yfinance. "
                         "Ajout des paires pivot %s↔%s et %s↔%s pour cross-rate via USD.",
-                        direct_sym, inverse_sym,
-                        base, _PIVOT, _PIVOT, quote,
+                        direct_sym,
+                        inverse_sym,
+                        base,
+                        _PIVOT,
+                        _PIVOT,
+                        quote,
                     )
-                    pivot_pairs_extra.add((base,  _PIVOT))
+                    pivot_pairs_extra.add((base, _PIVOT))
                     pivot_pairs_extra.add((_PIVOT, quote))
 
     # Synchroniser les paires pivot USD collectées pour les devises exotiques
     if pivot_pairs_extra:
-        extra_syms = list({
-            sym
-            for b, q in pivot_pairs_extra
-            for sym in (fx_pair_to_yf_symbol(b, q), fx_pair_to_yf_symbol(q, b))
-        })
+        extra_syms = list(
+            {sym for b, q in pivot_pairs_extra for sym in (fx_pair_to_yf_symbol(b, q), fx_pair_to_yf_symbol(q, b))}
+        )
         sync_asset_prices_weekly(conn, extra_syms, start_date, end_date)
         for b, q in pivot_pairs_extra:
-            direct_sym  = fx_pair_to_yf_symbol(b, q)
+            direct_sym = fx_pair_to_yf_symbol(b, q)
             inverse_sym = fx_pair_to_yf_symbol(q, b)
             for sym, store_b, store_q in [(direct_sym, b, q), (inverse_sym, q, b)]:
                 rows = conn.execute(
@@ -214,6 +221,7 @@ def sync_fx_weekly(conn, pairs: list[tuple[str, str]], start_date: str, end_date
 
     conn.commit()
     return {"did_run": True, "n_rows": n_fx}
+
 
 def get_price_asof(conn, symbol: str, week_date: str) -> float | None:
     row = mrepo.get_asset_price_asof(conn, symbol, week_date)
@@ -232,8 +240,8 @@ def get_price_and_currency_asof(conn, symbol: str, week_date: str) -> tuple[floa
     ccy = _row_val(row, "currency", 3)
     return price, str(ccy).upper() if ccy else None
 
-def get_fx_asof(conn, base_ccy: str, quote_ccy: str, week_date: str,
-                _depth: int = 0) -> float | None:
+
+def get_fx_asof(conn, base_ccy: str, quote_ccy: str, week_date: str, _depth: int = 0) -> float | None:
     """
     Retourne le taux base→quote à la semaine donnée.
 
@@ -242,12 +250,12 @@ def get_fx_asof(conn, base_ccy: str, quote_ccy: str, week_date: str,
       2. Paire inverse  (quote, base) → 1/rate
       3. Cross-rate via USD : base→USD→quote  (pour devises exotiques comme COP)
     """
-    base_ccy  = base_ccy.upper()
+    base_ccy = base_ccy.upper()
     quote_ccy = quote_ccy.upper()
     if base_ccy == quote_ccy:
         return 1.0
 
-# 1. Paire directe
+    # 1. Paire directe
     row = mrepo.get_fx_rate_asof(conn, base_ccy, quote_ccy, week_date)
     if row:
         return float(_row_val(row, "rate", 3))
@@ -262,12 +270,13 @@ def get_fx_asof(conn, base_ccy: str, quote_ccy: str, week_date: str,
     # 3. Cross-rate via USD (évite la récursion infinie via _depth)
     _PIVOT = "USD"
     if _depth == 0 and base_ccy != _PIVOT and quote_ccy != _PIVOT:
-        r_base_usd = get_fx_asof(conn, base_ccy,  _PIVOT,    week_date, _depth=1)
-        r_usd_quote = get_fx_asof(conn, _PIVOT,   quote_ccy, week_date, _depth=1)
+        r_base_usd = get_fx_asof(conn, base_ccy, _PIVOT, week_date, _depth=1)
+        r_usd_quote = get_fx_asof(conn, _PIVOT, quote_ccy, week_date, _depth=1)
         if r_base_usd is not None and r_usd_quote is not None:
             return float(r_base_usd) * float(r_usd_quote)
 
     return None
+
 
 def convert_weekly(conn, amount: float, from_ccy: str, to_ccy: str, week_date: str) -> float | None:
     """
@@ -285,7 +294,9 @@ def convert_weekly(conn, amount: float, from_ccy: str, to_ccy: str, week_date: s
         _logger.error(
             "convert_weekly: taux %s→%s introuvable pour la semaine %s. "
             "Retourne None pour marquer le prix comme manquant.",
-            from_ccy, to_ccy, week_date
+            from_ccy,
+            to_ccy,
+            week_date,
         )
         with _missing_fx_lock:
             _missing_fx_pairs.add((from_ccy, to_ccy))

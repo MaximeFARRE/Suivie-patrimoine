@@ -2,19 +2,26 @@
 Widget MetricLabel — remplace st.metric() de Streamlit.
 Affiche un label de titre + une valeur mise en avant + delta optionnel.
 """
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from qt_ui.theme import TEXT_SECONDARY, TEXT_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, BG_CARD
 from qt_ui.components.skeleton_handler import SkeletonHandler
+from qt_ui.theme import COLOR_ERROR, COLOR_SUCCESS, TEXT_PRIMARY, TEXT_SECONDARY
 
 
 class MetricLabel(QWidget):
     """Remplace st.metric(label, value, delta)."""
 
-    def __init__(self, label: str = "", value: str = "", delta: str = "",
-                 delta_positive: bool = True, parent=None):
+    def __init__(
+        self,
+        label: str = "",
+        value: str = "",
+        delta: str = "",
+        delta_positive: bool = True,
+        parent=None,
+    ):
         super().__init__(parent)
         self._loading = False
         self._skeleton_handler = SkeletonHandler(self)
@@ -55,8 +62,9 @@ class MetricLabel(QWidget):
         if not self._loading:
             return
 
-        from PyQt6.QtGui import QPainter, QColor, QBrush
         from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QBrush, QColor, QPainter
+
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -74,8 +82,7 @@ class MetricLabel(QWidget):
             p.drawRoundedRect(QRectF(8, 46, 40, 10), 3, 3)
         p.end()
 
-    def set_content(self, label: str, value: str, delta: str = "",
-                    delta_positive: bool = True) -> None:
+    def set_content(self, label: str, value: str, delta: str = "", delta_positive: bool = True) -> None:
         self._label_lbl.setText(str(label))
         self._value_lbl.setText(str(value))
 

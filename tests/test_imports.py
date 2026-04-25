@@ -1,10 +1,17 @@
 import io
-import pytest
-import pandas as pd
-from services.imports import _to_float, _month_key_from_date, _parse_date_strict, import_wide_csv_to_monthly_table
 
+import pandas as pd
+import pytest
+
+from services.imports import (
+    _month_key_from_date,
+    _parse_date_strict,
+    _to_float,
+    import_wide_csv_to_monthly_table,
+)
 
 # ─── _to_float ───────────────────────────────────────────
+
 
 def test_to_float_entier():
     assert _to_float("1234") == pytest.approx(1234.0)
@@ -24,6 +31,7 @@ def test_to_float_vide():
 
 def test_to_float_nan():
     import pandas as pd
+
     assert _to_float(float("nan")) == pytest.approx(0.0)
     assert _to_float(pd.NA) == pytest.approx(0.0)
 
@@ -34,6 +42,7 @@ def test_to_float_invalide():
 
 # ─── _parse_date_strict ─────────────────────────────────
 # Vérifie que le parsing explicite est non-ambigu et sans warning.
+
 
 def test_parse_date_strict_fr():
     d = _parse_date_strict("30/09/2025")
@@ -64,6 +73,7 @@ def test_parse_date_strict_no_warning(recwarn):
 
 
 # ─── _month_key_from_date ────────────────────────────────
+
 
 def test_month_key_format_fr():
     assert _month_key_from_date("30/09/2025") == "2025-09-01"
@@ -98,6 +108,7 @@ def test_month_key_no_warning(recwarn):
 
 # ─── import_wide_csv_to_monthly_table ────────────────────────────────────────
 
+
 def _make_csv(*rows: str) -> io.StringIO:
     """Construit un fichier CSV en mémoire (format wide)."""
     return io.StringIO("\n".join(rows))
@@ -110,9 +121,7 @@ def test_import_partiel_preserve_historique(conn):
     conn.commit()
 
     # Données de février déjà présentes
-    conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2026-02-01', 'Courses', 800)"
-    )
+    conn.execute("INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2026-02-01', 'Courses', 800)")
     conn.commit()
 
     # Importer seulement janvier
@@ -131,15 +140,11 @@ def test_import_partiel_preserve_historique(conn):
     assert result["nb_lignes"] == 2  # Courses + Restaurants
 
     # Février doit toujours exister
-    rows = conn.execute(
-        "SELECT COUNT(*) FROM depenses WHERE person_id = 1 AND mois = '2026-02-01'"
-    ).fetchone()
+    rows = conn.execute("SELECT COUNT(*) FROM depenses WHERE person_id = 1 AND mois = '2026-02-01'").fetchone()
     assert rows[0] == 1, "Les données de février ont été supprimées par erreur"
 
     # Janvier importé correctement
-    rows_jan = conn.execute(
-        "SELECT SUM(montant) FROM depenses WHERE person_id = 1 AND mois = '2026-01-01'"
-    ).fetchone()
+    rows_jan = conn.execute("SELECT SUM(montant) FROM depenses WHERE person_id = 1 AND mois = '2026-01-01'").fetchone()
     assert rows_jan[0] == pytest.approx(600.0)
 
 

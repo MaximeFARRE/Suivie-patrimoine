@@ -19,6 +19,7 @@ _logger = logging.getLogger(__name__)
 # Helpers compat sqlite3.Row / libsql tuple
 # ---------------------------------------------------------------------------
 
+
 def _row_val(row, key: str, idx: int = 0):
     if row is None:
         return None
@@ -31,6 +32,7 @@ def _row_val(row, key: str, idx: int = 0):
 # ---------------------------------------------------------------------------
 # Création / clôture d'un batch
 # ---------------------------------------------------------------------------
+
 
 def create_batch(
     conn,
@@ -70,6 +72,7 @@ def close_batch(conn, batch_id: int, nb_rows: int) -> None:
 # Lecture de l'historique
 # ---------------------------------------------------------------------------
 
+
 def list_batches(conn, limit: int = 100) -> list[dict[str, Any]]:
     """
     Retourne les batches du plus récent au plus ancien.
@@ -88,22 +91,24 @@ def list_batches(conn, limit: int = 100) -> list[dict[str, Any]]:
 
     result = []
     for r in rows:
-        batch_id   = _row_val(r, "id", 0)
-        itype      = _row_val(r, "import_type", 1)
-        status     = _row_val(r, "status", 7)
+        batch_id = _row_val(r, "id", 0)
+        itype = _row_val(r, "import_type", 1)
+        status = _row_val(r, "status", 7)
         alive = int(alive_by_batch.get(int(batch_id), 0))
 
-        result.append({
-            "id":           batch_id,
-            "import_type":  itype,
-            "person_name":  _row_val(r, "person_name", 2),
-            "account_name": _row_val(r, "account_name", 3),
-            "filename":     _row_val(r, "filename", 4),
-            "imported_at":  _row_val(r, "imported_at", 5),
-            "nb_rows":      _row_val(r, "nb_rows", 6),
-            "status":       status,
-            "alive_rows":   alive,
-        })
+        result.append(
+            {
+                "id": batch_id,
+                "import_type": itype,
+                "person_name": _row_val(r, "person_name", 2),
+                "account_name": _row_val(r, "account_name", 3),
+                "filename": _row_val(r, "filename", 4),
+                "imported_at": _row_val(r, "imported_at", 5),
+                "nb_rows": _row_val(r, "nb_rows", 6),
+                "status": status,
+                "alive_rows": alive,
+            }
+        )
     return result
 
 
@@ -158,7 +163,9 @@ def _count_alive_rows_bulk(conn, batch_rows) -> dict[int, int]:
     out.update(_count_rows_by_batch_ids(conn, "revenus", rev_ids))
 
     if cred_ids:
-        account_ids = sorted({credit_account_by_batch.get(bid) for bid in cred_ids if credit_account_by_batch.get(bid) is not None})
+        account_ids = sorted(
+            {credit_account_by_batch.get(bid) for bid in cred_ids if credit_account_by_batch.get(bid) is not None}
+        )
         if account_ids:
             placeholders = ",".join(["?"] * len(account_ids))
             rows = conn.execute(
@@ -186,14 +193,10 @@ def _count_alive_rows(conn, batch_id: int, import_type: str) -> int:
         table = "revenus"
     elif import_type == "CREDIT":
         try:
-            r = conn.execute(
-                "SELECT account_id FROM import_batches WHERE id = ?", (batch_id,)
-            ).fetchone()
+            r = conn.execute("SELECT account_id FROM import_batches WHERE id = ?", (batch_id,)).fetchone()
             if not r or r[0] is None:
                 return 0
-            r2 = conn.execute(
-                "SELECT COUNT(*) FROM credits WHERE account_id = ?", (r[0],)
-            ).fetchone()
+            r2 = conn.execute("SELECT COUNT(*) FROM credits WHERE account_id = ?", (r[0],)).fetchone()
             return int(r2[0]) if r2 else 0
         except Exception:
             return 0
@@ -212,6 +215,7 @@ def _count_alive_rows(conn, batch_id: int, import_type: str) -> int:
 # ---------------------------------------------------------------------------
 # Rollback d'un batch
 # ---------------------------------------------------------------------------
+
 
 def rollback_batch(conn, batch_id: int) -> dict[str, Any]:
     """
@@ -256,24 +260,19 @@ def rollback_batch(conn, batch_id: int) -> dict[str, Any]:
             ).fetchall()
             touched_months = [str(_row_val(r, "mois", 0)) for r in month_rows if _row_val(r, "mois", 0)]
 
-        cur = conn.execute(
-            "DELETE FROM transactions WHERE import_batch_id = ?", (batch_id,)
-        )
+        cur = conn.execute("DELETE FROM transactions WHERE import_batch_id = ?", (batch_id,))
         deleted["transactions"] = cur.rowcount
         if import_type == "BANKIN" and person_id is not None and touched_months:
             # Les imports BANKIN alimentent aussi depenses/revenus. On resynchronise
             # après rollback pour éviter les agrégats fantômes.
             from services.imports import sync_bankin_monthly_tables
+
             sync_bankin_monthly_tables(conn, int(person_id), months=touched_months)
     elif import_type == "DEPENSES":
-        cur = conn.execute(
-            "DELETE FROM depenses WHERE import_batch_id = ?", (batch_id,)
-        )
+        cur = conn.execute("DELETE FROM depenses WHERE import_batch_id = ?", (batch_id,))
         deleted["depenses"] = cur.rowcount
     elif import_type == "REVENUS":
-        cur = conn.execute(
-            "DELETE FROM revenus WHERE import_batch_id = ?", (batch_id,)
-        )
+        cur = conn.execute("DELETE FROM revenus WHERE import_batch_id = ?", (batch_id,))
         deleted["revenus"] = cur.rowcount
     elif import_type == "CREDIT":
         raise ValueError(

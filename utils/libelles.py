@@ -2,64 +2,88 @@
 
 # Types de compte en base
 TYPES_COMPTE = [
-    "BANQUE", "LIVRET", "PEA", "PEA_PME", "CTO", "CRYPTO",
-    "ASSURANCE_VIE", "PER", "PEE",
-    "IMMOBILIER", "CREDIT", "PE",
+    "BANQUE",
+    "LIVRET",
+    "PEA",
+    "PEA_PME",
+    "CTO",
+    "CRYPTO",
+    "ASSURANCE_VIE",
+    "PER",
+    "PEE",
+    "IMMOBILIER",
+    "CREDIT",
+    "PE",
 ]
 
 LIBELLES_TYPE_COMPTE = {
-    "BANQUE":        "Banque",
-    "LIVRET":        "Livret",
-    "PEA":           "PEA",
-    "PEA_PME":       "PEA-PME",
-    "CTO":           "Compte-titres",
-    "CRYPTO":        "Crypto",
+    "BANQUE": "Banque",
+    "LIVRET": "Livret",
+    "PEA": "PEA",
+    "PEA_PME": "PEA-PME",
+    "CTO": "Compte-titres",
+    "CRYPTO": "Crypto",
     "ASSURANCE_VIE": "Assurance-vie",
-    "PER":           "PER",
-    "PEE":           "PEE",
-    "IMMOBILIER":    "Immobilier",
-    "CREDIT":        "Crédit",
-    "PE":            "Private equity",
+    "PER": "PER",
+    "PEE": "PEE",
+    "IMMOBILIER": "Immobilier",
+    "CREDIT": "Crédit",
+    "PE": "Private equity",
 }
 
 # Sous-types de livrets réglementés
 SOUS_TYPES_LIVRET = {
-    "LIVRET_A":     "Livret A",
-    "LDDS":         "LDDS",
-    "LEP":          "LEP",
+    "LIVRET_A": "Livret A",
+    "LDDS": "LDDS",
+    "LEP": "LEP",
     "LIVRET_JEUNE": "Livret Jeune",
-    "CSL":          "CSL",
-    "AUTRE":        "Autre livret",
+    "CSL": "CSL",
+    "AUTRE": "Autre livret",
 }
 
 # Types d'opération en base
 TYPES_OPERATION = [
-    "ACHAT", "VENTE", "DIVIDENDE",
-    "DEPOT", "RETRAIT",
-    "DEPENSE", "FRAIS", "IMPOT",
-    "INTERETS", "REMBOURSEMENT_CREDIT",
-    "LOYER", "ABONDEMENT",
+    "ACHAT",
+    "VENTE",
+    "DIVIDENDE",
+    "DEPOT",
+    "RETRAIT",
+    "DEPENSE",
+    "FRAIS",
+    "IMPOT",
+    "INTERETS",
+    "REMBOURSEMENT_CREDIT",
+    "LOYER",
+    "ABONDEMENT",
 ]
 
 LIBELLES_TYPE_OPERATION = {
-    "ACHAT":                 "Achat",
-    "VENTE":                 "Vente",
-    "DIVIDENDE":             "Dividende",
-    "DEPOT":                 "Dépôt",
-    "RETRAIT":               "Retrait",
-    "DEPENSE":               "Dépense",
-    "FRAIS":                 "Frais",
-    "IMPOT":                 "Impôt",
-    "INTERETS":              "Intérêts",
-    "REMBOURSEMENT_CREDIT":  "Remboursement crédit",
-    "LOYER":                 "Loyer",
-    "ABONDEMENT":            "Abondement",
+    "ACHAT": "Achat",
+    "VENTE": "Vente",
+    "DIVIDENDE": "Dividende",
+    "DEPOT": "Dépôt",
+    "RETRAIT": "Retrait",
+    "DEPENSE": "Dépense",
+    "FRAIS": "Frais",
+    "IMPOT": "Impôt",
+    "INTERETS": "Intérêts",
+    "REMBOURSEMENT_CREDIT": "Remboursement crédit",
+    "LOYER": "Loyer",
+    "ABONDEMENT": "Abondement",
 }
 
 # Suggestions catégories (dépenses)
 CATEGORIES_DEPENSES = [
-    "Alimentation", "Transport", "Logement", "Santé", "Loisirs",
-    "Abonnements", "Restaurants", "Shopping", "Vacances", "Divers"
+    "Alimentation",
+    "Transport",
+    "Logement",
+    "Santé",
+    "Loisirs",
+    "Abonnements",
+    "Restaurants",
+    "Shopping",
+    "Vacances",
+    "Divers",
 ]
 
 

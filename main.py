@@ -2,10 +2,11 @@
 Point d'entrée de l'application Patrimoine Desktop (PyQt6).
 Lance la fenêtre principale et gère le cycle de vie de l'application.
 """
-import sys
+
+import logging
 import os
 import shutil
-import logging
+import sys
 import traceback
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
@@ -38,8 +39,8 @@ def _build_logging_handlers():
             try:
                 file_handler = RotatingFileHandler(
                     log_path,
-                    maxBytes=5 * 1024 * 1024,   # 5 MB par fichier
-                    backupCount=5,              # 5 fichiers max
+                    maxBytes=5 * 1024 * 1024,  # 5 MB par fichier
+                    backupCount=5,  # 5 fichiers max
                     encoding="utf-8",
                 )
                 return [file_handler, logging.StreamHandler(sys.stderr)], log_dir, log_path
@@ -63,12 +64,13 @@ if _ACTIVE_LOG_PATH is None:
 logger.info("═" * 60)
 logger.info("Démarrage de Patrimoine Desktop")
 
-from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+
 # QWebEngineView requires this attribute to be set before QApplication
 QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
-from core.db_connection import get_connection, close_connection
+from core.db_connection import close_connection, get_connection
 from qt_ui.main_window import MainWindow
 from qt_ui.theme import app_style_sheet, get_current_theme
 
@@ -85,18 +87,18 @@ def _global_exception_handler(exc_type, exc_value, exc_tb):
 
     try:
         from PyQt6.QtWidgets import QMessageBox
+
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle("Erreur inattendue")
         msg.setText("Une erreur inattendue s'est produite.")
         msg.setDetailedText(tb_text)
         log_location = str(_ACTIVE_LOG_PATH) if _ACTIVE_LOG_PATH else "stderr (console)"
-        msg.setInformativeText(
-            f"L'erreur a été enregistrée dans :\n{log_location}"
-        )
+        msg.setInformativeText(f"L'erreur a été enregistrée dans :\n{log_location}")
         msg.exec()
     except Exception:
         pass
+
 
 sys.excepthook = _global_exception_handler
 
@@ -110,8 +112,8 @@ def _backup_database():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     files_to_backup = [
-        ("patrimoine.db",           f"patrimoine_{timestamp}.db"),
-        ("patrimoine_turso.db",     f"patrimoine_turso_{timestamp}.db"),
+        ("patrimoine.db", f"patrimoine_{timestamp}.db"),
+        ("patrimoine_turso.db", f"patrimoine_turso_{timestamp}.db"),
         ("patrimoine_turso.db-info", f"patrimoine_turso_{timestamp}.db-info"),
     ]
 
@@ -136,16 +138,14 @@ def _backup_database():
 
     try:
         from qt_ui.pages.settings_page import SettingsPage
+
         max_backups = SettingsPage.get_backup_max_count()
     except Exception:
         max_backups = 10
 
     # Rotation : ne garder que le max
     for prefix in ["patrimoine_2", "patrimoine_turso_2"]:
-        backups = sorted(
-            [p for p in backup_dir.glob(f"{prefix}*.db") if p.is_file()],
-            key=lambda p: p.name
-        )
+        backups = sorted([p for p in backup_dir.glob(f"{prefix}*.db") if p.is_file()], key=lambda p: p.name)
         while len(backups) > max_backups:
             old = backups.pop(0)
             try:
@@ -181,6 +181,7 @@ def main():
         conn = get_connection()
     except Exception as e:
         from PyQt6.QtWidgets import QMessageBox
+
         QMessageBox.critical(None, "Erreur DB", f"Impossible d'initialiser la base de données :\n{e}")
         sys.exit(1)
 

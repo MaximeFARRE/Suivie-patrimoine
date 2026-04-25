@@ -124,29 +124,29 @@ _PALETTE = _PALETTE_LIGHT if _ACTIVE_THEME == THEME_LIGHT else _PALETTE_DARK
 
 # ─── Couleurs de base ──────────────────────────────────────────────────────
 
-BG_PRIMARY = _PALETTE["BG_PRIMARY"]       # Fond principal de l'application
-BG_SIDEBAR = _PALETTE["BG_SIDEBAR"]       # Fond sidebar / headers
-BG_CARD = _PALETTE["BG_CARD"]             # Fond des cartes, inputs, tableaux (alt row)
-BG_CARD_ALT = _PALETTE["BG_CARD_ALT"]     # Fond alterné des lignes de tableaux
-BG_HOVER = _PALETTE["BG_HOVER"]           # Fond hover des éléments interactifs
-BG_ACTIVE = _PALETTE["BG_ACTIVE"]         # Fond des éléments actifs (boutons, sélection)
+BG_PRIMARY = _PALETTE["BG_PRIMARY"]  # Fond principal de l'application
+BG_SIDEBAR = _PALETTE["BG_SIDEBAR"]  # Fond sidebar / headers
+BG_CARD = _PALETTE["BG_CARD"]  # Fond des cartes, inputs, tableaux (alt row)
+BG_CARD_ALT = _PALETTE["BG_CARD_ALT"]  # Fond alterné des lignes de tableaux
+BG_HOVER = _PALETTE["BG_HOVER"]  # Fond hover des éléments interactifs
+BG_ACTIVE = _PALETTE["BG_ACTIVE"]  # Fond des éléments actifs (boutons, sélection)
 BG_ACTIVE_HOVER = _PALETTE["BG_ACTIVE_HOVER"]  # Fond hover des éléments actifs
 
-BORDER_DEFAULT = _PALETTE["BORDER_DEFAULT"]   # Bordures des inputs, tableaux
-BORDER_SUBTLE = _PALETTE["BORDER_SUBTLE"]     # Bordures subtiles (séparateurs, groupbox)
+BORDER_DEFAULT = _PALETTE["BORDER_DEFAULT"]  # Bordures des inputs, tableaux
+BORDER_SUBTLE = _PALETTE["BORDER_SUBTLE"]  # Bordures subtiles (séparateurs, groupbox)
 
-TEXT_PRIMARY = _PALETTE["TEXT_PRIMARY"]      # Texte principal
+TEXT_PRIMARY = _PALETTE["TEXT_PRIMARY"]  # Texte principal
 TEXT_SECONDARY = _PALETTE["TEXT_SECONDARY"]  # Texte secondaire (labels, titres de section)
-TEXT_MUTED = _PALETTE["TEXT_MUTED"]          # Texte discret (statuts, hints)
-TEXT_DISABLED = _PALETTE["TEXT_DISABLED"]    # Texte désactivé
-TEXT_DARK = _PALETTE["TEXT_DARK"]            # Texte très discret (version)
+TEXT_MUTED = _PALETTE["TEXT_MUTED"]  # Texte discret (statuts, hints)
+TEXT_DISABLED = _PALETTE["TEXT_DISABLED"]  # Texte désactivé
+TEXT_DARK = _PALETTE["TEXT_DARK"]  # Texte très discret (version)
 
-ACCENT_BLUE = _PALETTE["ACCENT_BLUE"]      # Accent principal (onglets actifs, liens)
+ACCENT_BLUE = _PALETTE["ACCENT_BLUE"]  # Accent principal (onglets actifs, liens)
 ACCENT_BLUE_BORDER = _PALETTE["ACCENT_BLUE_BORDER"]
 
-COLOR_SUCCESS = _PALETTE["COLOR_SUCCESS"]    # Vert succès
-COLOR_ERROR = _PALETTE["COLOR_ERROR"]        # Rouge erreur
-COLOR_WARNING = _PALETTE["COLOR_WARNING"]    # Orange avertissement
+COLOR_SUCCESS = _PALETTE["COLOR_SUCCESS"]  # Vert succès
+COLOR_ERROR = _PALETTE["COLOR_ERROR"]  # Rouge erreur
+COLOR_WARNING = _PALETTE["COLOR_WARNING"]  # Orange avertissement
 COLOR_SELECTION = _PALETTE["COLOR_SELECTION"]  # Bleu sélection tableau
 
 # ─── Couleurs KPI tones ───────────────────────────────────────────────────
@@ -154,30 +154,30 @@ COLOR_SELECTION = _PALETTE["COLOR_SELECTION"]  # Bleu sélection tableau
 if _ACTIVE_THEME == THEME_LIGHT:
     KPI_TONES = {
         "primary": ("#dbeafe", "#1e3a8a"),
-        "blue":    ("#dbeafe", "#1e3a8a"),
-        "green":   ("#dcfce7", "#166534"),
-        "purple":  ("#ede9fe", "#5b21b6"),
+        "blue": ("#dbeafe", "#1e3a8a"),
+        "green": ("#dcfce7", "#166534"),
+        "purple": ("#ede9fe", "#5b21b6"),
         "neutral": (BG_CARD, TEXT_SECONDARY),
-        "red":     ("#fee2e2", "#991b1b"),
-        "bank":    ("#dcfce7", "#166534"),
-        "broker":  ("#dbeafe", "#1e3a8a"),
-        "pe":      ("#ede9fe", "#5b21b6"),
+        "red": ("#fee2e2", "#991b1b"),
+        "bank": ("#dcfce7", "#166534"),
+        "broker": ("#dbeafe", "#1e3a8a"),
+        "pe": ("#ede9fe", "#5b21b6"),
         "success": ("#dcfce7", "#166534"),
-        "alert":   ("#fee2e2", "#b91c1c"),
+        "alert": ("#fee2e2", "#b91c1c"),
     }
 else:
     KPI_TONES = {
         "primary": ("#111827", "#E5E7EB"),
-        "blue":    ("#1E3A8A", "#DBEAFE"),
-        "green":   ("#0B3B2E", "#D1FAE5"),
-        "purple":  ("#4C1D95", "#EDE9FE"),
+        "blue": ("#1E3A8A", "#DBEAFE"),
+        "green": ("#0B3B2E", "#D1FAE5"),
+        "purple": ("#4C1D95", "#EDE9FE"),
         "neutral": (BG_CARD, TEXT_SECONDARY),
-        "red":     ("#7F1D1D", "#FEE2E2"),
-        "bank":    ("#0B3B2E", "#D1FAE5"),
-        "broker":  ("#1E3A8A", "#DBEAFE"),
-        "pe":      ("#4C1D95", "#EDE9FE"),
+        "red": ("#7F1D1D", "#FEE2E2"),
+        "bank": ("#0B3B2E", "#D1FAE5"),
+        "broker": ("#1E3A8A", "#DBEAFE"),
+        "pe": ("#4C1D95", "#EDE9FE"),
         "success": ("#0a2e1a", "#4ade80"),
-        "alert":   ("#2e0a0a", "#f87171"),
+        "alert": ("#2e0a0a", "#f87171"),
     }
 
 # ─── Couleurs spécifiques ─────────────────────────────────────────────────
@@ -221,13 +221,13 @@ STYLE_BTN_PRIMARY_BORDERED = f"""
     QPushButton:pressed {{ background: #1d4ed8; }}
 """
 
-STYLE_BTN_SUCCESS = f"""
-    QPushButton {{
+STYLE_BTN_SUCCESS = """
+    QPushButton {
         background: #14532d; color: #4ade80; border: 1px solid #16a34a;
         border-radius: 4px; padding: 8px 18px; font-size: 13px; font-weight: bold;
-    }}
-    QPushButton:hover {{ background: #16a34a; color: white; }}
-    QPushButton:pressed {{ background: #15803d; }}
+    }
+    QPushButton:hover { background: #16a34a; color: white; }
+    QPushButton:pressed { background: #15803d; }
 """
 
 STYLE_BTN_CREATE = f"""
@@ -366,6 +366,7 @@ STYLE_FORM_LABEL = f"color: {TEXT_SECONDARY}; font-size: 13px;"
 
 # ─── Styles globaux application ────────────────────────────────────────────
 
+
 def app_style_sheet() -> str:
     """Styles globaux Qt appliqués au lancement de l'application."""
     return f"""
@@ -407,6 +408,7 @@ def app_style_sheet() -> str:
         }}
     """
 
+
 # ─── Plotly layout commun ─────────────────────────────────────────────────
 
 PLOTLY_LAYOUT = dict(
@@ -417,19 +419,22 @@ PLOTLY_LAYOUT = dict(
 )
 
 PLOTLY_RANGE_SELECTOR = dict(
-    buttons=list([
-        dict(count=1, label="1M", step="month", stepmode="backward"),
-        dict(count=3, label="3M", step="month", stepmode="backward"),
-        dict(count=6, label="6M", step="month", stepmode="backward"),
-        dict(count=1, label="1Y", step="year", stepmode="backward"),
-        dict(step="all", label="ALL")
-    ]),
+    buttons=list(
+        [
+            dict(count=1, label="1M", step="month", stepmode="backward"),
+            dict(count=3, label="3M", step="month", stepmode="backward"),
+            dict(count=6, label="6M", step="month", stepmode="backward"),
+            dict(count=1, label="1Y", step="year", stepmode="backward"),
+            dict(step="all", label="ALL"),
+        ]
+    ),
     bgcolor=("rgba(30, 41, 59, 0.4)" if is_dark_theme() else "rgba(148,163,184,0.25)"),
     activecolor=ACCENT_BLUE,
     font=dict(size=11, color=TEXT_PRIMARY),
     borderwidth=1,
     bordercolor=BORDER_SUBTLE,
-    x=0, y=1.1,
+    x=0,
+    y=1.1,
 )
 
 
@@ -446,7 +451,7 @@ def plotly_time_series_layout(**overrides) -> dict:
         "xaxis": dict(
             rangeselector=PLOTLY_RANGE_SELECTOR,
             rangeslider=dict(visible=True, thickness=0.05, bgcolor="rgba(0,0,0,0)"),
-            type="date"
+            type="date",
         ),
         "margin": dict(l=10, r=10, t=40, b=10),
     }

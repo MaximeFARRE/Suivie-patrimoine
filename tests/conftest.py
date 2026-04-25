@@ -1,6 +1,7 @@
 import sqlite3
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture

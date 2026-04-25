@@ -1,13 +1,17 @@
-import pytest
 import pandas as pd
+import pytest
 
 from services import family_snapshots as fs
-from services.projections import ScenarioParams, load_initial_patrimoine_from_family, project_patrimoine
 from services.family_dashboard import (
     compute_allocations_family,
     compute_family_kpis,
     prepare_family_alloc_pie_data,
     prepare_family_area_chart_data,
+)
+from services.projections import (
+    ScenarioParams,
+    load_initial_patrimoine_from_family,
+    project_patrimoine,
 )
 
 
@@ -25,7 +29,21 @@ def test_get_family_weekly_series_prefers_family_table(conn):
             bourse_holdings, pe_value, ent_value, immobilier_value, credits_remaining, notes
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (1, "2026-01-05", "2026-01-06T10:00:00+01:00", "REBUILD", 1000, 1100, 100, 200, 300, 100, 400, 100, "person"),
+        (
+            1,
+            "2026-01-05",
+            "2026-01-06T10:00:00+01:00",
+            "REBUILD",
+            1000,
+            1100,
+            100,
+            200,
+            300,
+            100,
+            400,
+            100,
+            "person",
+        ),
     )
     conn.execute(
         """
@@ -35,7 +53,21 @@ def test_get_family_weekly_series_prefers_family_table(conn):
             bourse_holdings, pe_value, ent_value, immobilier_value, credits_remaining, notes
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (1, "2026-01-05", "2026-01-06T10:00:00+01:00", "REBUILD", 2222, 2400, 120, 220, 320, 140, 500, 178, "family"),
+        (
+            1,
+            "2026-01-05",
+            "2026-01-06T10:00:00+01:00",
+            "REBUILD",
+            2222,
+            2400,
+            120,
+            220,
+            320,
+            140,
+            500,
+            178,
+            "family",
+        ),
     )
     conn.commit()
 
@@ -57,7 +89,21 @@ def test_get_family_weekly_series_fallback_people_includes_immobilier(conn):
             bourse_holdings, pe_value, ent_value, immobilier_value, credits_remaining, notes
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (1, "2026-01-05", "2026-01-06T10:00:00+01:00", "REBUILD", 1000, 1200, 100, 200, 300, 100, 500, 200, "p1"),
+        (
+            1,
+            "2026-01-05",
+            "2026-01-06T10:00:00+01:00",
+            "REBUILD",
+            1000,
+            1200,
+            100,
+            200,
+            300,
+            100,
+            500,
+            200,
+            "p1",
+        ),
     )
     conn.execute(
         """
@@ -67,7 +113,21 @@ def test_get_family_weekly_series_fallback_people_includes_immobilier(conn):
             bourse_holdings, pe_value, ent_value, immobilier_value, credits_remaining, notes
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (2, "2026-01-05", "2026-01-06T10:00:00+01:00", "REBUILD", 700, 900, 50, 150, 250, 50, 400, 200, "p2"),
+        (
+            2,
+            "2026-01-05",
+            "2026-01-06T10:00:00+01:00",
+            "REBUILD",
+            700,
+            900,
+            50,
+            150,
+            250,
+            50,
+            400,
+            200,
+            "p2",
+        ),
     )
     conn.commit()
 
@@ -117,7 +177,21 @@ def test_load_initial_patrimoine_from_family_reads_immobilier(conn):
             bourse_holdings, pe_value, ent_value, immobilier_value, credits_remaining, notes
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (1, "2026-01-05", "2026-01-06T10:00:00+01:00", "REBUILD", 1000, 1400, 100, 200, 300, 400, 500, 400, "family"),
+        (
+            1,
+            "2026-01-05",
+            "2026-01-06T10:00:00+01:00",
+            "REBUILD",
+            1000,
+            1400,
+            100,
+            200,
+            300,
+            400,
+            500,
+            400,
+            "family",
+        ),
     )
     conn.commit()
 
@@ -127,6 +201,7 @@ def test_load_initial_patrimoine_from_family_reads_immobilier(conn):
 
 
 # ─── compute_allocations_family ──────────────────────────────────────────────
+
 
 def _make_family_df(**kwargs) -> pd.DataFrame:
     """Construit un DataFrame famille minimal pour tester les allocations."""

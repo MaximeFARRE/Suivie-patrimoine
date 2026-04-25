@@ -1,26 +1,65 @@
 """
 Panel Revenus — remplace ui/revenus_scanner.py
 """
+
 import logging
+from datetime import date
+
 import pandas as pd
 import plotly.express as px
-from datetime import date
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QLineEdit, QGroupBox
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_BTN_PRIMARY, STYLE_INPUT, STYLE_GROUP, STYLE_SECTION,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING,
-    STYLE_BTN_UNDO, CHART_GREEN, plotly_layout, plotly_time_series_layout,
+    BG_PRIMARY,
+    CHART_GREEN,
+    STYLE_BTN_PRIMARY,
+    STYLE_BTN_UNDO,
+    STYLE_GROUP,
+    STYLE_INPUT,
+    STYLE_SECTION,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    plotly_layout,
+    plotly_time_series_layout,
 )
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, LoadingOverlay
+from qt_ui.widgets import DataTableWidget, KpiCard, LoadingOverlay, PlotlyView
 
 logger = logging.getLogger(__name__)
 
-CATEGORIES_REVENUS = ["Salaire", "Prime", "Freelance", "Loyers perçus", "Dividendes", "Intérêts", "Autres"]
-MOIS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+CATEGORIES_REVENUS = [
+    "Salaire",
+    "Prime",
+    "Freelance",
+    "Loyers perçus",
+    "Dividendes",
+    "Intérêts",
+    "Autres",
+]
+MOIS_FR = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+]
+
 
 class RevenusPanel(QWidget):
     def __init__(self, conn, person_id: int, parent=None):
@@ -166,6 +205,7 @@ class RevenusPanel(QWidget):
             return
 
         from services.revenus_repository import ajouter_revenu
+
         mois = self._get_mois()
         cat = self._cat_combo.currentText()
         ajouter_revenu(self._conn, self._person_id, mois, cat, montant)
@@ -176,6 +216,7 @@ class RevenusPanel(QWidget):
 
     def _on_undo(self) -> None:
         from services.revenus_repository import derniere_revenue, supprimer_revenu_par_id
+
         mois = self._get_mois()
         last = derniere_revenue(self._conn, self._person_id, mois)
         if last is None:
@@ -196,6 +237,7 @@ class RevenusPanel(QWidget):
                 revenus_kpis_mois,
                 revenus_par_mois_consolides,
             )
+
             mois = self._get_mois()
             kpis = revenus_kpis_mois(self._conn, self._person_id, mois)
             df_mois = revenus_du_mois_consolides(self._conn, self._person_id, mois)
@@ -223,9 +265,15 @@ class RevenusPanel(QWidget):
 
                 if "categorie" in df_mois.columns and "montant" in df_mois.columns:
                     df_cat = df_mois.groupby("categorie", as_index=False)["montant"].sum()
-                    fig_cat = px.bar(df_cat, x="categorie", y="montant", template="plotly_dark",
-                                     color="montant", color_continuous_scale="Greens",
-                                     labels={"categorie": "Catégorie", "montant": "Montant (€)"})
+                    fig_cat = px.bar(
+                        df_cat,
+                        x="categorie",
+                        y="montant",
+                        template="plotly_dark",
+                        color="montant",
+                        color_continuous_scale="Greens",
+                        labels={"categorie": "Catégorie", "montant": "Montant (€)"},
+                    )
                     fig_cat.update_layout(**plotly_layout(showlegend=False))
                     self._chart_cat.set_figure(fig_cat)
                 else:
@@ -237,9 +285,14 @@ class RevenusPanel(QWidget):
                     df_hist["mois"] = pd.to_datetime(df_hist["mois"], errors="coerce")
                     df_hist = df_hist.dropna(subset=["mois"]).sort_values("mois")
                     if "total" in df_hist.columns:
-                        fig_h = px.bar(df_hist, x="mois", y="total", template="plotly_dark",
-                                       labels={"mois": "Mois", "total": "Total revenus (€)"},
-                                       color_discrete_sequence=[CHART_GREEN])
+                        fig_h = px.bar(
+                            df_hist,
+                            x="mois",
+                            y="total",
+                            template="plotly_dark",
+                            labels={"mois": "Mois", "total": "Total revenus (€)"},
+                            color_discrete_sequence=[CHART_GREEN],
+                        )
                         fig_h.update_layout(**plotly_time_series_layout())
                         self._chart_hist.set_figure(fig_h)
                     else:

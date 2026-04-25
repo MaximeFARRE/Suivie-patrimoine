@@ -1,7 +1,9 @@
 import logging
+
 import requests
-from services import repositories as repo
+
 from services import pricing
+from services import repositories as repo
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +31,11 @@ def fetch_fx_rate(base_ccy: str, quote_ccy: str) -> float | None:
     # Fallback yfinance
     try:
         import yfinance as yf
+
         ticker = f"{base_ccy}{quote_ccy}=X"
         df = yf.download(ticker, period="1d", progress=False)
         if df is not None and not df.empty and "Close" in df.columns:
-            return float(df["Close"].iloc[-1].item() if hasattr(df["Close"].iloc[-1], 'item') else df["Close"].iloc[-1])
+            return float(df["Close"].iloc[-1].item() if hasattr(df["Close"].iloc[-1], "item") else df["Close"].iloc[-1])
     except Exception as e:
         logger.warning("yfinance FX fallback a échoué pour %s→%s : %s", base_ccy, quote_ccy, e)
 

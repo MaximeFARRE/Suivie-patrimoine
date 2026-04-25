@@ -162,8 +162,7 @@ def test_build_current_portfolio_backtest_can_ignore_limiting_assets(conn):
     assert retained_symbols == {"AAA"}
     ignored_rows = ignore_payload.get("assets_ignored") or []
     assert any(
-        row.get("symbol") == "BBB" and row.get("reason") == "ignored_limiting_asset_for_horizon"
-        for row in ignored_rows
+        row.get("symbol") == "BBB" and row.get("reason") == "ignored_limiting_asset_for_horizon" for row in ignored_rows
     )
 
 

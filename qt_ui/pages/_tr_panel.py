@@ -2,20 +2,37 @@
 Panel Trade Republic — connexion pytr, export, aperçu, import.
 Extrait de import_page.py pour réduire la taille du fichier principal.
 """
+
 import os
 import tempfile
-from services import import_lookup_service as lookup
-from qt_ui.pages._import_panels import BTN_STYLE, INPUT_STYLE, GROUP_STYLE, make_label
-from PyQt6.QtWidgets import (
-    QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QCheckBox, QGroupBox, QLineEdit, QTableWidget, QTableWidgetItem,
-    QTextEdit, QHeaderView, QAbstractItemView, QFileDialog, QSizePolicy,
-)
+
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
+from qt_ui.pages._import_panels import BTN_STYLE, GROUP_STYLE, INPUT_STYLE, make_label
+from services import import_lookup_service as lookup
 
 # ── QThread helpers (définis au niveau module) ───────────────────────────────
+
 
 class _ExportThread(QThread):
     done = pyqtSignal(int, str)
@@ -27,6 +44,7 @@ class _ExportThread(QThread):
 
     def run(self):
         from services.tr_import import run_pytr_export
+
         rc, msg = run_pytr_export(self._out, waf_token=self._waf_token)
         self.done.emit(rc, msg)
 
@@ -44,6 +62,7 @@ class _PredictionThread(QThread):
         try:
             from services.db import get_conn
             from services.tr_import import extract_tr_tickers_with_predictions
+
             with get_conn() as local_conn:
                 results = extract_tr_tickers_with_predictions(local_conn, self._filepath, self._pid)
             self.done.emit(results)
@@ -55,6 +74,7 @@ class _PreviewThread(QThread):
     """Lance import_tr_transactions(dry_run=True) dans un thread séparé.
     La résolution ISIN→ticker fait des appels API qui peuvent prendre
     quelques secondes — on ne bloque pas l'UI pendant ce temps."""
+
     done = pyqtSignal(object)
     error = pyqtSignal(str)
 
@@ -70,9 +90,13 @@ class _PreviewThread(QThread):
         try:
             from services.db import get_conn
             from services.tr_import import import_tr_transactions
+
             with get_conn() as local_conn:
                 result = import_tr_transactions(
-                    local_conn, self._filepath, self._pid, self._acc_id,
+                    local_conn,
+                    self._filepath,
+                    self._pid,
+                    self._acc_id,
                     dry_run=True,
                     ticker_account_map=self._ticker_map,
                     canonical_symbol_map=self._canonical_symbol_map,
@@ -92,6 +116,7 @@ class _TickerPreviewThread(QThread):
     def run(self):
         try:
             from services.ticker_preview_service import preview_ticker_live
+
             self.done.emit(self._symbol, preview_ticker_live(self._symbol))
         except Exception as e:
             self.done.emit(
@@ -111,8 +136,12 @@ class _UpgradeThread(QThread):
     done = pyqtSignal(int, str)
 
     def run(self):
-        import subprocess, sys, shutil
+        import shutil
+        import subprocess
+        import sys
+
         from services.tr_import import _find_pytr_cmd
+
         pytr_cmd = _find_pytr_cmd()
         py = pytr_cmd[0] if pytr_cmd[0] != "-m" else sys.executable
         pip = shutil.which("pip") or shutil.which("pip3")
@@ -131,6 +160,7 @@ class _UpgradeThread(QThread):
 
 
 # ── Panel principal ──────────────────────────────────────────────────────────
+
 
 class TrImportPanel(QScrollArea):
     """
@@ -252,9 +282,7 @@ class TrImportPanel(QScrollArea):
         s1v.addWidget(log_edit)
 
         code_frame = QWidget()
-        code_frame.setStyleSheet(
-            "background: #1a2535; border: 1px solid #2a4a6a; border-radius: 6px; padding: 4px;"
-        )
+        code_frame.setStyleSheet("background: #1a2535; border: 1px solid #2a4a6a; border-radius: 6px; padding: 4px;")
         code_row = QHBoxLayout(code_frame)
         code_row.setContentsMargins(8, 6, 8, 6)
         code_lbl = QLabel("Code reçu :")
@@ -406,6 +434,7 @@ class TrImportPanel(QScrollArea):
 
         def _log(msg: str, color: str = "#94a3b8") -> None:
             from services.tr_import import strip_ansi
+
             clean = strip_ansi(msg).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             pin = tr_pin_edit.text().strip()
             if pin and len(pin) >= 4:
@@ -438,9 +467,7 @@ class TrImportPanel(QScrollArea):
 
         def _cleanup_finished_threads() -> None:
             """Supprime les threads terminés de la liste de références."""
-            self._active_preview_threads = [
-                t for t in self._active_preview_threads if t.isRunning()
-            ]
+            self._active_preview_threads = [t for t in self._active_preview_threads if t.isRunning()]
 
         def _request_ticker_preview(symbol: str, label: QLabel, seq: int) -> None:
             symbol_u = (symbol or "").strip().upper()
@@ -496,6 +523,7 @@ class TrImportPanel(QScrollArea):
                 return
             try:
                 from services.tr_import import save_tr_phone
+
                 save_tr_phone(self._conn, pid, phone)
                 _log(f"✔ Téléphone sauvegardé : {phone}", "#22c55e")
             except Exception as e:
@@ -545,6 +573,7 @@ class TrImportPanel(QScrollArea):
             waf_token = tr_waf_edit.text().strip()
 
             from services.tr_import import PytrProcess
+
             proc = PytrProcess(pytr_args, waf_token=waf_token)
             if waf_token:
                 _log(f"WAF token manuel fourni ({len(waf_token)} car.)", "#22c55e")
@@ -571,21 +600,41 @@ class TrImportPanel(QScrollArea):
                             _log(f"⛔  Connexion échouée (code {rc}).", "#ef4444")
                             recent = log_edit.toPlainText().lower()
                             if "expecting value" in recent:
-                                from services.tr_import import clear_pytr_credentials, pytr_has_credentials
+                                from services.tr_import import (
+                                    clear_pytr_credentials,
+                                    pytr_has_credentials,
+                                )
+
                                 if not is_retry and pytr_has_credentials():
-                                    _log("🔄 Credentials périmés — suppression et nouvelle tentative…", "#f59e0b")
+                                    _log(
+                                        "🔄 Credentials périmés — suppression et nouvelle tentative…",
+                                        "#f59e0b",
+                                    )
                                     clear_pytr_credentials()
                                     _finish_login(False)
                                     _do_login(is_retry=True)
                                     return
                                 # Deuxième échec : WAF automatique refusé (bug pytr #330)
                                 from services.tr_import import clear_pytr_credentials
+
                                 clear_pytr_credentials()
                                 _log("", "#ef4444")
-                                _log("💡 Bug connu pytr 0.4.7 : le token WAF automatique n'est plus accepté par TR.", "#f59e0b")
-                                _log("👉 Solution : ouvrez app.traderepublic.com dans votre navigateur", "#f59e0b")
-                                _log("   → F12 → Application → Cookies → copiez 'aws-waf-token'", "#f59e0b")
-                                _log("   → collez-le dans le champ 'WAF Token' ci-dessus → relancez.", "#f59e0b")
+                                _log(
+                                    "💡 Bug connu pytr 0.4.7 : le token WAF automatique n'est plus accepté par TR.",
+                                    "#f59e0b",
+                                )
+                                _log(
+                                    "👉 Solution : ouvrez app.traderepublic.com dans votre navigateur",
+                                    "#f59e0b",
+                                )
+                                _log(
+                                    "   → F12 → Application → Cookies → copiez 'aws-waf-token'",
+                                    "#f59e0b",
+                                )
+                                _log(
+                                    "   → collez-le dans le champ 'WAF Token' ci-dessus → relancez.",
+                                    "#f59e0b",
+                                )
                             elif "invalid" in recent or "wrong" in recent or "incorrect" in recent:
                                 _log("💡 PIN ou numéro de téléphone incorrect.", "#f59e0b")
                             elif "too many" in recent or "rate" in recent or "429" in recent:
@@ -621,7 +670,10 @@ class TrImportPanel(QScrollArea):
                     ):
                         code_frame.show()
                         code_edit.setFocus()
-                        _log("⬆️  Saisissez le code reçu (app TR ou SMS) puis cliquez ✅ Valider.", "#f59e0b")
+                        _log(
+                            "⬆️  Saisissez le code reçu (app TR ou SMS) puis cliquez ✅ Valider.",
+                            "#f59e0b",
+                        )
 
             timer.timeout.connect(_poll)
             timer.start(150)
@@ -660,6 +712,7 @@ class TrImportPanel(QScrollArea):
                 if rc == 0:
                     _log("✅ Export terminé.", "#22c55e")
                     from services.tr_import import find_tr_csv
+
                     csv_path = find_tr_csv(output_dir)
                     if csv_path:
                         _log(f"CSV : {csv_path}", "#94a3b8")
@@ -695,8 +748,10 @@ class TrImportPanel(QScrollArea):
                     self._pending_filepath = filepath
                     preview_table.setRowCount(0)
 
-                    acc_labels = {tr_account_combo.itemData(i): tr_account_combo.itemText(i)
-                                  for i in range(tr_account_combo.count())}
+                    acc_labels = {
+                        tr_account_combo.itemData(i): tr_account_combo.itemText(i)
+                        for i in range(tr_account_combo.count())
+                    }
 
                     for r in result.get("preview", []):
                         ri = preview_table.rowCount()
@@ -757,6 +812,7 @@ class TrImportPanel(QScrollArea):
                     result_lbl.setText("")
                 except Exception as e:
                     import traceback
+
                     _log(f"❌ Erreur affichage aperçu : {e}", "#ef4444")
                     for tb_line in traceback.format_exc().splitlines():
                         _log(tb_line, "#ef4444")
@@ -834,7 +890,9 @@ class TrImportPanel(QScrollArea):
                     else:
                         for rx in results:
                             raw_sym = str(rx.get("raw_symbol") or rx.get("symbol") or "").strip().upper()
-                            canonical_sym = str(rx.get("canonical_symbol") or rx.get("symbol") or raw_sym).strip().upper()
+                            canonical_sym = (
+                                str(rx.get("canonical_symbol") or rx.get("symbol") or raw_sym).strip().upper()
+                            )
                             if not raw_sym:
                                 continue
                             pred_acc = rx.get("predicted_account_id")
@@ -888,6 +946,7 @@ class TrImportPanel(QScrollArea):
                     _apply_mapping_and_preview()
                 except Exception as e:
                     import traceback
+
                     _log(f"❌ Erreur prédiction multi-compte : {e}", "#ef4444")
                     for tb_line in traceback.format_exc().splitlines():
                         _log(tb_line, "#ef4444")
@@ -902,9 +961,7 @@ class TrImportPanel(QScrollArea):
             pred_thread.start()
 
         def _pick_csv() -> None:
-            path, _ = QFileDialog.getOpenFileName(
-                inner, "Choisir un CSV Trade Republic", "", "CSV (*.csv)"
-            )
+            path, _ = QFileDialog.getOpenFileName(inner, "Choisir un CSV Trade Republic", "", "CSV (*.csv)")
             if path:
                 _log(f"CSV sélectionné : {path}", "#94a3b8")
                 _run_preview(path)
@@ -918,8 +975,9 @@ class TrImportPanel(QScrollArea):
             if not filepath or not account_id or not pid:
                 return
             try:
+                from services.import_history import close_batch, create_batch
                 from services.tr_import import import_tr_transactions
-                from services.import_history import create_batch, close_batch
+
                 batch_id = create_batch(
                     self._conn,
                     import_type="TR",
@@ -930,7 +988,10 @@ class TrImportPanel(QScrollArea):
                     filename=os.path.basename(filepath),
                 )
                 result = import_tr_transactions(
-                    self._conn, filepath, pid, account_id,
+                    self._conn,
+                    filepath,
+                    pid,
+                    account_id,
                     dry_run=False,
                     ticker_account_map=self._ticker_map,
                     canonical_symbol_map=self._canonical_symbol_map,
@@ -945,6 +1006,7 @@ class TrImportPanel(QScrollArea):
                 refresh_history()
             except Exception as e:
                 import traceback
+
                 result_lbl.setStyleSheet("color: #ef4444; font-size: 12px;")
                 result_lbl.setText(f"Erreur : {e}")
                 _log(f"❌ Erreur import : {e}", "#ef4444")
@@ -963,6 +1025,7 @@ class TrImportPanel(QScrollArea):
                 self._upgrade_thread = None
                 btn_update_pytr.setEnabled(True)
                 from services.tr_import import strip_ansi
+
                 for line in strip_ansi(msg).splitlines()[-5:]:
                     if line.strip():
                         _log(line, "#22c55e" if rc == 0 else "#ef4444")
@@ -977,6 +1040,7 @@ class TrImportPanel(QScrollArea):
         # ── Reset credentials ─────────────────────────────────────────────────
         def _do_reset_creds() -> None:
             from services.tr_import import clear_pytr_credentials, get_pytr_credentials_path
+
             cred_path = get_pytr_credentials_path()
             if clear_pytr_credentials():
                 _log(f"✔ Credentials supprimés ({cred_path}).", "#22c55e")
@@ -1006,15 +1070,16 @@ class TrImportPanel(QScrollArea):
         """Recharge les comptes PEA/CTO pour la personne sélectionnée."""
         self._tr_account_combo.clear()
         try:
-            tr_accounts = accounts if accounts is not None else lookup.list_accounts_by_types(
-                self._conn, person_id, ["PEA", "CTO"]
+            tr_accounts = (
+                accounts
+                if accounts is not None
+                else lookup.list_accounts_by_types(self._conn, person_id, ["PEA", "CTO"])
             )
             for acc in tr_accounts:
-                self._tr_account_combo.addItem(
-                    f"{acc['name']} ({acc['account_type']})", int(acc["id"])
-                )
+                self._tr_account_combo.addItem(f"{acc['name']} ({acc['account_type']})", int(acc["id"]))
             if phone is None:
                 from services.tr_import import get_tr_phone
+
                 phone = get_tr_phone(self._conn, person_id)
             if phone:
                 self._tr_phone_edit.setText(phone)

@@ -4,9 +4,11 @@ Tests pour la feature livret :
 - Calcul du solde livret dans get_liquidites_summary
 - Inclusion dans bank_cash des snapshots (via snapshots_compute)
 """
+
 import sqlite3
-import pytest
 from pathlib import Path
+
+import pytest
 
 from services import repositories as repo
 from services.liquidites import get_liquidites_summary
@@ -38,6 +40,7 @@ def person_id(conn):
 
 # ── Création d'un compte LIVRET ───────────────────────────────────────────────
 
+
 def test_create_livret_a(conn, person_id):
     acc_id = repo.create_account(conn, person_id, "Mon Livret A", "LIVRET", None, "EUR", subtype="LIVRET_A")
     acc = repo.get_account(conn, acc_id)
@@ -68,6 +71,7 @@ def test_list_accounts_inclut_subtype(conn, person_id):
 
 
 # ── Calcul des liquidités ────────────────────────────────────────────────────
+
 
 def test_livret_cash_compte_dans_total(conn, person_id):
     """Un livret avec des dépôts/intérêts doit apparaître dans livret_cash_eur et total_eur."""
@@ -128,8 +132,10 @@ def test_banque_et_livret_separes_dans_summary(conn, person_id):
 
 # ── Libellés ─────────────────────────────────────────────────────────────────
 
+
 def test_libelles_livret():
-    from utils.libelles import SOUS_TYPES_LIVRET, afficher_sous_type_livret, LIBELLES_TYPE_COMPTE
+    from utils.libelles import LIBELLES_TYPE_COMPTE, SOUS_TYPES_LIVRET, afficher_sous_type_livret
+
     assert "LIVRET" in LIBELLES_TYPE_COMPTE
     assert LIBELLES_TYPE_COMPTE["LIVRET"] == "Livret"
     assert "LIVRET_A" in SOUS_TYPES_LIVRET

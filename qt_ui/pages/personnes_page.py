@@ -2,34 +2,38 @@
 Page Personnes — remplace pages/2_Personnes.py
 Contient un sélecteur de personne, 8 onglets fixes + onglets dynamiques par compte.
 """
+
 import logging
 from typing import Optional
-import pandas as pd
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-    QTabWidget, QScrollArea, QSplitter
-)
-from PyQt6.QtCore import Qt
-from qt_ui.components.animated_tab import AnimatedTabWidget
 
-from qt_ui.panels.vue_ensemble_panel import VueEnsemblePanel
-from qt_ui.panels.depenses_panel import DepensesPanel
-from qt_ui.panels.revenus_panel import RevenusPanel
+import pandas as pd
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
+
+from qt_ui.components.animated_tab import AnimatedTabWidget
+from qt_ui.panels.ajout_compte_panel import AjoutComptePanel
+from qt_ui.panels.bourse_global_panel import BourseGlobalPanel
 from qt_ui.panels.credits_overview_panel import CreditsOverviewPanel
-from qt_ui.panels.private_equity_panel import PrivateEquityPanel
+from qt_ui.panels.depenses_panel import DepensesPanel
 from qt_ui.panels.entreprises_panel import EntreprisesPanel
 from qt_ui.panels.immobilier_panel import ImmobilierPanel
 from qt_ui.panels.liquidites_panel import LiquiditesPanel
-from qt_ui.panels.bourse_global_panel import BourseGlobalPanel
-from qt_ui.panels.ajout_compte_panel import AjoutComptePanel
-
-from utils.libelles import afficher_type_compte
+from qt_ui.panels.private_equity_panel import PrivateEquityPanel
+from qt_ui.panels.revenus_panel import RevenusPanel
+from qt_ui.panels.vue_ensemble_panel import VueEnsemblePanel
 from qt_ui.theme import (
-    BG_PRIMARY, BG_SIDEBAR, BG_CARD, BORDER_SUBTLE, BORDER_DEFAULT,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_DISABLED,
-    ACCENT_BLUE, BG_ACTIVE, STYLE_TAB, STYLE_SCROLLAREA,
+    BG_ACTIVE,
+    BG_CARD,
+    BG_PRIMARY,
+    BG_SIDEBAR,
+    BORDER_DEFAULT,
+    BORDER_SUBTLE,
+    STYLE_SCROLLAREA,
+    STYLE_TAB,
     STYLE_TITLE_LARGE,
+    TEXT_DISABLED,
+    TEXT_PRIMARY,
 )
+from utils.libelles import afficher_type_compte
 
 logger = logging.getLogger(__name__)
 
@@ -46,16 +50,19 @@ def _make_account_panel(conn, person_id: int, account_id: int, account_type: str
     atype = account_type.upper()
     if atype in ("BANQUE", "LIVRET"):
         from qt_ui.panels.compte_banque_panel import CompteBanquePanel
+
         return CompteBanquePanel(conn, person_id, account_id, parent=parent)
-    elif atype in ("PEA", "PEA_PME", "CTO", "CRYPTO",
-                   "ASSURANCE_VIE", "PER", "PEE"):
+    elif atype in ("PEA", "PEA_PME", "CTO", "CRYPTO", "ASSURANCE_VIE", "PER", "PEE"):
         from qt_ui.panels.compte_bourse_panel import CompteBoursePanel
+
         return CompteBoursePanel(conn, person_id, account_id, atype, parent=parent)
     elif atype == "CREDIT":
         from qt_ui.panels.compte_credit_panel import CompteCreditPanel
+
         return CompteCreditPanel(conn, person_id, account_id, parent=parent)
     else:
         from qt_ui.panels.compte_generic_panel import CompteGenericPanel
+
         return CompteGenericPanel(
             conn,
             person_id,
@@ -135,7 +142,9 @@ class PersonnesPage(QWidget):
 
         # Séparateur + section Comptes
         sep_label = QLabel("  Comptes")
-        sep_label.setStyleSheet(f"background: {BG_SIDEBAR}; color: {TEXT_DISABLED}; font-size: 11px; font-weight: bold; letter-spacing: 1px; padding: 6px 20px; border-top: 1px solid {BORDER_SUBTLE};")
+        sep_label.setStyleSheet(
+            f"background: {BG_SIDEBAR}; color: {TEXT_DISABLED}; font-size: 11px; font-weight: bold; letter-spacing: 1px; padding: 6px 20px; border-top: 1px solid {BORDER_SUBTLE};"
+        )
         content_v.addWidget(sep_label)
 
         # Panel d'ajout de compte
@@ -169,6 +178,7 @@ class PersonnesPage(QWidget):
     def _load_people(self) -> None:
         try:
             from services import repositories as repo
+
             self._people_df = repo.list_people(self._conn)
             self._person_combo.blockSignals(True)
             self._person_combo.clear()
@@ -266,9 +276,15 @@ class PersonnesPage(QWidget):
         if 0 <= int(index) < self._fixed_tabs.count():
             self._last_fixed_tab_index = int(index)
         panels = [
-            self._panel_vue, self._panel_dep, self._panel_rev,
-            self._panel_credits, self._panel_pe, self._panel_ent,
-            self._panel_immo, self._panel_liq, self._panel_bourse,
+            self._panel_vue,
+            self._panel_dep,
+            self._panel_rev,
+            self._panel_credits,
+            self._panel_pe,
+            self._panel_ent,
+            self._panel_immo,
+            self._panel_liq,
+            self._panel_bourse,
         ]
         if 0 <= index < len(panels):
             panels[index].refresh()
@@ -309,9 +325,7 @@ class PersonnesPage(QWidget):
                 account_name = str(row["name"])
                 label = f"{account_name} ({afficher_type_compte(account_type)})"
 
-                panel = _make_account_panel(
-                    self._conn, self._current_person_id, account_id, account_type
-                )
+                panel = _make_account_panel(self._conn, self._current_person_id, account_id, account_type)
                 sig = getattr(panel, "account_deleted", None)
                 if sig is not None and hasattr(sig, "connect"):
                     sig.connect(self._on_account_deleted)

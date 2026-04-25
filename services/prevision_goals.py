@@ -1,7 +1,10 @@
 import datetime
+
 import numpy as np
 import pandas as pd
-from .prevision_models import PrevisionResult, GoalMetrics
+
+from .prevision_models import GoalMetrics, PrevisionResult
+
 
 def compute_goal_metrics(result: PrevisionResult) -> GoalMetrics:
     """
@@ -10,20 +13,16 @@ def compute_goal_metrics(result: PrevisionResult) -> GoalMetrics:
     target = result.config.target_goal_amount
     if not target or result.trajectories_df is None or result.trajectories_df.empty:
         return GoalMetrics(0.0, None, None)
-        
+
     final_values = result.trajectories_df.iloc[-1].values
     successes = final_values >= target
     prob = float(np.sum(successes) / len(final_values)) if len(final_values) > 0 else 0.0
-    
+
     # Calcul du manque à gagner médian (pour ceux qui échouent)
     shortfalls = target - final_values[~successes]
     median_shortfall = float(np.median(shortfalls)) if len(shortfalls) > 0 else 0.0
-    
-    return GoalMetrics(
-        probability_of_success=prob,
-        median_shortfall=median_shortfall,
-        years_to_goal_median=None
-    )
+
+    return GoalMetrics(probability_of_success=prob, median_shortfall=median_shortfall, years_to_goal_median=None)
 
 
 def compute_fire_date(

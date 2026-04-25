@@ -11,10 +11,12 @@ Ce module est le seul autorisé à :
 Frontière : ce module NE contient PAS de KPI dérivés, de métriques de performance
 ou de logique de présentation. Ces responsabilités appartiennent à `family_dashboard.py`.
 """
+
 from __future__ import annotations
+
 import pandas as pd
-from datetime import datetime
-import pytz
+
+from services.snapshots import _now_paris_iso
 
 FAMILY_WEEKLY_COLUMNS = [
     "week_date",
@@ -28,16 +30,20 @@ FAMILY_WEEKLY_COLUMNS = [
     "credits_remaining",
 ]
 
-# _now_paris_iso existe aussi dans snapshots.py — on l'importe pour éviter la duplication.
-from services.snapshots import _now_paris_iso
-
-
 
 def list_family_weekly_snapshots(conn, family_id: int = 1) -> pd.DataFrame:
     _COLS = [
-        "week_date", "created_at", "mode",
-        "patrimoine_net", "patrimoine_brut", "liquidites_total",
-        "bourse_holdings", "pe_value", "ent_value", "immobilier_value", "credits_remaining",
+        "week_date",
+        "created_at",
+        "mode",
+        "patrimoine_net",
+        "patrimoine_brut",
+        "liquidites_total",
+        "bourse_holdings",
+        "pe_value",
+        "ent_value",
+        "immobilier_value",
+        "credits_remaining",
     ]
     rows = conn.execute(
         """
@@ -84,8 +90,17 @@ def get_family_weekly_series(conn, family_id: int = 1, fallback_person_ids: list
     if not fallback_person_ids:
         return df_family
 
-    _AGG_COLS = ["week_date", "patrimoine_net", "patrimoine_brut", "liquidites_total",
-                 "bourse_holdings", "pe_value", "ent_value", "immobilier_value", "credits_remaining"]
+    _AGG_COLS = [
+        "week_date",
+        "patrimoine_net",
+        "patrimoine_brut",
+        "liquidites_total",
+        "bourse_holdings",
+        "pe_value",
+        "ent_value",
+        "immobilier_value",
+        "credits_remaining",
+    ]
     q = ",".join(["?"] * len(fallback_person_ids))
     rows = conn.execute(
         f"""
@@ -114,8 +129,17 @@ def _aggregate_person_snapshots_by_week(conn, person_ids: list[int]) -> pd.DataF
     Agrège les snapshots hebdomadaires de plusieurs personnes par semaine (SUM).
     Helper interne mutualisé — évite la répétition de cette requête SQL dans chaque rebuild famille.
     """
-    _AGG_COLS = ["week_date", "patrimoine_net", "patrimoine_brut", "liquidites_total",
-                 "bourse_holdings", "pe_value", "ent_value", "immobilier_value", "credits_remaining"]
+    _AGG_COLS = [
+        "week_date",
+        "patrimoine_net",
+        "patrimoine_brut",
+        "liquidites_total",
+        "bourse_holdings",
+        "pe_value",
+        "ent_value",
+        "immobilier_value",
+        "credits_remaining",
+    ]
     q = ",".join(["?"] * len(person_ids))
     rows = conn.execute(
         f"""
@@ -192,7 +216,6 @@ def rebuild_family_weekly(conn, person_ids: list[int], lookback_days: int = 90, 
     # 2) agrégation via le helper mutualisé
     df = _aggregate_person_snapshots_by_week(conn, person_ids)
 
-
     if df.empty:
         return {"did_run": False, "reason": "no_weekly_person_snapshots"}
 
@@ -201,13 +224,22 @@ def rebuild_family_weekly(conn, person_ids: list[int], lookback_days: int = 90, 
     for _, r in df.iterrows():
         payload = dict(r)
         payload["notes"] = f"Agrégé sur {len(person_ids)} personnes"
-        upsert_family_snapshot(conn, family_id=family_id, week_date=str(r["week_date"]), mode="REBUILD", payload=payload)
+        upsert_family_snapshot(
+            conn,
+            family_id=family_id,
+            week_date=str(r["week_date"]),
+            mode="REBUILD",
+            payload=payload,
+        )
         n += 1
 
     conn.commit()
     return {"did_run": True, "family_id": family_id, "n_weeks": int(n), "n_people": len(person_ids)}
 
-def rebuild_family_weekly_missing_only(conn, person_ids: list[int], lookback_days: int = 90, recalc_days: int = 0, family_id: int = 1) -> dict:
+
+def rebuild_family_weekly_missing_only(
+    conn, person_ids: list[int], lookback_days: int = 90, recalc_days: int = 0, family_id: int = 1
+) -> dict:
     """
     Rebuild famille intelligent :
     - rebuild missing-only par personne
@@ -218,12 +250,14 @@ def rebuild_family_weekly_missing_only(conn, person_ids: list[int], lookback_day
 
     # 1) rebuild missing-only chaque personne
     from services import snapshots as wk_snap
+
     for pid in person_ids:
-        wk_snap.rebuild_snapshots_person_missing_only(conn, person_id=int(pid), lookback_days=int(lookback_days), recalc_days=int(recalc_days))
+        wk_snap.rebuild_snapshots_person_missing_only(
+            conn, person_id=int(pid), lookback_days=int(lookback_days), recalc_days=int(recalc_days)
+        )
 
     # 2) agrégation via le helper mutualisé
     df = _aggregate_person_snapshots_by_week(conn, person_ids)
-
 
     if df.empty:
         return {"did_run": False, "reason": "no_weekly_person_snapshots"}
@@ -232,11 +266,24 @@ def rebuild_family_weekly_missing_only(conn, person_ids: list[int], lookback_day
     for _, r in df.iterrows():
         payload = dict(r)
         payload["notes"] = f"Agrégé sur {len(person_ids)} personnes"
-        upsert_family_snapshot(conn, family_id=family_id, week_date=str(r["week_date"]), mode="REBUILD", payload=payload)
+        upsert_family_snapshot(
+            conn,
+            family_id=family_id,
+            week_date=str(r["week_date"]),
+            mode="REBUILD",
+            payload=payload,
+        )
         n += 1
 
     conn.commit()
-    return {"did_run": True, "family_id": family_id, "n_weeks": int(n), "n_people": len(person_ids), "mode": "MISSING_ONLY"}
+    return {
+        "did_run": True,
+        "family_id": family_id,
+        "n_weeks": int(n),
+        "n_people": len(person_ids),
+        "mode": "MISSING_ONLY",
+    }
+
 
 def rebuild_family_weekly_from_last(
     conn,
@@ -267,7 +314,6 @@ def rebuild_family_weekly_from_last(
     # 2) agrégation via le helper mutualisé
     df = _aggregate_person_snapshots_by_week(conn, person_ids)
 
-
     if df.empty:
         return {"did_run": False, "reason": "no_weekly_person_snapshots"}
 
@@ -275,11 +321,23 @@ def rebuild_family_weekly_from_last(
     for _, r in df.iterrows():
         payload = dict(r)
         payload["notes"] = f"Agrégé sur {len(person_ids)} personnes"
-        upsert_family_snapshot(conn, family_id=family_id, week_date=str(r["week_date"]), mode="REBUILD", payload=payload)
+        upsert_family_snapshot(
+            conn,
+            family_id=family_id,
+            week_date=str(r["week_date"]),
+            mode="REBUILD",
+            payload=payload,
+        )
         n += 1
 
     conn.commit()
-    return {"did_run": True, "family_id": family_id, "n_weeks": int(n), "n_people": len(person_ids), "mode": "FROM_LAST"}
+    return {
+        "did_run": True,
+        "family_id": family_id,
+        "n_weeks": int(n),
+        "n_people": len(person_ids),
+        "mode": "FROM_LAST",
+    }
 
 
 def rebuild_family_weekly_backdated_aware(
@@ -314,7 +372,6 @@ def rebuild_family_weekly_backdated_aware(
     # agrégation famille via le helper mutualisé
     df = _aggregate_person_snapshots_by_week(conn, person_ids)
 
-
     if df.empty:
         return {"did_run": False, "reason": "no_weekly_person_snapshots", "people": res_people}
 
@@ -322,11 +379,22 @@ def rebuild_family_weekly_backdated_aware(
     for _, r in df.iterrows():
         payload = dict(r)
         payload["notes"] = f"Agrégé sur {len(person_ids)} personnes"
-        upsert_family_snapshot(conn, family_id=family_id, week_date=str(r["week_date"]), mode="REBUILD", payload=payload)
+        upsert_family_snapshot(
+            conn,
+            family_id=family_id,
+            week_date=str(r["week_date"]),
+            mode="REBUILD",
+            payload=payload,
+        )
         n += 1
 
     conn.commit()
-    return {"did_run": True, "mode": "FAMILY_BACKDATED_AWARE", "n_weeks": int(n), "people": res_people}
+    return {
+        "did_run": True,
+        "mode": "FAMILY_BACKDATED_AWARE",
+        "n_weeks": int(n),
+        "people": res_people,
+    }
 
 
 def rebuild_family_weekly_full_history(
@@ -358,8 +426,7 @@ def rebuild_family_weekly_full_history(
             break
 
         # Wrapper du callback pour indiquer quelle personne on reconstruire
-        def _person_progress(current_week, current_year, week_index, total_weeks,
-                             _idx=person_index, _total=n_people):
+        def _person_progress(current_week, current_year, week_index, total_weeks, _idx=person_index, _total=n_people):
             if progress_callback is not None:
                 progress_callback(
                     current_week=current_week,
@@ -381,16 +448,23 @@ def rebuild_family_weekly_full_history(
     # Aggregation famille sur l'integralite des snapshots personnes disponibles
     df = _aggregate_person_snapshots_by_week(conn, person_ids)
     if df.empty:
-        return {"did_run": False, "reason": "no_weekly_person_snapshots",
-                "mode": "FAMILY_FULL_HISTORY", "people": res_people}
+        return {
+            "did_run": False,
+            "reason": "no_weekly_person_snapshots",
+            "mode": "FAMILY_FULL_HISTORY",
+            "people": res_people,
+        }
 
     n = 0
     for _, r in df.iterrows():
         payload = dict(r)
         payload["notes"] = f"Agrege sur {len(person_ids)} personnes"
         upsert_family_snapshot(
-            conn, family_id=family_id,
-            week_date=str(r["week_date"]), mode="REBUILD", payload=payload
+            conn,
+            family_id=family_id,
+            week_date=str(r["week_date"]),
+            mode="REBUILD",
+            payload=payload,
         )
         n += 1
 

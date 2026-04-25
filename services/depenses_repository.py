@@ -1,4 +1,5 @@
 import sqlite3
+
 import pandas as pd
 
 
@@ -18,7 +19,6 @@ def depenses_du_mois(conn: sqlite3.Connection, person_id: int, mois: str) -> pd.
 
     if not rows:
         return pd.DataFrame(rows, columns=["id", "categorie", "montant"])
-
 
     return pd.DataFrame(rows, columns=["id", "categorie", "montant"])
 
@@ -41,12 +41,14 @@ def supprimer_depense_par_id(conn: sqlite3.Connection, depense_id: int):
     conn.execute("DELETE FROM depenses WHERE id = ?", (depense_id,))
     conn.commit()
 
+
 def maj_depense(conn: sqlite3.Connection, depense_id: int, categorie: str, montant: float):
     conn.execute(
         "UPDATE depenses SET categorie = ?, montant = ? WHERE id = ?",
         (categorie, montant, depense_id),
     )
     conn.commit()
+
 
 def depenses_par_mois(conn: sqlite3.Connection, person_id: int) -> pd.DataFrame:
     rows = conn.execute(

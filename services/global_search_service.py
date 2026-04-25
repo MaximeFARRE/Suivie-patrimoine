@@ -2,7 +2,9 @@
 Recherche globale multi-objets (personnes, comptes, actifs, transactions).
 Point d'entrée unique : query_global_search(conn, query).
 """
+
 import logging
+
 from services.common_utils import fmt_amount, row_get
 
 logger = logging.getLogger(__name__)
@@ -123,18 +125,20 @@ def query_global_search(conn, query: str, limit_per_kind: int = 7) -> list[dict]
             person_name = str(_row_get(row, "person_name", 5) or "")
             account_name = str(_row_get(row, "account_name", 7) or "")
             context = f" ({person_name})" if person_name else ""
-            results.append({
-                "kind": "asset",
-                "asset_id": int(_row_get(row, "id", 0)),
-                "symbol": symbol,
-                "asset_name": asset_name,
-                "asset_type": str(_row_get(row, "asset_type", 3) or ""),
-                "person_id": int(raw_person_id) if raw_person_id is not None else None,
-                "person_name": person_name,
-                "account_id": int(raw_account_id) if raw_account_id is not None else None,
-                "account_name": account_name,
-                "label": f"📈 Actif · {symbol} — {asset_name}{context}",
-            })
+            results.append(
+                {
+                    "kind": "asset",
+                    "asset_id": int(_row_get(row, "id", 0)),
+                    "symbol": symbol,
+                    "asset_name": asset_name,
+                    "asset_type": str(_row_get(row, "asset_type", 3) or ""),
+                    "person_id": int(raw_person_id) if raw_person_id is not None else None,
+                    "person_name": person_name,
+                    "account_id": int(raw_account_id) if raw_account_id is not None else None,
+                    "account_name": account_name,
+                    "label": f"📈 Actif · {symbol} — {asset_name}{context}",
+                }
+            )
     except Exception as exc:
         logger.warning("Recherche globale (assets) en erreur : %s", exc)
 

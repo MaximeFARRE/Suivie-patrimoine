@@ -2,27 +2,49 @@
 Page Famille — remplace pages/1_Famille.py
 Contient 3 onglets : Snapshots weekly, Diagnostic, Flux (V1)
 """
+
 import logging
+from time import monotonic
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from time import monotonic
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QScrollArea, QGroupBox, QComboBox, QProgressBar
-)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from qt_ui.components.animated_tab import AnimatedTabWidget
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, MetricLabel
+from qt_ui.components.animated_tab import AnimatedTabWidget
 from qt_ui.theme import (
-    BG_PRIMARY, BG_SIDEBAR, BORDER_SUBTLE, TEXT_PRIMARY,
-    STYLE_BTN_PRIMARY, STYLE_TAB, STYLE_GROUP,
-    STYLE_INPUT, STYLE_SCROLLAREA, STYLE_PROGRESS, STYLE_TITLE_LARGE,
-    STYLE_TITLE, STYLE_SECTION, STYLE_SECTION_MARGIN, STYLE_STATUS,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_WARNING, STYLE_STATUS_ERROR,
+    BG_PRIMARY,
+    BG_SIDEBAR,
+    BORDER_SUBTLE,
+    STYLE_BTN_PRIMARY,
+    STYLE_GROUP,
+    STYLE_INPUT,
+    STYLE_PROGRESS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_SECTION_MARGIN,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    STYLE_TAB,
+    STYLE_TITLE,
+    STYLE_TITLE_LARGE,
+    TEXT_PRIMARY,
     plotly_layout,
 )
+from qt_ui.widgets import DataTableWidget, KpiCard, MetricLabel, PlotlyView
 from utils.format_monnaie import money
 
 logger = logging.getLogger(__name__)
@@ -32,12 +54,19 @@ def _empty_figure(msg: str = "Aucune donnée disponible") -> go.Figure:
     """Figure Plotly vide avec un message centré — remplace un widget blank."""
     fig = go.Figure()
     fig.add_annotation(
-        text=msg, x=0.5, y=0.5, xref="paper", yref="paper",
-        showarrow=False, font=dict(size=13, color="#64748b"),
+        text=msg,
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font=dict(size=13, color="#64748b"),
     )
     fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
         margin=dict(l=0, r=0, t=0, b=0),
     )
     return fig
@@ -62,6 +91,7 @@ def _fmt_var_pct(value: float | None) -> str:
 
 # ─── Worker threads ──────────────────────────────────────────────────────────
 
+
 class RebuildFamilleThread(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
@@ -80,14 +110,12 @@ class RebuildFamilleThread(QThread):
             self.progress.emit("Rebuild famille en cours...")
             from services import family_snapshots as fs
             from services.db import get_conn
+
             with get_conn() as local_conn:
                 if self._is_cancelled:
                     self.finished.emit("Annulé")
                     return
-                res = fs.rebuild_family_weekly(
-                    local_conn, person_ids=self._person_ids,
-                    lookback_days=90, family_id=1
-                )
+                res = fs.rebuild_family_weekly(local_conn, person_ids=self._person_ids, lookback_days=90, family_id=1)
             self.finished.emit(str(res))
         except Exception as e:
             logger.error("Erreur rebuild famille : %s", e)
@@ -110,9 +138,10 @@ class RebuildAllThread(QThread):
 
     def run(self):
         try:
-            from services import snapshots as wk_snap
             from services import family_snapshots as fs
+            from services import snapshots as wk_snap
             from services.db import get_conn
+
             msgs = []
             total = len(self._person_ids)
             with get_conn() as local_conn:
@@ -122,18 +151,21 @@ class RebuildAllThread(QThread):
                         break
                     self.progress.emit(f"Rebuild personne {i+1}/{total}...")
                     r = wk_snap.rebuild_snapshots_person_from_last(
-                        local_conn, person_id=pid,
+                        local_conn,
+                        person_id=pid,
                         safety_weeks=self._safety_weeks,
                         fallback_lookback_days=90,
-                        cancel_check=lambda: self._is_cancelled
+                        cancel_check=lambda: self._is_cancelled,
                     )
                     msgs.append(str(r))
                 try:
                     self.progress.emit("Rebuild famille...")
                     fs.rebuild_family_weekly_from_last(
-                        local_conn, person_ids=self._person_ids,
+                        local_conn,
+                        person_ids=self._person_ids,
                         safety_weeks=self._safety_weeks,
-                        fallback_lookback_days=90, family_id=1
+                        fallback_lookback_days=90,
+                        family_id=1,
                     )
                     msgs.append("famille OK")
                 except Exception as e:
@@ -147,9 +179,10 @@ class RebuildAllThread(QThread):
 
 class FamilyFullHistoryRebuildThread(QThread):
     """Reconstruit tous les snapshots famille depuis la premiere transaction."""
-    progress = pyqtSignal(str)          # message lisible pour le label UI
+
+    progress = pyqtSignal(str)  # message lisible pour le label UI
     finished = pyqtSignal(str)
-    error    = pyqtSignal(str)
+    error = pyqtSignal(str)
 
     def __init__(self, person_ids: list):
         super().__init__()
@@ -164,6 +197,7 @@ class FamilyFullHistoryRebuildThread(QThread):
         try:
             from services import family_snapshots as fs
             from services.db import get_conn
+
             with get_conn() as local_conn:
                 res = fs.rebuild_family_weekly_full_history(
                     local_conn,
@@ -195,6 +229,7 @@ class FamilyFullHistoryRebuildThread(QThread):
 
 
 # ─── Panel : Famille Dashboard ────────────────────────────────────────────────
+
 
 class FamilleDashboardPanel(QWidget):
     def __init__(self, conn, parent=None):
@@ -316,7 +351,9 @@ class FamilleDashboardPanel(QWidget):
         self._leaderboard_label = QLabel()
         self._leaderboard_label.setWordWrap(True)
         self._leaderboard_label.setTextFormat(Qt.TextFormat.RichText)
-        self._leaderboard_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 13px; padding: 8px; background: {BG_SIDEBAR}; border-radius: 6px;")
+        self._leaderboard_label.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: 13px; padding: 8px; background: {BG_SIDEBAR}; border-radius: 6px;"
+        )
         self._layout.addWidget(self._leaderboard_label)
 
         # Table personnes
@@ -357,9 +394,13 @@ class FamilleDashboardPanel(QWidget):
             if col not in df_plot.columns:
                 df_plot[col] = 0.0
 
-        df_plot["var_net_pct"] = df_plot["patrimoine_net"].shift(0).combine(
-            df_plot["patrimoine_net"].shift(1),
-            lambda cur, prev: _compute_var_pct(cur, prev),
+        df_plot["var_net_pct"] = (
+            df_plot["patrimoine_net"]
+            .shift(0)
+            .combine(
+                df_plot["patrimoine_net"].shift(1),
+                lambda cur, prev: _compute_var_pct(cur, prev),
+            )
         )
         df_plot["var_net_txt"] = df_plot["var_net_pct"].apply(_fmt_var_pct)
 
@@ -445,8 +486,8 @@ class FamilleDashboardPanel(QWidget):
 
         total_net = float(person_alloc["Net (€)"].sum())
         person_alloc["part_famille_pct"] = (
-            person_alloc["Net (€)"] / total_net * 100.0
-        ).round(2) if total_net > 0 else 0.0
+            (person_alloc["Net (€)"] / total_net * 100.0).round(2) if total_net > 0 else 0.0
+        )
 
         fig_p = px.pie(person_alloc, names="Personne", values="Net (€)", hole=0.45)
         fig_p.update_traces(
@@ -547,6 +588,7 @@ class FamilleDashboardPanel(QWidget):
             return
         try:
             from services import family_dashboard as fd
+
             people = fd.get_people(self._conn)
             if people.empty:
                 self._title_label.setStyleSheet(STYLE_STATUS_WARNING)
@@ -609,7 +651,9 @@ class FamilleDashboardPanel(QWidget):
                     self._build_people_pie(df_people)
                     self._people_table.set_dataframe(df_people)
                 else:
-                    self._people_table.set_dataframe(pd.DataFrame([{"Statut": "⚠️ Aucune donnée personne sur la semaine commune."}]))
+                    self._people_table.set_dataframe(
+                        pd.DataFrame([{"Statut": "⚠️ Aucune donnée personne sur la semaine commune."}])
+                    )
                 # Alerte DQ-08 : personnes sans snapshot à la semaine commune
                 missing = fd.get_people_without_snapshot(people, df_people)
                 if missing:
@@ -645,14 +689,18 @@ class FamilleDashboardPanel(QWidget):
                     html_parts.append("<b>🥇 Patrimoine net (Top 3)</b><br>")
                     for i, row in top_net.iterrows():
                         import html
+
                         m = medals[i] if i < 3 else "•"
-                        html_parts.append(f"{m} <b>{html.escape(str(row['Personne']))}</b> — {money(float(row['Net (€)']))}<br>")
+                        html_parts.append(
+                            f"{m} <b>{html.escape(str(row['Personne']))}</b> — {money(float(row['Net (€)']))}<br>"
+                        )
 
                 top3 = boards.get("top_perf_3m", [])
                 if top3:
                     html_parts.append("<br><b>🚀 Progression 3 mois (Top 3)</b><br>")
                     for i, (name, val) in enumerate(top3):
                         import html
+
                         m = medals[i]
                         html_parts.append(f"{m} <b>{html.escape(str(name))}</b> — {val:.1f}%<br>")
 
@@ -666,6 +714,7 @@ class FamilleDashboardPanel(QWidget):
     def _on_rebuild(self) -> None:
         try:
             from services import family_dashboard as fd
+
             people = fd.get_people(self._conn)
             person_ids = [int(x) for x in people["id"].tolist()]
         except Exception as e:
@@ -715,6 +764,7 @@ class FamilleDashboardPanel(QWidget):
 
         try:
             from services import family_dashboard as fd
+
             people = fd.get_people(self._conn)
             person_ids = [int(x) for x in people["id"].tolist()]
         except Exception as exc:
@@ -760,6 +810,7 @@ class FamilleDashboardPanel(QWidget):
 
 
 # ─── Panel : Data Health ──────────────────────────────────────────────────────
+
 
 class DataHealthPanel(QWidget):
     def __init__(self, conn, parent=None):
@@ -888,6 +939,7 @@ class DataHealthPanel(QWidget):
     def _on_rebuild_all(self) -> None:
         try:
             from services import diagnostics_global as dg
+
             people = dg.list_people(self._conn)
             person_ids = [int(x) for x in people["id"].tolist()] if not people.empty else []
         except Exception as e:
@@ -924,6 +976,7 @@ class DataHealthPanel(QWidget):
 
 
 # ─── Panel : Flux V1 ──────────────────────────────────────────────────────────
+
 
 class FluxPanel(QWidget):
     def __init__(self, conn, parent=None):
@@ -982,13 +1035,12 @@ class FluxPanel(QWidget):
             return
         try:
             from services import cashflow as cf
+
             self._status_label.setStyleSheet(STYLE_STATUS)
             self._status_label.setText("⏳ Chargement des flux...")
 
             today = pd.Timestamp.today()
-            summary = cf.get_family_flux_summary(
-                self._conn, year=int(today.year), month=int(today.month)
-            )
+            summary = cf.get_family_flux_summary(self._conn, year=int(today.year), month=int(today.month))
 
             solde_total = summary["solde_total"]
             cashflow_mois = summary["cashflow_mois"]
@@ -1029,6 +1081,7 @@ class FluxPanel(QWidget):
 
 
 # ─── Page Famille ─────────────────────────────────────────────────────────────
+
 
 class FamillePage(QWidget):
     def __init__(self, conn, parent=None):

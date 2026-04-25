@@ -3,28 +3,67 @@ Page Import — orchestrateur.
 Les panels dépenses/revenus/Bankin sont dans _import_panels.py.
 Le panel Trade Republic est dans _tr_panel.py.
 """
+
 import time
-from services import import_lookup_service as lookup
+
+from PyQt6.QtCore import QDate
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 from qt_ui.pages._import_panels import (
-    BTN_STYLE as _BTN_STYLE, INPUT_STYLE as _INPUT_STYLE,
-    LABEL_STYLE as _LABEL_STYLE, GROUP_STYLE as _GROUP_STYLE,
-    make_label as _make_label, build_depenses_panel, build_bankin_panel,
+    BTN_STYLE as _BTN_STYLE,
+)
+from qt_ui.pages._import_panels import (
+    GROUP_STYLE as _GROUP_STYLE,
+)
+from qt_ui.pages._import_panels import (
+    INPUT_STYLE as _INPUT_STYLE,
+)
+from qt_ui.pages._import_panels import (
+    build_bankin_panel,
+    build_depenses_panel,
+)
+from qt_ui.pages._import_panels import (
+    make_label as _make_label,
 )
 from qt_ui.pages._tr_panel import TrImportPanel
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QCheckBox, QGroupBox, QLineEdit, QDoubleSpinBox,
-    QSpinBox, QScrollArea, QDateEdit, QStackedWidget, QMessageBox,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-)
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QColor
 from qt_ui.theme import (
-    BG_PRIMARY, BG_CARD, BORDER_SUBTLE,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_DISABLED,
-    COLOR_SUCCESS, COLOR_WARNING,
-    STYLE_TITLE_XL, STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING,
+    BG_CARD,
+    BG_PRIMARY,
+    BORDER_SUBTLE,
+    COLOR_SUCCESS,
+    COLOR_WARNING,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    STYLE_TITLE_XL,
+    TEXT_DISABLED,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
 )
+from services import import_lookup_service as lookup
 
 
 class ImportPage(QScrollArea):
@@ -71,13 +110,15 @@ class ImportPage(QScrollArea):
         type_grp.setStyleSheet(_GROUP_STYLE)
         tv = QVBoxLayout(type_grp)
         self._mode_combo = QComboBox()
-        self._mode_combo.addItems([
-            "Dépenses (mensuel)",
-            "Revenus (mensuel)",
-            "Bankin (transactions)",
-            "Trade Republic (PEA / CTO)",
-            "Crédit (config + génération)",
-        ])
+        self._mode_combo.addItems(
+            [
+                "Dépenses (mensuel)",
+                "Revenus (mensuel)",
+                "Bankin (transactions)",
+                "Trade Republic (PEA / CTO)",
+                "Crédit (config + génération)",
+            ]
+        )
         self._mode_combo.setStyleSheet(_INPUT_STYLE)
         self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         tv.addWidget(self._mode_combo)
@@ -93,12 +134,8 @@ class ImportPage(QScrollArea):
         self._panel_revenus = build_depenses_panel(
             self._conn, self._person_combo.currentText, self._refresh_history, "revenus"
         )
-        self._panel_bankin = build_bankin_panel(
-            self._conn, self._person_combo.currentText, self._refresh_history
-        )
-        self._panel_tr = TrImportPanel(
-            self._conn, self._person_combo.currentText, self._refresh_history
-        )
+        self._panel_bankin = build_bankin_panel(self._conn, self._person_combo.currentText, self._refresh_history)
+        self._panel_tr = TrImportPanel(self._conn, self._person_combo.currentText, self._refresh_history)
         self._panel_credit = self._build_credit_panel()
 
         self._stack.addWidget(self._panel_depenses)
@@ -121,7 +158,16 @@ class ImportPage(QScrollArea):
     # Panel Historique des imports
     # ------------------------------------------------------------------
 
-    _HISTORY_COLS = ["#", "Type", "Personne", "Compte / Fichier", "Date", "Lignes", "Statut", "Action"]
+    _HISTORY_COLS = [
+        "#",
+        "Type",
+        "Personne",
+        "Compte / Fichier",
+        "Date",
+        "Lignes",
+        "Statut",
+        "Action",
+    ]
     _TYPE_ICONS = {"TR": "📈", "BANKIN": "🏦", "DEPENSES": "💸", "REVENUS": "💰", "CREDIT": "🏠"}
 
     def _build_history_panel(self) -> QGroupBox:
@@ -180,6 +226,7 @@ class ImportPage(QScrollArea):
         self._history_status.setText("⏳ Chargement de l'historique...")
         try:
             from services.import_history import list_batches
+
             batches = list_batches(self._conn, limit=50)
         except Exception as e:
             self._history_status.setStyleSheet(STYLE_STATUS_ERROR)
@@ -210,7 +257,7 @@ class ImportPage(QScrollArea):
             itype = b["import_type"]
             icon = self._TYPE_ICONS.get(itype, "📥")
             status = b["status"]
-            rolled_back = (status == "ROLLED_BACK")
+            rolled_back = status == "ROLLED_BACK"
 
             tbl.setItem(ri, 0, QTableWidgetItem(str(b["id"])))
             tbl.setItem(ri, 1, QTableWidgetItem(f"{icon} {itype}"))
@@ -229,7 +276,9 @@ class ImportPage(QScrollArea):
             if not rolled_back and itype == "CREDIT":
                 lbl = QTableWidgetItem("⚠️ Manuel")
                 lbl.setForeground(QColor(COLOR_WARNING))
-                lbl.setToolTip("Les crédits ne peuvent pas être annulés automatiquement.\nSupprimez le crédit manuellement depuis la page Crédits.")
+                lbl.setToolTip(
+                    "Les crédits ne peuvent pas être annulés automatiquement.\nSupprimez le crédit manuellement depuis la page Crédits."
+                )
                 tbl.setItem(ri, 7, lbl)
             elif not rolled_back and b["alive_rows"] > 0:
                 btn = QPushButton("🗑️ Annuler")
@@ -268,6 +317,7 @@ class ImportPage(QScrollArea):
             return
         try:
             from services.import_history import rollback_batch
+
             result = rollback_batch(self._conn, batch_id)
             total = result["total_deleted"]
             QMessageBox.information(
@@ -295,7 +345,9 @@ class ImportPage(QScrollArea):
         layout.setSpacing(12)
         w.setWidget(inner)
 
-        cap = QLabel("Tu renseignes la fiche crédit ici. L'amortissement est généré automatiquement (avec gestion du différé).")
+        cap = QLabel(
+            "Tu renseignes la fiche crédit ici. L'amortissement est généré automatiquement (avec gestion du différé)."
+        )
         cap.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
         layout.addWidget(cap)
 
@@ -488,14 +540,12 @@ class ImportPage(QScrollArea):
         selected_name = self._person_combo.currentText()
         try:
             from services import repositories as repo
+
             people = repo.list_people(self._conn)
             self._people_cache_df = people
             self._person_id_by_name = {}
             if people is not None and not people.empty:
-                self._person_id_by_name = {
-                    str(r["name"]): int(r["id"])
-                    for _, r in people.iterrows()
-                }
+                self._person_id_by_name = {str(r["name"]): int(r["id"]) for _, r in people.iterrows()}
             self._last_people_refresh_ts = time.monotonic()
             self._accounts_cache_by_person.clear()
 
@@ -536,6 +586,7 @@ class ImportPage(QScrollArea):
                 accounts_df = cached[1]
             else:
                 from services import repositories as repo
+
                 accounts_df = repo.list_accounts(self._conn, person_id=int(person_id))
                 self._accounts_cache_by_person[int(person_id)] = (now, accounts_df)
 
@@ -549,7 +600,10 @@ class ImportPage(QScrollArea):
             # Refresh TR accounts
             if hasattr(self._panel_tr, "_refresh_accounts"):
                 from services.tr_import import get_tr_phone
-                self._panel_tr._refresh_accounts(person_id, accounts=tr_accounts, phone=get_tr_phone(self._conn, int(person_id)))
+
+                self._panel_tr._refresh_accounts(
+                    person_id, accounts=tr_accounts, phone=get_tr_phone(self._conn, int(person_id))
+                )
 
             # Comptes crédit
             credit_accounts = lookup.list_accounts_by_types(
@@ -607,7 +661,8 @@ class ImportPage(QScrollArea):
             date_debut = self._c_date_debut.date().toString("yyyy-MM-dd")
 
             account_name = self._credit_account_combo.currentText()
-            from services.import_history import create_batch, close_batch
+            from services.import_history import close_batch, create_batch
+
             batch_id = create_batch(
                 self._conn,
                 import_type="CREDIT",
@@ -617,23 +672,32 @@ class ImportPage(QScrollArea):
                 account_name=account_name,
             )
 
-            from services.credits import CreditParams, build_amortissement, replace_amortissement, upsert_credit
-            credit_id = upsert_credit(self._conn, {
-                "person_id": person_id,
-                "account_id": account_id,
-                "nom": self._c_nom.text().strip() or "Crédit",
-                "banque": self._c_banque.text().strip() or None,
-                "type_credit": self._c_type.currentText(),
-                "capital_emprunte": self._c_capital.value(),
-                "taux_nominal": self._c_taux.value(),
-                "taeg": self._c_taeg.value(),
-                "duree_mois": self._c_duree.value(),
-                "mensualite_theorique": self._c_mensualite.value(),
-                "assurance_mensuelle_theorique": self._c_assurance.value(),
-                "date_debut": date_debut,
-                "actif": 1 if self._c_actif.isChecked() else 0,
-                "payer_account_id": payer_account_id,
-            })
+            from services.credits import (
+                CreditParams,
+                build_amortissement,
+                replace_amortissement,
+                upsert_credit,
+            )
+
+            credit_id = upsert_credit(
+                self._conn,
+                {
+                    "person_id": person_id,
+                    "account_id": account_id,
+                    "nom": self._c_nom.text().strip() or "Crédit",
+                    "banque": self._c_banque.text().strip() or None,
+                    "type_credit": self._c_type.currentText(),
+                    "capital_emprunte": self._c_capital.value(),
+                    "taux_nominal": self._c_taux.value(),
+                    "taeg": self._c_taeg.value(),
+                    "duree_mois": self._c_duree.value(),
+                    "mensualite_theorique": self._c_mensualite.value(),
+                    "assurance_mensuelle_theorique": self._c_assurance.value(),
+                    "date_debut": date_debut,
+                    "actif": 1 if self._c_actif.isChecked() else 0,
+                    "payer_account_id": payer_account_id,
+                },
+            )
 
             use_override = self._c_use_override.isChecked()
             mensualite_ovr = self._c_mensualite_override.value()
@@ -647,7 +711,7 @@ class ImportPage(QScrollArea):
                 differe_type=self._c_diff_type.currentText(),
                 assurance_pendant_differe=self._c_diff_assurance.isChecked(),
                 interets_pendant_differe=self._c_diff_interets.currentText(),
-                mensualite=float(mensualite_ovr) if (use_override and mensualite_ovr > 0) else None
+                mensualite=float(mensualite_ovr) if (use_override and mensualite_ovr > 0) else None,
             )
             rows = build_amortissement(params)
             n = replace_amortissement(self._conn, credit_id, rows)

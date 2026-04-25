@@ -2,12 +2,14 @@
 Tests contrat FX : vérifie que les fonctions de conversion respectent le contrat
 "None si taux manquant, jamais de montant brut silencieux".
 """
-import pytest
-import pandas as pd
+
 from unittest.mock import patch
 
+import pandas as pd
+import pytest
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_conn_no_fx():
     """Connexion SQLite en mémoire sans aucun taux FX en base."""
@@ -30,14 +32,17 @@ def _make_conn_no_fx():
 
 # ── fx.convert ────────────────────────────────────────────────────────────────
 
+
 class TestFxConvert:
     def test_same_currency_returns_amount(self, conn):
         from services import fx
+
         result = fx.convert(conn, 100.0, "EUR", "EUR")
         assert result == pytest.approx(100.0)
 
     def test_blank_currency_defaults_to_eur_contract(self, conn):
         from services import fx
+
         result = fx.convert(conn, 100.0, "", None)
         assert result == pytest.approx(100.0)
 
@@ -50,12 +55,12 @@ class TestFxConvert:
             result = fx.convert(conn, 100.0, "USD", "EUR")
 
         assert result is None, (
-            "fx.convert doit retourner None quand le taux est introuvable, "
-            f"mais a retourné {result!r}"
+            "fx.convert doit retourner None quand le taux est introuvable, " f"mais a retourné {result!r}"
         )
 
     def test_known_rate_converts_correctly(self, conn):
-        from services import fx, repositories as repo, pricing
+        from services import fx, pricing
+        from services import repositories as repo
 
         repo.insert_fx_rate(conn, "USD", "EUR", pricing.today_str(), 0.92)
         conn.commit()
@@ -66,24 +71,27 @@ class TestFxConvert:
 
 # ── market_history.convert_weekly ────────────────────────────────────────────
 
+
 class TestConvertWeekly:
     def test_same_currency_returns_amount(self, conn):
         from services import market_history
+
         result = market_history.convert_weekly(conn, 50.0, "EUR", "EUR", "2024-01-01")
         assert result == pytest.approx(50.0)
 
     def test_blank_currency_defaults_to_eur_contract(self, conn):
         from services import market_history
+
         result = market_history.convert_weekly(conn, 50.0, "", None, "2024-01-01")
         assert result == pytest.approx(50.0)
 
     def test_missing_fx_returns_none(self, conn):
         """Taux hebdo absent → None, pas le montant brut."""
         from services import market_history
+
         result = market_history.convert_weekly(conn, 100.0, "USD", "EUR", "2024-01-01")
         assert result is None, (
-            "convert_weekly doit retourner None quand le taux hebdo est absent, "
-            f"mais a retourné {result!r}"
+            "convert_weekly doit retourner None quand le taux hebdo est absent, " f"mais a retourné {result!r}"
         )
 
     def test_known_weekly_rate_converts(self, conn):
@@ -97,7 +105,8 @@ class TestConvertWeekly:
         assert result == pytest.approx(182.0)
 
     def test_cross_rate_via_usd_when_direct_pair_missing(self, conn):
-        from services import market_history, market_repository as mrepo
+        from services import market_history
+        from services import market_repository as mrepo
 
         mrepo.upsert_fx_rate_weekly(conn, "COP", "USD", "2024-01-01", 0.00025)
         mrepo.upsert_fx_rate_weekly(conn, "USD", "EUR", "2024-01-01", 0.80)
@@ -112,6 +121,7 @@ class TestConvertWeekly:
 
 # ── liquidites utilise fx.convert (point d'entrée unique) ────────────────────
 
+
 class TestLiquiditesFxConvert:
     """
     _fx_to_eur a été supprimé : liquidites.py délègue désormais à fx.convert.
@@ -120,6 +130,7 @@ class TestLiquiditesFxConvert:
 
     def test_eur_returns_amount_unchanged(self, conn):
         from services import fx
+
         assert fx.convert(conn, 42.0, "EUR", "EUR") == pytest.approx(42.0)
 
     def test_missing_rate_returns_none_not_raw_amount(self):
@@ -136,7 +147,8 @@ class TestLiquiditesFxConvert:
         )
 
     def test_direct_rate_used(self, conn):
-        from services import fx, repositories as repo, pricing
+        from services import fx, pricing
+        from services import repositories as repo
 
         repo.insert_fx_rate(conn, "USD", "EUR", pricing.today_str(), 0.93)
         conn.commit()
@@ -147,10 +159,12 @@ class TestLiquiditesFxConvert:
 
 # ── valorisation impossible ───────────────────────────────────────────────────
 
+
 class TestValuationImpossible:
     def test_convert_weekly_zero_amount_no_rate(self, conn):
         """Même un montant nul avec FX manquant doit retourner None."""
         from services import market_history
+
         result = market_history.convert_weekly(conn, 0.0, "GBP", "EUR", "2024-01-01")
         # 0.0 * None ne doit pas crasher, mais le taux reste absent
         # GBP→EUR pas en base → None
@@ -174,17 +188,18 @@ class TestBourseAnalyticsMissingFx:
         """
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "EUR"}]
-        )
-        positions_df = pd.DataFrame(
-            [{"symbol": "ABC", "quantity": 2.0, "asset_ccy": "USD", "account_id": 10}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "EUR"}])
+        positions_df = pd.DataFrame([{"symbol": "ABC", "quantity": 2.0, "asset_ccy": "USD", "account_id": 10}])
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.positions.compute_positions_asof", return_value=positions_df), \
-             patch("services.bourse_analytics.market_history.get_price_asof", return_value=123.0), \
-             patch("services.bourse_analytics.market_history.convert_weekly", return_value=None):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch(
+                "services.bourse_analytics.positions.compute_positions_asof",
+                return_value=positions_df,
+            ),
+            patch("services.bourse_analytics.market_history.get_price_asof", return_value=123.0),
+            patch("services.bourse_analytics.market_history.convert_weekly", return_value=None),
+        ):
             out = bourse_analytics.compute_positions_valued_asof(conn, person_id=1, asof_week_date="2024-01-01")
 
         assert isinstance(out, pd.DataFrame)
@@ -197,9 +212,7 @@ class TestBourseAnalyticsMissingFx:
         """
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "USD"}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "USD"}])
         tx = pd.DataFrame(
             [
                 {"date": "2024-01-01", "type": "ACHAT", "amount": 100.0, "fees": 2.0},
@@ -208,9 +221,11 @@ class TestBourseAnalyticsMissingFx:
             ]
         )
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.repo.list_transactions", return_value=tx), \
-             patch("services.bourse_analytics.market_history.convert_weekly", return_value=70.0) as mock_fx:
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch("services.bourse_analytics.repo.list_transactions", return_value=tx),
+            patch("services.bourse_analytics.market_history.convert_weekly", return_value=70.0) as mock_fx,
+        ):
             out = bourse_analytics.compute_invested_amount_eur_asof(conn, person_id=1, asof_week_date="2024-01-03")
 
         assert out == pytest.approx(70.0)
@@ -219,9 +234,7 @@ class TestBourseAnalyticsMissingFx:
     def test_positions_valued_asof_computes_values_and_weights(self, conn):
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "EUR"}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "EUR"}])
         positions_df = pd.DataFrame(
             [
                 {"symbol": "AAA", "quantity": 2.0, "asset_ccy": "EUR", "account_id": 10},
@@ -232,10 +245,18 @@ class TestBourseAnalyticsMissingFx:
         def _px(_conn, symbol, _asof):
             return 10.0 if symbol == "AAA" else 30.0
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.positions.compute_positions_asof", return_value=positions_df), \
-             patch("services.bourse_analytics.market_history.get_price_asof", side_effect=_px), \
-             patch("services.bourse_analytics.market_history.convert_weekly", side_effect=lambda _c, a, *_: a):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch(
+                "services.bourse_analytics.positions.compute_positions_asof",
+                return_value=positions_df,
+            ),
+            patch("services.bourse_analytics.market_history.get_price_asof", side_effect=_px),
+            patch(
+                "services.bourse_analytics.market_history.convert_weekly",
+                side_effect=lambda _c, a, *_: a,
+            ),
+        ):
             out = bourse_analytics.compute_positions_valued_asof(conn, person_id=1, asof_week_date="2024-01-01")
 
         assert list(out["ticker"]) == ["BBB", "AAA"]
@@ -245,11 +266,16 @@ class TestBourseAnalyticsMissingFx:
     def test_live_positions_for_account_short_circuits_when_no_assets(self, conn):
         from services import bourse_analytics
 
-        with patch("services.bourse_analytics.repo.get_account", return_value={"id": 10, "currency": "EUR"}), \
-             patch("services.bourse_analytics.repo.list_account_asset_ids", return_value=[]), \
-             patch("services.bourse_analytics.repo.list_transactions") as mock_tx, \
-             patch("services.bourse_analytics.repo.get_latest_prices") as mock_prices, \
-             patch("services.portfolio.compute_positions_v2_fx") as mock_compute:
+        with (
+            patch(
+                "services.bourse_analytics.repo.get_account",
+                return_value={"id": 10, "currency": "EUR"},
+            ),
+            patch("services.bourse_analytics.repo.list_account_asset_ids", return_value=[]),
+            patch("services.bourse_analytics.repo.list_transactions") as mock_tx,
+            patch("services.bourse_analytics.repo.get_latest_prices") as mock_prices,
+            patch("services.portfolio.compute_positions_v2_fx") as mock_compute,
+        ):
             out = bourse_analytics.get_live_bourse_positions_for_account(conn, account_id=10)
 
         assert isinstance(out, pd.DataFrame)
@@ -279,11 +305,19 @@ class TestBourseAnalyticsMissingFx:
             ]
         )
 
-        with patch("services.bourse_analytics.repo.get_account", return_value={"id": 10, "currency": "EUR"}), \
-             patch("services.bourse_analytics.repo.list_account_asset_ids", return_value=[26]), \
-             patch("services.bourse_analytics.repo.list_transactions", return_value=pd.DataFrame([{"id": 1}])), \
-             patch("services.bourse_analytics.repo.get_latest_prices", return_value=pd.DataFrame()), \
-             patch("services.portfolio.compute_positions_v2_fx", return_value=pos_account):
+        with (
+            patch(
+                "services.bourse_analytics.repo.get_account",
+                return_value={"id": 10, "currency": "EUR"},
+            ),
+            patch("services.bourse_analytics.repo.list_account_asset_ids", return_value=[26]),
+            patch(
+                "services.bourse_analytics.repo.list_transactions",
+                return_value=pd.DataFrame([{"id": 1}]),
+            ),
+            patch("services.bourse_analytics.repo.get_latest_prices", return_value=pd.DataFrame()),
+            patch("services.portfolio.compute_positions_v2_fx", return_value=pos_account),
+        ):
             out = bourse_analytics.get_live_bourse_positions_for_account(conn, account_id=10)
 
         assert len(out) == 1
@@ -296,25 +330,39 @@ class TestBourseAnalyticsMissingFx:
     def test_live_positions_skips_accounts_without_assets(self, conn):
         from services import bourse_analytics
 
-        accounts = pd.DataFrame([
-            {"id": 10, "account_type": "PEA", "name": "PEA A", "currency": "EUR"},
-            {"id": 11, "account_type": "CTO", "name": "CTO B", "currency": "EUR"},
-        ])
-        pos_account_11 = pd.DataFrame([
-            {"symbol": "ABC", "quantity": 2.0, "last_price": 10.0, "value": 20.0, "pnl_latent": 1.0}
-        ])
+        accounts = pd.DataFrame(
+            [
+                {"id": 10, "account_type": "PEA", "name": "PEA A", "currency": "EUR"},
+                {"id": 11, "account_type": "CTO", "name": "CTO B", "currency": "EUR"},
+            ]
+        )
+        pos_account_11 = pd.DataFrame(
+            [
+                {
+                    "symbol": "ABC",
+                    "quantity": 2.0,
+                    "last_price": 10.0,
+                    "value": 20.0,
+                    "pnl_latent": 1.0,
+                }
+            ]
+        )
 
         def _asset_ids(_conn, account_id):
             return [] if int(account_id) == 10 else [501]
 
         def _tx(_conn, account_id=None, **_kwargs):
-            return pd.DataFrame([{"id": 1, "type": "ACHAT", "amount": 100.0}]) if int(account_id) == 11 else pd.DataFrame()
+            return (
+                pd.DataFrame([{"id": 1, "type": "ACHAT", "amount": 100.0}]) if int(account_id) == 11 else pd.DataFrame()
+            )
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.repo.list_account_asset_ids", side_effect=_asset_ids), \
-             patch("services.bourse_analytics.repo.list_transactions", side_effect=_tx), \
-             patch("services.bourse_analytics.repo.get_latest_prices", return_value=pd.DataFrame()), \
-             patch("services.portfolio.compute_positions_v2_fx", return_value=pos_account_11):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch("services.bourse_analytics.repo.list_account_asset_ids", side_effect=_asset_ids),
+            patch("services.bourse_analytics.repo.list_transactions", side_effect=_tx),
+            patch("services.bourse_analytics.repo.get_latest_prices", return_value=pd.DataFrame()),
+            patch("services.portfolio.compute_positions_v2_fx", return_value=pos_account_11),
+        ):
             out = bourse_analytics.get_live_bourse_positions(conn, person_id=1)
 
         assert isinstance(out, pd.DataFrame)
@@ -324,7 +372,8 @@ class TestBourseAnalyticsMissingFx:
 
 class TestLiquiditesSummary:
     def test_summary_aggregates_bank_and_bourse_cash_with_fx(self, conn):
-        from services import liquidites, repositories as repo, pricing
+        from services import liquidites, pricing
+        from services import repositories as repo
 
         conn.execute("INSERT INTO people(name) VALUES ('Alice')")
         conn.execute(
@@ -370,9 +419,7 @@ class TestBourseAccountBreakdown:
     def test_breakdown_cash_asof_respects_transaction_formula(self, conn):
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "USD"}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "USD"}])
         tx = pd.DataFrame(
             [
                 {"date": "2024-01-01", "type": "DEPOT", "amount": 100.0, "fees": 0.0},
@@ -387,10 +434,18 @@ class TestBourseAccountBreakdown:
 
         # cash_native = 100 - 4 - 20 + 10 + 5 + 1 - 3 - (1+2) = 86
         # cash_eur @0.5 = 43
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.positions.compute_positions_asof", return_value=pd.DataFrame()), \
-             patch("services.bourse_analytics.repo.list_transactions", return_value=tx), \
-             patch("services.bourse_analytics.market_history.convert_weekly", side_effect=lambda _c, a, *_: a * 0.5):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch(
+                "services.bourse_analytics.positions.compute_positions_asof",
+                return_value=pd.DataFrame(),
+            ),
+            patch("services.bourse_analytics.repo.list_transactions", return_value=tx),
+            patch(
+                "services.bourse_analytics.market_history.convert_weekly",
+                side_effect=lambda _c, a, *_: a * 0.5,
+            ),
+        ):
             out = bourse_analytics.compute_accounts_breakdown_asof(conn, person_id=1, asof_week_date="2024-01-07")
 
         assert len(out) == 1
@@ -404,17 +459,18 @@ class TestBourseAccountBreakdown:
         """
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "USD"}]
-        )
-        tx = pd.DataFrame(
-            [{"id": 1, "date": "2024-01-01", "type": "DEPOT", "amount": 1000.0, "fees": 0.0}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "USD"}])
+        tx = pd.DataFrame([{"id": 1, "date": "2024-01-01", "type": "DEPOT", "amount": 1000.0, "fees": 0.0}])
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.positions.compute_positions_asof", return_value=pd.DataFrame()), \
-             patch("services.bourse_analytics.repo.list_transactions", return_value=tx), \
-             patch("services.bourse_analytics.market_history.convert_weekly", return_value=None):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch(
+                "services.bourse_analytics.positions.compute_positions_asof",
+                return_value=pd.DataFrame(),
+            ),
+            patch("services.bourse_analytics.repo.list_transactions", return_value=tx),
+            patch("services.bourse_analytics.market_history.convert_weekly", return_value=None),
+        ):
             out = bourse_analytics.compute_accounts_breakdown_asof(conn, person_id=1, asof_week_date="2024-01-01")
 
         assert isinstance(out, pd.DataFrame)
@@ -440,19 +496,21 @@ class TestDataQualityFalseZeroRegressions:
         assert out["quality_status"] == "partial"
         assert out["bank_cash_eur"] == pytest.approx(0.0)
         assert out["total_eur"] == pytest.approx(0.0)
-        assert out["missing_fx"] == [{
-            "component": "bank",
-            "account_id": 1,
-            "currency": "USD",
-            "amount_native": 1000.0,
-        }]
+        assert out["missing_fx"] == [
+            {
+                "component": "bank",
+                "account_id": 1,
+                "currency": "USD",
+                "amount_native": 1000.0,
+            }
+        ]
 
 
 class TestFxImpactDecomposition:
     def test_positions_v2_fx_splits_market_and_currency_effects(self, conn):
+        from services import market_repository as mrepo
         from services import portfolio
         from services import repositories as repo
-        from services import market_repository as mrepo
 
         conn.execute(
             "INSERT INTO assets(id, symbol, name, asset_type, currency) VALUES (1, 'AAA', 'AAA Corp', 'action', 'USD')"
@@ -462,20 +520,22 @@ class TestFxImpactDecomposition:
         # FX au moment de l'achat (utilisé pour fx_moyen_achat)
         mrepo.upsert_fx_rate_weekly(conn, "USD", "EUR", "2024-01-01", 1.00)
 
-        tx = pd.DataFrame([
-            {
-                "id": 1,
-                "date": "2024-01-01",
-                "type": "ACHAT",
-                "asset_id": 1,
-                "asset_symbol": "AAA",
-                "asset_name": "AAA Corp",
-                "quantity": 10.0,
-                "price": 100.0,     # devise actif (USD)
-                "amount": 1000.0,   # EUR (coût total)
-                "fees": 0.0,
-            }
-        ])
+        tx = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "date": "2024-01-01",
+                    "type": "ACHAT",
+                    "asset_id": 1,
+                    "asset_symbol": "AAA",
+                    "asset_name": "AAA Corp",
+                    "quantity": 10.0,
+                    "price": 100.0,  # devise actif (USD)
+                    "amount": 1000.0,  # EUR (coût total)
+                    "fees": 0.0,
+                }
+            ]
+        )
         latest_prices = pd.DataFrame([{"asset_id": 1, "price": 120.0, "currency": "USD"}])
 
         out = portfolio.compute_positions_v2_fx(conn, tx, latest_prices, account_ccy="EUR")
@@ -513,16 +573,20 @@ class TestFxImpactDecomposition:
     def test_live_position_missing_price_is_not_valued_as_zero(self):
         from services import portfolio
 
-        tx = pd.DataFrame([{
-            "id": 1,
-            "date": "2024-01-01",
-            "type": "ACHAT",
-            "asset_id": 42,
-            "asset_symbol": "ABC",
-            "asset_name": "ABC Corp",
-            "quantity": 2.0,
-            "price": 10.0,
-        }])
+        tx = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "date": "2024-01-01",
+                    "type": "ACHAT",
+                    "asset_id": 42,
+                    "asset_symbol": "ABC",
+                    "asset_name": "ABC Corp",
+                    "quantity": 2.0,
+                    "price": 10.0,
+                }
+            ]
+        )
 
         out = portfolio.compute_positions_v1(tx, pd.DataFrame(columns=["asset_id", "price"]))
 
@@ -534,18 +598,19 @@ class TestFxImpactDecomposition:
     def test_bourse_state_asof_missing_fx_is_partial_without_fallback_rate(self, conn):
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "EUR"}]
-        )
-        positions_df = pd.DataFrame(
-            [{"symbol": "ABC", "quantity": 2.0, "asset_ccy": "USD", "account_id": 10}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "PEA", "name": "PEA Test", "currency": "EUR"}])
+        positions_df = pd.DataFrame([{"symbol": "ABC", "quantity": 2.0, "asset_ccy": "USD", "account_id": 10}])
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.positions.compute_positions_asof", return_value=positions_df), \
-             patch("services.market_history.get_price_asof", return_value=10.0), \
-             patch("services.market_history.get_fx_asof", return_value=None), \
-             patch("services.bourse_analytics.compute_invested_amount_eur_asof", return_value=100.0):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch(
+                "services.bourse_analytics.positions.compute_positions_asof",
+                return_value=positions_df,
+            ),
+            patch("services.market_history.get_price_asof", return_value=10.0),
+            patch("services.market_history.get_fx_asof", return_value=None),
+            patch("services.bourse_analytics.compute_invested_amount_eur_asof", return_value=100.0),
+        ):
             out = bourse_analytics.get_bourse_state_asof(conn, person_id=1, asof_date="2024-01-01")
 
         row = out["df"].iloc[0]
@@ -563,9 +628,11 @@ class TestFxImpactDecomposition:
         income_df = pd.DataFrame(columns=["date", "month", "year", "type", "amount_eur"])
         income_df.attrs["missing_fx"] = []
 
-        with patch("services.snapshots.get_person_weekly_series", return_value=pd.DataFrame()), \
-             patch("services.bourse_analytics.compute_invested_amount_eur_asof", return_value=100.0), \
-             patch("services.bourse_analytics.compute_passive_income_history", return_value=income_df):
+        with (
+            patch("services.snapshots.get_person_weekly_series", return_value=pd.DataFrame()),
+            patch("services.bourse_analytics.compute_invested_amount_eur_asof", return_value=100.0),
+            patch("services.bourse_analytics.compute_passive_income_history", return_value=income_df),
+        ):
             out = bourse_analytics.get_bourse_performance_metrics(conn, person_id=1, current_live_value=1000.0)
 
         assert out["quality_status"] == "partial"
@@ -576,27 +643,27 @@ class TestFxImpactDecomposition:
     def test_passive_income_missing_fx_is_recorded_not_summed_as_zero(self, conn):
         from services import bourse_analytics
 
-        accounts = pd.DataFrame(
-            [{"id": 10, "account_type": "CTO", "name": "CTO Test", "currency": "USD"}]
-        )
-        tx = pd.DataFrame(
-            [{"date": "2024-01-05", "type": "DIVIDENDE", "amount": 50.0, "fees": 0.0}]
-        )
+        accounts = pd.DataFrame([{"id": 10, "account_type": "CTO", "name": "CTO Test", "currency": "USD"}])
+        tx = pd.DataFrame([{"date": "2024-01-05", "type": "DIVIDENDE", "amount": 50.0, "fees": 0.0}])
 
-        with patch("services.bourse_analytics.repo.list_accounts", return_value=accounts), \
-             patch("services.bourse_analytics.repo.list_transactions", return_value=tx), \
-             patch("services.market_history.convert_weekly", return_value=None):
+        with (
+            patch("services.bourse_analytics.repo.list_accounts", return_value=accounts),
+            patch("services.bourse_analytics.repo.list_transactions", return_value=tx),
+            patch("services.market_history.convert_weekly", return_value=None),
+        ):
             out = bourse_analytics.compute_passive_income_history(conn, person_id=1)
 
         assert out.empty
         assert out.attrs["quality_status"] == "partial"
-        assert out.attrs["missing_fx"] == [{
-            "account_id": 10,
-            "currency": "USD",
-            "date": "2024-01-05",
-            "type": "DIVIDENDE",
-            "amount_native": 50.0,
-        }]
+        assert out.attrs["missing_fx"] == [
+            {
+                "account_id": 10,
+                "currency": "USD",
+                "date": "2024-01-05",
+                "type": "DIVIDENDE",
+                "amount_native": 50.0,
+            }
+        ]
 
 
 class TestPrivateEquityAccountBasedValuation:

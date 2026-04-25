@@ -3,43 +3,67 @@ Page Paramètres — AM-11
 Accessible via le bouton ⚙️ en bas de la sidebar.
 Affiche les infos système, permet la configuration et le backup manuel.
 """
+
 import logging
-import shutil
 import platform
+import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from time import monotonic
 
+from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QFormLayout, QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit,
-    QFileDialog, QMessageBox, QScrollArea, QFrame, QSizePolicy, QTabWidget
+    QApplication,
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, QSettings
-from PyQt6.QtGui import QFont, QClipboard
-from PyQt6.QtWidgets import QApplication
 
 from qt_ui.theme import (
-    BG_PRIMARY, BG_CARD, BG_SIDEBAR, BG_ACTIVE,
-    BORDER_SUBTLE, BORDER_DEFAULT,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_DISABLED,
-    ACCENT_BLUE, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING,
-    STYLE_BTN_PRIMARY, STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS,
-    STYLE_GROUP, STYLE_INPUT_FOCUS, STYLE_TITLE_LARGE, STYLE_SECTION,
-    STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING,
+    ACCENT_BLUE,
+    BG_ACTIVE,
     BG_ACTIVE_HOVER,
+    BG_CARD,
+    BG_PRIMARY,
+    BG_SIDEBAR,
+    BORDER_DEFAULT,
+    BORDER_SUBTLE,
+    STYLE_BTN_PRIMARY,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_INPUT_FOCUS,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    STYLE_TITLE_LARGE,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
     get_current_theme,
 )
 
 logger = logging.getLogger(__name__)
 
 APP_VERSION = "2.0.0"
-_SETTINGS_ORG  = "Famille"
-_SETTINGS_APP  = "PatrimoineDesktop"
+_SETTINGS_ORG = "Famille"
+_SETTINGS_APP = "PatrimoineDesktop"
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _sep() -> QFrame:
     f = QFrame()
@@ -69,6 +93,7 @@ def _card_style() -> str:
 
 
 # ─── SettingsPage ──────────────────────────────────────────────────────────────
+
 
 class SettingsPage(QWidget):
     """
@@ -148,16 +173,17 @@ class SettingsPage(QWidget):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         from services.db import DB_PATH
+
         _USER_DATA_DIR = Path.home() / ".patrimoine"
 
         fields = [
-            ("Chemin de la base de données",  str(DB_PATH)),
+            ("Chemin de la base de données", str(DB_PATH)),
             ("Dossier de données utilisateur", str(_USER_DATA_DIR)),
-            ("Dossier des logs",               str(_USER_DATA_DIR / "logs")),
-            ("Dossier des backups",            str(_USER_DATA_DIR / "backups")),
-            ("Version de l'application",       APP_VERSION),
-            ("Système d'exploitation",         f"{platform.system()} {platform.release()}"),
-            ("Python",                          platform.python_version()),
+            ("Dossier des logs", str(_USER_DATA_DIR / "logs")),
+            ("Dossier des backups", str(_USER_DATA_DIR / "backups")),
+            ("Version de l'application", APP_VERSION),
+            ("Système d'exploitation", f"{platform.system()} {platform.release()}"),
+            ("Python", platform.python_version()),
         ]
 
         for label_text, value_text in fields:
@@ -166,14 +192,16 @@ class SettingsPage(QWidget):
 
             val_row = QHBoxLayout()
             val_lbl = QLabel(value_text)
-            val_lbl.setStyleSheet(f"""
+            val_lbl.setStyleSheet(
+                f"""
                 color: {TEXT_PRIMARY};
                 font-size: 12px;
                 background: {BG_SIDEBAR};
                 border: 1px solid {BORDER_DEFAULT};
                 border-radius: 4px;
                 padding: 3px 8px;
-            """)
+            """
+            )
             val_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             val_lbl.setCursor(Qt.CursorShape.IBeamCursor)
             val_row.addWidget(val_lbl, 1)
@@ -181,11 +209,13 @@ class SettingsPage(QWidget):
             btn_copy = QPushButton("📋")
             btn_copy.setFixedSize(28, 28)
             btn_copy.setToolTip("Copier dans le presse-papier")
-            btn_copy.setStyleSheet(f"""
+            btn_copy.setStyleSheet(
+                f"""
                 QPushButton {{ background: {BG_ACTIVE}; color: {ACCENT_BLUE};
                                border: none; border-radius: 4px; font-size: 13px; }}
                 QPushButton:hover {{ background: {BG_ACTIVE_HOVER}; }}
-            """)
+            """
+            )
             btn_copy.clicked.connect(lambda _, v=value_text: self._copy_to_clipboard(v))
             val_row.addWidget(btn_copy)
 
@@ -280,6 +310,7 @@ class SettingsPage(QWidget):
         v.setSpacing(12)
 
         from services.db import DB_PATH
+
         _USER_DATA_DIR = Path.home() / ".patrimoine"
         backup_dir = _USER_DATA_DIR / "backups"
 
@@ -343,11 +374,14 @@ class SettingsPage(QWidget):
 
     def _build_simulation_presets(self) -> QGroupBox:
         """Section de configuration des presets de simulation par scope."""
-        from services.simulation_presets_repository import (
-            PRESET_DEFAULTS, PRESET_KEYS, get_all_presets,
-            initialize_default_presets, update_preset,
-        )
         from services.goals_projection_repository import list_people_for_scope
+        from services.simulation_presets_repository import (
+            PRESET_DEFAULTS,
+            PRESET_KEYS,
+            get_all_presets,
+            initialize_default_presets,
+            update_preset,
+        )
 
         box = QGroupBox("📊  Presets de simulation")
         box.setStyleSheet(_card_style())
@@ -376,7 +410,8 @@ class SettingsPage(QWidget):
 
         # ── Onglets par preset ────────────────────────────────────────────────
         tabs = QTabWidget()
-        tabs.setStyleSheet(f"""
+        tabs.setStyleSheet(
+            f"""
             QTabWidget::pane {{ border: 1px solid {BORDER_SUBTLE}; border-radius: 6px; }}
             QTabBar::tab {{
                 background: {BG_CARD}; color: {TEXT_SECONDARY};
@@ -384,30 +419,35 @@ class SettingsPage(QWidget):
                 border-bottom: none; border-radius: 4px 4px 0 0;
             }}
             QTabBar::tab:selected {{ background: {BG_ACTIVE}; color: {TEXT_PRIMARY}; font-weight: bold; }}
-        """)
+        """
+        )
 
-        _PRESET_LABELS = {"pessimiste": "Pessimiste", "realiste": "Réaliste", "optimiste": "Optimiste"}
+        _PRESET_LABELS = {
+            "pessimiste": "Pessimiste",
+            "realiste": "Réaliste",
+            "optimiste": "Optimiste",
+        }
 
         _FIELDS = [
             # ── Rendements attendus ──────────────────────────────────────────────
-            ("return_liquidites_pct",  "Rendement Liquidités (%)",         -20.0, 50.0, " %"),
-            ("return_bourse_pct",      "Rendement Bourse (%)",             -20.0, 50.0, " %"),
-            ("return_immobilier_pct",  "Rendement Immobilier (%)",         -20.0, 50.0, " %"),
-            ("return_pe_pct",          "Rendement Private Equity (%)",     -20.0, 50.0, " %"),
-            ("return_entreprises_pct", "Rendement Entreprises (%)",        -20.0, 50.0, " %"),
+            ("return_liquidites_pct", "Rendement Liquidités (%)", -20.0, 50.0, " %"),
+            ("return_bourse_pct", "Rendement Bourse (%)", -20.0, 50.0, " %"),
+            ("return_immobilier_pct", "Rendement Immobilier (%)", -20.0, 50.0, " %"),
+            ("return_pe_pct", "Rendement Private Equity (%)", -20.0, 50.0, " %"),
+            ("return_entreprises_pct", "Rendement Entreprises (%)", -20.0, 50.0, " %"),
             # ── Volatilités (pour Monte Carlo) ───────────────────────────────────
-            ("vol_liquidites_pct",     "Volatilité Liquidités (%)",          0.0, 50.0, " %"),
-            ("vol_bourse_pct",         "Volatilité Bourse (%)",              0.0, 80.0, " %"),
-            ("vol_immobilier_pct",     "Volatilité Immobilier (%)",          0.0, 50.0, " %"),
-            ("vol_pe_pct",             "Volatilité Private Equity (%)",      0.0, 80.0, " %"),
-            ("vol_entreprises_pct",    "Volatilité Entreprises (%)",         0.0, 80.0, " %"),
-            ("vol_crypto_pct",         "Volatilité Crypto (%)",              0.0, 200.0, " %"),
+            ("vol_liquidites_pct", "Volatilité Liquidités (%)", 0.0, 50.0, " %"),
+            ("vol_bourse_pct", "Volatilité Bourse (%)", 0.0, 80.0, " %"),
+            ("vol_immobilier_pct", "Volatilité Immobilier (%)", 0.0, 50.0, " %"),
+            ("vol_pe_pct", "Volatilité Private Equity (%)", 0.0, 80.0, " %"),
+            ("vol_entreprises_pct", "Volatilité Entreprises (%)", 0.0, 80.0, " %"),
+            ("vol_crypto_pct", "Volatilité Crypto (%)", 0.0, 200.0, " %"),
             # ── Macro ────────────────────────────────────────────────────────────
-            ("inflation_pct",          "Inflation (%)",                      -5.0, 20.0, " %"),
-            ("income_growth_pct",      "Croissance revenus (%)",            -20.0, 20.0, " %"),
-            ("expense_growth_pct",     "Croissance dépenses (%)",           -20.0, 20.0, " %"),
-            ("fire_multiple",          "Multiple FIRE",                        1.0, 200.0, ""),
-            ("savings_factor",         "Facteur épargne (×)",                  0.0,   5.0, " ×"),
+            ("inflation_pct", "Inflation (%)", -5.0, 20.0, " %"),
+            ("income_growth_pct", "Croissance revenus (%)", -20.0, 20.0, " %"),
+            ("expense_growth_pct", "Croissance dépenses (%)", -20.0, 20.0, " %"),
+            ("fire_multiple", "Multiple FIRE", 1.0, 200.0, ""),
+            ("savings_factor", "Facteur épargne (×)", 0.0, 5.0, " ×"),
         ]
 
         # {preset_key: {field: QDoubleSpinBox}}
@@ -459,6 +499,7 @@ class SettingsPage(QWidget):
                     except Exception as exc:
                         preset_status_labels[pk].setStyleSheet(STYLE_STATUS_ERROR)
                         preset_status_labels[pk].setText(f"❌ Erreur : {exc}")
+
                 return _save
 
             btn_save = QPushButton(f"Sauvegarder « {_PRESET_LABELS[preset_key]} »")
@@ -494,9 +535,7 @@ class SettingsPage(QWidget):
                 p = all_p.get(pk, PRESET_DEFAULTS[pk])
                 for field, *_ in _FIELDS:
                     if field in preset_spinboxes[pk]:
-                        preset_spinboxes[pk][field].setValue(
-                            float(p.get(field, PRESET_DEFAULTS[pk].get(field, 0.0)))
-                        )
+                        preset_spinboxes[pk][field].setValue(float(p.get(field, PRESET_DEFAULTS[pk].get(field, 0.0))))
                 if pk in preset_status_labels:
                     preset_status_labels[pk].setText("")
 
@@ -512,12 +551,12 @@ class SettingsPage(QWidget):
         v.setSpacing(8)
 
         data = [
-            ("Application",  "Patrimoine Desktop"),
-            ("Version",       APP_VERSION),
-            ("Framework",     "PyQt6"),
+            ("Application", "Patrimoine Desktop"),
+            ("Version", APP_VERSION),
+            ("Framework", "PyQt6"),
             ("Base de données", "SQLite (WAL mode)"),
-            ("Auteur",        "Maxime FARRE"),
-            ("Licence",       "Privée — usage personnel"),
+            ("Auteur", "Maxime FARRE"),
+            ("Licence", "Privée — usage personnel"),
         ]
 
         for label, value in data:
@@ -540,7 +579,7 @@ class SettingsPage(QWidget):
         previous_theme = str(self._settings.value("ui_theme", get_current_theme())).strip().lower()
         new_theme = str(self._combo_theme.currentData() or "dark").strip().lower()
 
-        self._settings.setValue("devise_defaut",   self._combo_devise.currentText())
+        self._settings.setValue("devise_defaut", self._combo_devise.currentText())
         self._settings.setValue("ui_theme", new_theme)
         self._settings.setValue("rebuild_delay_ms", self._spin_delay.value())
         self._settings.setValue("backup_max_count", self._spin_nbackup.value())
@@ -576,7 +615,8 @@ class SettingsPage(QWidget):
 
     def _export_custom(self, db_path: Path) -> None:
         dest_str, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la base de données",
+            self,
+            "Exporter la base de données",
             str(Path.home() / f"patrimoine_{datetime.now().strftime('%Y%m%d')}.db"),
             "SQLite Database (*.db);;All files (*)",
         )
@@ -591,7 +631,9 @@ class SettingsPage(QWidget):
             self._lbl_backup_status.setText(f"❌ Erreur : {e}")
 
     def _open_folder(self, path: Path) -> None:
-        import subprocess, sys
+        import subprocess
+        import sys
+
         path.mkdir(parents=True, exist_ok=True)
         try:
             if sys.platform == "win32":
@@ -639,10 +681,7 @@ class SettingsPage(QWidget):
         else:
             latest = backups[0]
             mtime = datetime.fromtimestamp(latest.stat().st_mtime).strftime("%d/%m/%Y à %H:%M")
-            msg = (
-                f"{len(backups)} sauvegarde(s) disponible(s) — "
-                f"Dernier : {latest.name} ({mtime})"
-            )
+            msg = f"{len(backups)} sauvegarde(s) disponible(s) — " f"Dernier : {latest.name} ({mtime})"
         self._lbl_backup_count.setText(msg)
         self._backup_count_cache_text = msg
         self._backup_count_cache_ts = now

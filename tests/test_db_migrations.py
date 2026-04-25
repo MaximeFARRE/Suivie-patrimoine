@@ -4,8 +4,8 @@ from services.db import (
     MIG_VER_ADD_ASSET_IMPORT_ALIASES,
     MIG_VER_ADD_CREDITS_PAYER_ACCOUNT,
     MIG_VER_ADD_IMMO_COLUMNS,
-    MIG_VER_ADD_TX_ANALYSIS_FLAGS,
     MIG_VER_ADD_TR_PHONE,
+    MIG_VER_ADD_TX_ANALYSIS_FLAGS,
     MIG_VER_ADD_TX_PERSON_ACCOUNT_INDEX,
     MIG_VER_IMPORT_BATCHES,
     apply_code_migrations,
@@ -49,7 +49,9 @@ def test_apply_code_migrations_adds_missing_structural_elements():
     # Simule une base legacy avec les tables mais sans colonnes ajoutées ensuite.
     conn.execute("CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT NOT NULL);")
     conn.execute("CREATE TABLE credits (id INTEGER PRIMARY KEY);")
-    conn.execute("CREATE TABLE transactions (id INTEGER PRIMARY KEY, person_id INTEGER, account_id INTEGER, date TEXT);")
+    conn.execute(
+        "CREATE TABLE transactions (id INTEGER PRIMARY KEY, person_id INTEGER, account_id INTEGER, date TEXT);"
+    )
     conn.execute("CREATE TABLE depenses (id INTEGER PRIMARY KEY);")
     conn.execute("CREATE TABLE revenus (id INTEGER PRIMARY KEY);")
     conn.execute("CREATE TABLE patrimoine_snapshots (id INTEGER PRIMARY KEY);")
@@ -87,10 +89,7 @@ def test_apply_code_migrations_adds_missing_structural_elements():
     # Idempotence: un second passage ne doit rien réappliquer.
     assert apply_code_migrations(conn) == []
 
-    versions = {
-        int(r["version"])
-        for r in conn.execute("SELECT version FROM schema_version;").fetchall()
-    }
+    versions = {int(r["version"]) for r in conn.execute("SELECT version FROM schema_version;").fetchall()}
     assert MIG_VER_ADD_TR_PHONE in versions
     assert MIG_VER_IMPORT_BATCHES in versions
     assert MIG_VER_ADD_IMMO_COLUMNS in versions
@@ -124,10 +123,7 @@ def test_run_migrations_applies_sql_and_code_versions(conn):
     applied_first = run_migrations(conn)
     assert applied_first  # migration initiale attendue
 
-    versions = {
-        int(r["version"])
-        for r in conn.execute("SELECT version FROM schema_version;").fetchall()
-    }
+    versions = {int(r["version"]) for r in conn.execute("SELECT version FROM schema_version;").fetchall()}
 
     # SQL files
     assert 1 in versions

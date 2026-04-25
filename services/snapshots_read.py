@@ -47,7 +47,8 @@ def get_person_weekly_series(conn, person_id: int) -> pd.DataFrame:
     except Exception:
         _logger.error(
             "get_person_weekly_series: erreur lecture snapshots pour person_id=%s",
-            person_id, exc_info=True,
+            person_id,
+            exc_info=True,
         )
         return empty
 
@@ -61,8 +62,9 @@ def get_person_weekly_series(conn, person_id: int) -> pd.DataFrame:
     n_dropped = n_before - len(df)
     if n_dropped > 0:
         _logger.warning(
-            "get_person_weekly_series: %d ligne(s) ignorée(s) (date invalide) "
-            "pour person_id=%s", n_dropped, person_id,
+            "get_person_weekly_series: %d ligne(s) ignorée(s) (date invalide) " "pour person_id=%s",
+            n_dropped,
+            person_id,
         )
 
     for col in PERSON_WEEKLY_COLUMNS:
@@ -97,7 +99,8 @@ def get_latest_person_snapshot(conn, person_id: int) -> dict | None:
     except Exception:
         _logger.error(
             "get_latest_person_snapshot: erreur lecture pour person_id=%s",
-            person_id, exc_info=True,
+            person_id,
+            exc_info=True,
         )
         return None
 
@@ -129,7 +132,8 @@ def get_latest_snapshot_notes(conn, person_id: int) -> str | None:
     except Exception:
         _logger.warning(
             "get_latest_snapshot_notes: erreur lecture pour person_id=%s",
-            person_id, exc_info=True,
+            person_id,
+            exc_info=True,
         )
         return None
 
@@ -151,7 +155,8 @@ def get_person_snapshot_at_week(
     except Exception:
         _logger.warning(
             "get_person_snapshot_at_week: week_date invalide (%r) pour person_id=%s",
-            week_date, person_id,
+            week_date,
+            person_id,
         )
         return None
 
@@ -170,14 +175,17 @@ def get_person_snapshot_at_week(
     except Exception:
         _logger.error(
             "get_person_snapshot_at_week: erreur lecture pour person_id=%s week_date=%s",
-            person_id, week_str, exc_info=True,
+            person_id,
+            week_str,
+            exc_info=True,
         )
         return None
 
     if row is None:
         _logger.info(
             "get_person_snapshot_at_week: aucun snapshot pour person_id=%s semaine=%s",
-            person_id, week_str,
+            person_id,
+            week_str,
         )
         return None
 
@@ -187,4 +195,3 @@ def get_person_snapshot_at_week(
         week_str=week_str,
         warn_invalid_fields=True,
     )
-

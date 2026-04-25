@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
-from services.calculations import solde_compte, cashflow_mois
+
+from services.calculations import cashflow_mois, solde_compte
 from services.global_search_service import query_global_search
 
 
@@ -65,8 +66,7 @@ def test_global_search_service_returns_expected_payload_shapes(conn):
         "VALUES (1, 'PEA Alice', 'PEA', 'BourseDirect', 'EUR')"
     )
     conn.execute(
-        "INSERT INTO assets(symbol, name, asset_type, currency) "
-        "VALUES ('AI', 'Air Liquide', 'action', 'EUR')"
+        "INSERT INTO assets(symbol, name, asset_type, currency) " "VALUES ('AI', 'Air Liquide', 'action', 'EUR')"
     )
     conn.execute(
         """

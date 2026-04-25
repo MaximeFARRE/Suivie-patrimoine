@@ -1,13 +1,12 @@
+import pandas as pd
+
 from services import import_aliases_service as alias_svc
 from services import tr_import
-import pandas as pd
 
 
 def _seed_person_and_account(conn):
     conn.execute("INSERT INTO people(name) VALUES ('Alice')")
-    conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) VALUES (1, 'PEA Alice', 'PEA', 'EUR')"
-    )
+    conn.execute("INSERT INTO accounts(person_id, name, account_type, currency) VALUES (1, 'PEA Alice', 'PEA', 'EUR')")
     conn.commit()
 
 
@@ -68,9 +67,7 @@ def test_import_tr_uses_saved_alias_mapping(conn, monkeypatch):
     )
     assert out["to_insert"] == 1
 
-    row = conn.execute(
-        "SELECT asset_id FROM transactions WHERE person_id = 1 AND account_id = 1 LIMIT 1"
-    ).fetchone()
+    row = conn.execute("SELECT asset_id FROM transactions WHERE person_id = 1 AND account_id = 1 LIMIT 1").fetchone()
     assert row is not None
     assert int(row["asset_id"]) == canonical_asset_id
 

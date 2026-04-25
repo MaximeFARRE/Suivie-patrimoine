@@ -3,28 +3,52 @@ Panel Crédits — Vue d'ensemble + Créer / Modifier.
 Permet de gérer les crédits directement depuis la page Personnes,
 sans passer par un compte crédit dédié.
 """
+
 import logging
+from datetime import datetime
+
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
 import pytz
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar,
-    QFormLayout, QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox, QPushButton,
-    QDateEdit, QCheckBox, QScrollArea,
-)
-from qt_ui.components.animated_tab import AnimatedTabWidget
 from PyQt6.QtCore import QDate, Qt
-
-from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel
-from qt_ui.theme import (
-    BG_PRIMARY, ACCENT_BLUE, STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS,
-    STYLE_INPUT_FOCUS, STYLE_FORM_LABEL, STYLE_GROUP, STYLE_SECTION,
-    STYLE_TITLE, STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR,
-    STYLE_TAB_INNER, STYLE_SCROLLAREA, STYLE_PROGRESS,
-    COLOR_SUCCESS, BORDER_SUBTLE, plotly_layout, plotly_time_series_layout,
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
+
+from qt_ui.components.animated_tab import AnimatedTabWidget
+from qt_ui.theme import (
+    ACCENT_BLUE,
+    BG_PRIMARY,
+    BORDER_SUBTLE,
+    COLOR_SUCCESS,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_FORM_LABEL,
+    STYLE_INPUT_FOCUS,
+    STYLE_PROGRESS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_TAB_INNER,
+    STYLE_TITLE,
+    plotly_time_series_layout,
+)
+from qt_ui.widgets import DataTableWidget, MetricLabel, PlotlyView
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +79,7 @@ class CreditsOverviewPanel(QWidget):
         tabs = AnimatedTabWidget()
         tabs.setStyleSheet(STYLE_TAB_INNER)
         tabs.addTab(self._build_overview_tab(), "📊  Vue d'ensemble")
-        tabs.addTab(self._build_edit_tab(),     "✏️  Créer / Modifier")
+        tabs.addTab(self._build_edit_tab(), "✏️  Créer / Modifier")
         tabs.currentChanged.connect(self._on_tab_changed)
 
         layout.addWidget(tabs)
@@ -76,11 +100,11 @@ class CreditsOverviewPanel(QWidget):
 
         # KPIs
         kpi_row = QHBoxLayout()
-        self._kpi_crd   = MetricLabel("CRD total", "—")
-        self._kpi_remb  = MetricLabel("Capital remboursé", "—")
+        self._kpi_crd = MetricLabel("CRD total", "—")
+        self._kpi_remb = MetricLabel("Capital remboursé", "—")
         self._kpi_mensu = MetricLabel("Mensualités théoriques", "—")
-        self._kpi_reel  = MetricLabel("Coût réel (mois)", "—")
-        self._kpi_nb    = MetricLabel("Crédits actifs", "—")
+        self._kpi_reel = MetricLabel("Coût réel (mois)", "—")
+        self._kpi_nb = MetricLabel("Crédits actifs", "—")
         for kpi in (self._kpi_crd, self._kpi_remb, self._kpi_mensu, self._kpi_reel, self._kpi_nb):
             kpi_row.addWidget(kpi)
         kpi_row.addStretch()
@@ -371,9 +395,11 @@ class CreditsOverviewPanel(QWidget):
     def _load_data(self) -> None:
         try:
             from services.credits import (
-                list_credits_by_person, get_amortissements,
-                get_crd_a_date, get_credit_dates,
                 cout_reel_mois_credit_via_bankin,
+                get_amortissements,
+                get_crd_a_date,
+                get_credit_dates,
+                list_credits_by_person,
             )
 
             today = _now_paris_date()
@@ -401,49 +427,51 @@ class CreditsOverviewPanel(QWidget):
                     item.widget().deleteLater()
 
             for _, c in dfc.iterrows():
-                credit_id   = int(c["id"])
-                nom         = str(c.get("nom") or f"Crédit {credit_id}")
-                banque      = str(c.get("banque") or "")
+                credit_id = int(c["id"])
+                nom = str(c.get("nom") or f"Crédit {credit_id}")
+                banque = str(c.get("banque") or "")
                 capital_init = float(c.get("capital_emprunte") or 0.0)
 
-                crd_today        = float(get_crd_a_date(self._conn, credit_id=credit_id, date_ref=str(today)))
+                crd_today = float(get_crd_a_date(self._conn, credit_id=credit_id, date_ref=str(today)))
                 capital_rembourse = max(0.0, capital_init - crd_today)
-                mensu_theo       = (float(c.get("mensualite_theorique") or 0.0)
-                                    + float(c.get("assurance_mensuelle_theorique") or 0.0))
-                cout_reel        = float(cout_reel_mois_credit_via_bankin(
-                    self._conn, credit_id=credit_id, mois_yyyy_mm_01=mois_courant
-                ))
-                dates     = get_credit_dates(self._conn, credit_id=credit_id)
-                date_fin  = dates.get("date_fin")
+                mensu_theo = float(c.get("mensualite_theorique") or 0.0) + float(
+                    c.get("assurance_mensuelle_theorique") or 0.0
+                )
+                cout_reel = float(
+                    cout_reel_mois_credit_via_bankin(self._conn, credit_id=credit_id, mois_yyyy_mm_01=mois_courant)
+                )
+                dates = get_credit_dates(self._conn, credit_id=credit_id)
+                date_fin = dates.get("date_fin")
 
                 mois_restants = (
-                    max(0, (date_fin.year - today.year) * 12 + (date_fin.month - today.month))
-                    if date_fin else None
+                    max(0, (date_fin.year - today.year) * 12 + (date_fin.month - today.month)) if date_fin else None
                 )
 
-                total_crd              += crd_today
+                total_crd += crd_today
                 total_capital_rembourse += capital_rembourse
-                total_mensualite_theo  += mensu_theo
-                total_cout_reel        += cout_reel
+                total_mensualite_theo += mensu_theo
+                total_cout_reel += cout_reel
 
                 if mois_restants is not None:
                     poids = max(crd_today, 0.0)
-                    somme_poids     += poids
+                    somme_poids += poids
                     somme_mois_pond += poids * mois_restants
 
                 prog = max(0.0, min(1.0, (capital_rembourse / capital_init) if capital_init > 0 else 0.0))
 
-                lignes_table.append({
-                    "Crédit":               nom,
-                    "Banque":               banque,
-                    "CRD actuel":           f"{crd_today:,.2f} €".replace(",", " "),
-                    "Capital remboursé":    f"{capital_rembourse:,.2f} €".replace(",", " "),
-                    "Mensualité théorique": f"{mensu_theo:,.2f} €".replace(",", " "),
-                    "Coût réel (mois)":     f"{cout_reel:,.2f} €".replace(",", " "),
-                    "Fin":                  date_fin.isoformat() if date_fin else "—",
-                    "Mois restants":        mois_restants if mois_restants is not None else "—",
-                    "% remboursé":          f"{prog * 100:.1f}%",
-                })
+                lignes_table.append(
+                    {
+                        "Crédit": nom,
+                        "Banque": banque,
+                        "CRD actuel": f"{crd_today:,.2f} €".replace(",", " "),
+                        "Capital remboursé": f"{capital_rembourse:,.2f} €".replace(",", " "),
+                        "Mensualité théorique": f"{mensu_theo:,.2f} €".replace(",", " "),
+                        "Coût réel (mois)": f"{cout_reel:,.2f} €".replace(",", " "),
+                        "Fin": date_fin.isoformat() if date_fin else "—",
+                        "Mois restants": mois_restants if mois_restants is not None else "—",
+                        "% remboursé": f"{prog * 100:.1f}%",
+                    }
+                )
 
                 # Barre de progression par crédit
                 prog_row = QHBoxLayout()
@@ -471,11 +499,11 @@ class CreditsOverviewPanel(QWidget):
                     amorts_by_credit[credit_id] = amort
 
             # KPIs globaux
-            self._kpi_crd.set_content("CRD total",               f"{total_crd:,.2f} €".replace(",", " "))
-            self._kpi_remb.set_content("Capital remboursé",       f"{total_capital_rembourse:,.2f} €".replace(",", " "))
+            self._kpi_crd.set_content("CRD total", f"{total_crd:,.2f} €".replace(",", " "))
+            self._kpi_remb.set_content("Capital remboursé", f"{total_capital_rembourse:,.2f} €".replace(",", " "))
             self._kpi_mensu.set_content("Mensualités théoriques", f"{total_mensualite_theo:,.2f} €".replace(",", " "))
-            self._kpi_reel.set_content("Coût réel (mois)",        f"{total_cout_reel:,.2f} €".replace(",", " "))
-            self._kpi_nb.set_content("Crédits actifs",            str(len(dfc)))
+            self._kpi_reel.set_content("Coût réel (mois)", f"{total_cout_reel:,.2f} €".replace(",", " "))
+            self._kpi_nb.set_content("Crédits actifs", str(len(dfc)))
 
             if somme_poids > 0:
                 mois_moy = int(round(somme_mois_pond / somme_poids))
@@ -501,15 +529,24 @@ class CreditsOverviewPanel(QWidget):
                     rows_chart.append({"date": m, "crd_total": total})
                 df_total = pd.DataFrame(rows_chart).sort_values("date")
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df_total["date"], y=df_total["crd_total"],
-                    mode="lines", name="CRD total", line=dict(color=ACCENT_BLUE),
-                ))
-                fig.add_trace(go.Scatter(
-                    x=[pd.to_datetime(today)], y=[total_crd],
-                    mode="markers", name="Aujourd'hui",
-                    marker=dict(color="red", size=10),
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_total["date"],
+                        y=df_total["crd_total"],
+                        mode="lines",
+                        name="CRD total",
+                        line=dict(color=ACCENT_BLUE),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=[pd.to_datetime(today)],
+                        y=[total_crd],
+                        mode="markers",
+                        name="Aujourd'hui",
+                        marker=dict(color="red", size=10),
+                    )
+                )
                 fig.update_layout(**plotly_time_series_layout(xaxis_title="Mois", yaxis_title="CRD total (€)"))
                 self._chart_crd.set_figure(fig)
 
@@ -524,6 +561,7 @@ class CreditsOverviewPanel(QWidget):
     def _refresh_credit_combo(self) -> None:
         try:
             from services.credits import list_credits_by_person
+
             # Tous crédits (actifs + inactifs) pour permettre la modification
             df = list_credits_by_person(self._conn, person_id=self._person_id, only_active=False)
             self._upd_combo.blockSignals(True)
@@ -569,6 +607,7 @@ class CreditsOverviewPanel(QWidget):
             if date_str:
                 try:
                     import datetime as dt
+
                     d = dt.date.fromisoformat(date_str[:10])
                     self._upd_date_debut.setDate(QDate(d.year, d.month, d.day))
                 except Exception:
@@ -602,20 +641,20 @@ class CreditsOverviewPanel(QWidget):
             )
 
             data = {
-                "person_id":                     self._person_id,
-                "account_id":                    account_id,
-                "nom":                           nom,
-                "banque":                        banque,
-                "type_credit":                   self._new_type.currentText(),
-                "capital_emprunte":              self._new_capital.value(),
-                "taux_nominal":                  self._new_taux.value(),
-                "taeg":                          self._new_taeg.value(),
-                "duree_mois":                    self._new_duree.value(),
-                "mensualite_theorique":          self._new_mensu.value(),
+                "person_id": self._person_id,
+                "account_id": account_id,
+                "nom": nom,
+                "banque": banque,
+                "type_credit": self._new_type.currentText(),
+                "capital_emprunte": self._new_capital.value(),
+                "taux_nominal": self._new_taux.value(),
+                "taeg": self._new_taeg.value(),
+                "duree_mois": self._new_duree.value(),
+                "mensualite_theorique": self._new_mensu.value(),
                 "assurance_mensuelle_theorique": self._new_assurance.value(),
-                "date_debut":                    self._new_date_debut.date().toString("yyyy-MM-dd"),
-                "actif":                         1 if self._new_actif.isChecked() else 0,
-                "payer_account_id":              None,
+                "date_debut": self._new_date_debut.date().toString("yyyy-MM-dd"),
+                "actif": 1 if self._new_actif.isChecked() else 0,
+                "payer_account_id": None,
             }
             credit_id = upsert_credit(self._conn, data)
 
@@ -655,8 +694,8 @@ class CreditsOverviewPanel(QWidget):
 
     def _save_updated_credit(self) -> None:
         try:
-            from services.credits import upsert_credit
             from services import panel_data_access as pda
+            from services.credits import upsert_credit
 
             credit_id = self._upd_combo.currentData()
             if credit_id is None:
@@ -672,20 +711,20 @@ class CreditsOverviewPanel(QWidget):
                 return
 
             data = {
-                "person_id":                     int(row["person_id"]),
-                "account_id":                    int(row["account_id"]),
-                "nom":                           self._upd_nom.text().strip() or None,
-                "banque":                        self._upd_banque.text().strip() or None,
-                "type_credit":                   self._upd_type.currentText(),
-                "capital_emprunte":              self._upd_capital.value(),
-                "taux_nominal":                  self._upd_taux.value(),
-                "taeg":                          self._upd_taeg.value(),
-                "duree_mois":                    self._upd_duree.value(),
-                "mensualite_theorique":          self._upd_mensu.value(),
+                "person_id": int(row["person_id"]),
+                "account_id": int(row["account_id"]),
+                "nom": self._upd_nom.text().strip() or None,
+                "banque": self._upd_banque.text().strip() or None,
+                "type_credit": self._upd_type.currentText(),
+                "capital_emprunte": self._upd_capital.value(),
+                "taux_nominal": self._upd_taux.value(),
+                "taeg": self._upd_taeg.value(),
+                "duree_mois": self._upd_duree.value(),
+                "mensualite_theorique": self._upd_mensu.value(),
                 "assurance_mensuelle_theorique": self._upd_assurance.value(),
-                "date_debut":                    self._upd_date_debut.date().toString("yyyy-MM-dd"),
-                "actif":                         1 if self._upd_actif.isChecked() else 0,
-                "payer_account_id":              None,
+                "date_debut": self._upd_date_debut.date().toString("yyyy-MM-dd"),
+                "actif": 1 if self._upd_actif.isChecked() else 0,
+                "payer_account_id": None,
             }
             upsert_credit(self._conn, data)
 
@@ -713,10 +752,12 @@ class CreditsOverviewPanel(QWidget):
 
     def _generate_amortissement(self, credit_id: int, status_label: QLabel) -> None:
         try:
-            from services.credits import (
-                build_amortissement, replace_amortissement, CreditParams,
-            )
             from services import panel_data_access as pda
+            from services.credits import (
+                CreditParams,
+                build_amortissement,
+                replace_amortissement,
+            )
 
             row = pda.get_credit_by_id(self._conn, credit_id)
             if not row:

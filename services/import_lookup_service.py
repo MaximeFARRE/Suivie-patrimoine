@@ -3,8 +3,11 @@ Lookups utilisés par la page d'import : personnes et comptes.
 Centralise les requêtes de résolution nom→id et filtrage de comptes
 afin que la UI n'exécute plus de SQL directement.
 """
+
 import logging
+
 import pandas as pd
+
 from services import repositories as repo
 
 logger = logging.getLogger(__name__)

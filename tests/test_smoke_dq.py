@@ -1,7 +1,8 @@
-import pytest
 import pandas as pd
-from services.projections import run_projection, ScenarioParams
+
 from services.portfolio import compute_positions_v1
+from services.projections import ScenarioParams, run_projection
+
 
 def test_dq09_projection_missing_cashflow_graceful_degradation():
     """
@@ -39,21 +40,23 @@ def test_dq03_bourse_missing_price_graceful_handling():
     Vérifie qu'un actif sans prix connu retourne 'missing_price' et ne plante pas.
     compute_positions_v1 travaille sur asset_id (entier) — pas symbol.
     """
-    tx_df = pd.DataFrame([
-        {
-            "id": 1,
-            "account_id": 1,
-            "person_id": 1,
-            "asset_id": 42,
-            "asset_symbol": "AAPL",
-            "asset_name": "Apple Inc.",
-            "type": "ACHAT",
-            "date": "2023-01-01",
-            "quantity": 10.0,
-            "price": 150.0,
-            "amount": 1500.0,
-        }
-    ])
+    tx_df = pd.DataFrame(
+        [
+            {
+                "id": 1,
+                "account_id": 1,
+                "person_id": 1,
+                "asset_id": 42,
+                "asset_symbol": "AAPL",
+                "asset_name": "Apple Inc.",
+                "type": "ACHAT",
+                "date": "2023-01-01",
+                "quantity": 10.0,
+                "price": 150.0,
+                "amount": 1500.0,
+            }
+        ]
+    )
     # Prix absents → latest_prices vide de l'actif
     latest_prices = pd.DataFrame(columns=["asset_id", "price"])
 
@@ -67,7 +70,7 @@ def test_dq01_liquidites_missing_fx_graceful_handling(conn_with_person):
     Vérifie que les liquidités en devise étrangère manquante sont filtrées/ignorées sans crash.
     """
     from services.liquidites import get_liquidites_summary
-    
+
     conn_with_person.execute(
         "INSERT INTO accounts (person_id, name, account_type, currency) VALUES (1, 'Banque USD', 'BANQUE', 'USD')"
     )
@@ -75,7 +78,7 @@ def test_dq01_liquidites_missing_fx_graceful_handling(conn_with_person):
         "INSERT INTO transactions (account_id, person_id, type, date, amount) VALUES (2, 1, 'DEPOT', '2023-01-01', 1000.0)"
     )
     conn_with_person.commit()
-    
+
     summary = get_liquidites_summary(conn_with_person, person_id=1)
     assert isinstance(summary, dict)
     assert "total_eur" in summary or "total" in summary

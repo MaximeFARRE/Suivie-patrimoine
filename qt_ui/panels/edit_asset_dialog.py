@@ -2,14 +2,24 @@
 Dialog de modification d'un actif (nom, symbole, devise).
 Calqué sur TransactionEditDialog de compte_bourse_panel.py.
 """
+
 import logging
-from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout,
-    QLabel, QLineEdit, QComboBox,
-)
+
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QVBoxLayout,
+)
+
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_INPUT, STYLE_BTN_SUCCESS,
+    BG_PRIMARY,
+    STYLE_BTN_SUCCESS,
+    STYLE_INPUT,
     STYLE_STATUS_ERROR,
 )
 
@@ -56,9 +66,7 @@ class EditAssetDialog(QDialog):
 
         root.addLayout(form)
 
-        self._warning_label = QLabel(
-            "⚠️  Si vous modifiez le symbole, l'historique local des prix sera mis à jour."
-        )
+        self._warning_label = QLabel("⚠️  Si vous modifiez le symbole, l'historique local des prix sera mis à jour.")
         self._warning_label.setStyleSheet("color: #f59e0b; font-size: 11px;")
         self._warning_label.setWordWrap(True)
         self._warning_label.setVisible(False)
@@ -82,6 +90,7 @@ class EditAssetDialog(QDialog):
 
     def _prefill(self) -> None:
         from services import repositories as repo
+
         asset = repo.get_asset_by_id(self._conn, self._asset_id)
         if asset is None:
             self._error_label.setText(f"Actif introuvable (id={self._asset_id}).")
@@ -118,6 +127,7 @@ class EditAssetDialog(QDialog):
 
         try:
             from services import repositories as repo
+
             repo.update_asset(self._conn, self._asset_id, name, symbol, currency)
         except ValueError as e:
             self._error_label.setText(str(e))

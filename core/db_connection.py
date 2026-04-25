@@ -8,9 +8,11 @@ Ordre d'initialisation :
   2. seed_minimal()  → insère les données de base si la DB est vide
   3. get_conn()      → retourne la connexion singleton
 """
+
 import logging
 import threading
-from services.db import get_conn, init_db, seed_minimal, ensure_credits_migrations
+
+from services.db import ensure_credits_migrations, get_conn, init_db, seed_minimal
 
 _logger = logging.getLogger(__name__)
 _conn = None

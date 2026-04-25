@@ -5,12 +5,8 @@ from services import revenus_repository as rr
 
 def test_revenus_consolides_include_passive_income(conn_with_person):
     conn = conn_with_person
-    conn.execute(
-        "INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'CTO', 'CTO', 'EUR')"
-    )
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-06-01', 'Salaire', 900)"
-    )
+    conn.execute("INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'CTO', 'CTO', 'EUR')")
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-06-01', 'Salaire', 900)")
     conn.execute(
         "INSERT INTO transactions(date, person_id, account_id, type, amount, fees) VALUES ('2025-06-05', 1, 2, 'DIVIDENDE', 40, 0)"
     )

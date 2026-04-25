@@ -5,13 +5,15 @@ Vérifie que les pages s'instancient, câblent les bons services et
 gèrent un cas nominal sans lever d'exception.
 Les tests Qt tournent en mode offscreen (aucune fenêtre visible).
 """
+
 import os
-import sys
 import sqlite3
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+import sys
 from contextlib import ExitStack
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 # Plateforme offscreen — doit être positionné avant toute import PyQt6
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -24,14 +26,16 @@ os.environ.setdefault(
 
 # AA_ShareOpenGLContexts doit être positionné AVANT la création du QApplication.
 # Il permet d'importer QWebEngineWidgets (utilisé par GoalsProjectionPage) sans erreur.
-from PyQt6.QtWidgets import QApplication as _QApp
 from PyQt6.QtCore import Qt as _Qt
+from PyQt6.QtWidgets import QApplication as _QApp
+
 _QApp.setAttribute(_Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
 # Import de GoalsProjectionPage au niveau module (avant QApp) pour que
 # QWebEngineWidgets soit chargé avant la création de l'instance QApplication.
 try:
     from qt_ui.pages.goals_projection_page import GoalsProjectionPage as _GoalsPage
+
     _GOALS_PAGE_AVAILABLE = True
 except Exception:
     _GoalsPage = None  # type: ignore
@@ -40,10 +44,12 @@ except Exception:
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def qapp():
     """QApplication singleton pour la session de test."""
     from PyQt6.QtWidgets import QApplication
+
     app = QApplication.instance() or QApplication(sys.argv)
     yield app
 
@@ -72,12 +78,10 @@ def conn_with_people(mem_conn):
     mem_conn.execute("INSERT INTO people(name) VALUES ('Alice')")
     mem_conn.execute("INSERT INTO people(name) VALUES ('Bob')")
     mem_conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (1, 'PEA Alice', 'PEA', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (1, 'PEA Alice', 'PEA', 'EUR')"
     )
     mem_conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (2, 'Banque Bob', 'BANQUE', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (2, 'Banque Bob', 'BANQUE', 'EUR')"
     )
     mem_conn.commit()
     return mem_conn
@@ -85,15 +89,18 @@ def conn_with_people(mem_conn):
 
 # ── Tests Recherche globale ───────────────────────────────────────────────────
 
+
 class TestGlobalSearch:
     """Vérifie l'intégration service → main_window (sans instancier la fenêtre entière)."""
 
     def test_empty_query_returns_empty(self, mem_conn):
         from services.global_search_service import query_global_search
+
         assert query_global_search(mem_conn, "   ") == []
 
     def test_person_found_in_results(self, conn_with_people):
         from services.global_search_service import query_global_search
+
         results = query_global_search(conn_with_people, "alice")
         kinds = {r["kind"] for r in results}
         assert "person" in kinds
@@ -102,18 +109,21 @@ class TestGlobalSearch:
 
     def test_account_returned_with_person(self, conn_with_people):
         from services.global_search_service import query_global_search
+
         results = query_global_search(conn_with_people, "alice")
         kinds = {r["kind"] for r in results}
         assert "account" in kinds
 
     def test_unknown_query_returns_empty(self, conn_with_people):
         from services.global_search_service import query_global_search
+
         results = query_global_search(conn_with_people, "zzz_inconnu_999")
         assert results == []
 
     def test_payload_types_are_safe(self, conn_with_people):
         """Vérifie que les payloads ne contiennent pas de types bruts Row sqlite3."""
         from services.global_search_service import query_global_search
+
         results = query_global_search(conn_with_people, "alice")
         for item in results:
             assert isinstance(item["kind"], str)
@@ -126,16 +136,19 @@ class TestGlobalSearch:
 
 # ── Tests Import Page ─────────────────────────────────────────────────────────
 
+
 class TestImportPage:
     """Vérifie que la page s'instancie et câble les services correctement."""
 
     def test_page_instantiates(self, qapp, mem_conn):
         from qt_ui.pages.import_page import ImportPage
+
         page = ImportPage(mem_conn)
         assert page is not None
 
     def test_person_combo_populated(self, qapp, conn_with_people):
         from qt_ui.pages.import_page import ImportPage
+
         page = ImportPage(conn_with_people)
         page.refresh()
         items = [page._person_combo.itemText(i) for i in range(page._person_combo.count())]
@@ -144,6 +157,7 @@ class TestImportPage:
 
     def test_mode_switch_does_not_crash(self, qapp, conn_with_people):
         from qt_ui.pages.import_page import ImportPage
+
         page = ImportPage(conn_with_people)
         page.refresh()
         for i in range(page._mode_combo.count()):
@@ -152,17 +166,20 @@ class TestImportPage:
     def test_import_lookup_service_used(self, conn_with_people):
         """get_person_id_by_name doit retrouver Alice par nom."""
         from services import import_lookup_service as lookup
+
         pid = lookup.get_person_id_by_name(conn_with_people, "Alice")
         assert pid == 1
 
     def test_list_accounts_by_types(self, conn_with_people):
         from services import import_lookup_service as lookup
+
         accounts = lookup.list_accounts_by_types(conn_with_people, 1, ["PEA"])
         assert len(accounts) == 1
         assert accounts[0]["name"] == "PEA Alice"
 
 
 # ── Tests Goals Projection Page ───────────────────────────────────────────────
+
 
 class TestGoalsProjectionPage:
     """Vérifie que la page se charge et délègue correctement aux services."""
@@ -214,6 +231,7 @@ class TestGoalsProjectionPage:
     def test_service_get_projection_base_no_data(self, mem_conn):
         """Sans snapshot, get_projection_base_for_scope renvoie une structure valide."""
         from services.projections import get_projection_base_for_scope
+
         base = get_projection_base_for_scope(mem_conn, "family")
         assert base["scope_type"] == "family"
         assert "net_worth" in base
@@ -221,14 +239,18 @@ class TestGoalsProjectionPage:
 
     def test_service_list_goals_empty(self, mem_conn):
         import pandas as pd
+
         from services.goals_projection_repository import list_goals
+
         goals = list_goals(mem_conn, "family", None)
         assert isinstance(goals, pd.DataFrame)
         assert goals.empty
 
     def test_service_list_scenarios_empty(self, mem_conn):
         import pandas as pd
+
         from services.goals_projection_repository import list_scenarios
+
         scenarios = list_scenarios(mem_conn, "family", None)
         assert isinstance(scenarios, pd.DataFrame)
         assert scenarios.empty
@@ -237,6 +259,7 @@ class TestGoalsProjectionPage:
         """run_legacy_projection doit renvoyer un DataFrame valide avec les colonnes attendues."""
         from services.projection_service import ProjectionService
         from services.projections import ScenarioParams
+
         # ScenarioParams est un dataclass sans args obligatoires — on utilise les valeurs par défaut
         params = ScenarioParams()
         params.label = "Test"

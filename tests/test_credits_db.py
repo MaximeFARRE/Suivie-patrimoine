@@ -3,27 +3,28 @@ Tests DB pour le module services/credits.py.
 Couvre : upsert_credit, replace_amortissement, get_credit_kpis,
          get_crd_a_date, cout_reel_mois_credit_via_bankin.
 """
+
 import pytest
+
 from services.credits import (
-    upsert_credit,
-    get_credit_by_account,
-    replace_amortissement,
-    get_amortissements,
-    get_credit_kpis,
-    get_crd_a_date,
     cout_reel_mois_credit_via_bankin,
+    get_amortissements,
+    get_crd_a_date,
+    get_credit_by_account,
+    get_credit_kpis,
+    replace_amortissement,
+    upsert_credit,
 )
 
-
 # ─── fixture ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def conn_credit(conn):
     """Connexion avec une personne et un compte CREDIT."""
     conn.execute("INSERT INTO people(name) VALUES ('Alice')")
     conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (1, 'Crédit immo', 'CREDIT', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (1, 'Crédit immo', 'CREDIT', 'EUR')"
     )
     conn.commit()
     return conn
@@ -49,6 +50,7 @@ def _base_credit_data(account_id: int = 1) -> dict:
 
 
 # ─── upsert_credit ───────────────────────────────────────────────────────────
+
 
 def test_upsert_credit_creation(conn_credit):
     """upsert_credit crée la fiche et retourne un id > 0."""
@@ -82,13 +84,10 @@ def test_upsert_credit_payer_account_id_persiste(conn_credit):
     """payer_account_id est correctement stocké et récupéré."""
     # Créer un deuxième compte (courant, qui paie le crédit)
     conn_credit.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (1, 'Compte courant', 'BANQUE', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (1, 'Compte courant', 'BANQUE', 'EUR')"
     )
     conn_credit.commit()
-    payer_id = conn_credit.execute(
-        "SELECT id FROM accounts WHERE name = 'Compte courant'"
-    ).fetchone()[0]
+    payer_id = conn_credit.execute("SELECT id FROM accounts WHERE name = 'Compte courant'").fetchone()[0]
 
     data = _base_credit_data()
     data["payer_account_id"] = payer_id
@@ -99,6 +98,7 @@ def test_upsert_credit_payer_account_id_persiste(conn_credit):
 
 
 # ─── replace_amortissement ───────────────────────────────────────────────────
+
 
 def _sample_rows(credit_id: int = 1) -> list:
     return [
@@ -141,6 +141,7 @@ def test_replace_amortissement_vide_nettoie(conn_credit):
 
 # ─── get_credit_kpis ─────────────────────────────────────────────────────────
 
+
 def test_get_credit_kpis_crd_toujours_positif_ou_zero(conn_credit):
     """Le CRD estimé retourné par get_credit_kpis ne peut pas être négatif."""
     credit_id = upsert_credit(conn_credit, _base_credit_data())
@@ -173,9 +174,7 @@ def test_get_credit_kpis_crd_toujours_positif_ou_zero(conn_credit):
     assert kpis["crd_estime"] >= 0.0
     assert kpis["interets_restants"] >= 0.0
     assert kpis["assurance_restante"] >= 0.0
-    assert kpis["cout_restant_total"] == pytest.approx(
-        kpis["interets_restants"] + kpis["assurance_restante"]
-    )
+    assert kpis["cout_restant_total"] == pytest.approx(kpis["interets_restants"] + kpis["assurance_restante"])
 
 
 def test_get_credit_kpis_sans_amortissement(conn_credit):
@@ -188,6 +187,7 @@ def test_get_credit_kpis_sans_amortissement(conn_credit):
 
 
 # ─── get_crd_a_date ────────────────────────────────────────────────────────
+
 
 def _insert_amortissement_2_mois(conn, credit_id: int) -> None:
     """Insere deux échéances pour les tests de CRD."""
@@ -253,25 +253,21 @@ def test_get_crd_a_date_sans_amortissement_retourne_zero(conn_credit):
 
 # ─── cout_reel_mois_credit_via_bankin ──────────────────────────────────────
 
+
 @pytest.fixture
 def conn_credit_avec_payer(conn_credit):
     """Ajoute un compte payeur et le lie au crédit."""
     conn_credit.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (1, 'Compte courant', 'BANQUE', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (1, 'Compte courant', 'BANQUE', 'EUR')"
     )
     conn_credit.commit()
-    payer_id = conn_credit.execute(
-        "SELECT id FROM accounts WHERE name = 'Compte courant'"
-    ).fetchone()[0]
+    payer_id = conn_credit.execute("SELECT id FROM accounts WHERE name = 'Compte courant'").fetchone()[0]
 
     data = _base_credit_data()
     data["payer_account_id"] = payer_id
     upsert_credit(conn_credit, data)
 
-    credit_id = conn_credit.execute(
-        "SELECT id FROM credits WHERE account_id = 1"
-    ).fetchone()[0]
+    credit_id = conn_credit.execute("SELECT id FROM credits WHERE account_id = 1").fetchone()[0]
 
     return conn_credit, credit_id, payer_id
 
@@ -279,18 +275,14 @@ def conn_credit_avec_payer(conn_credit):
 def test_cout_reel_sans_payer_account_retourne_0(conn_credit):
     """Si payer_account_id est NULL, le coût réel est 0.0."""
     credit_id = upsert_credit(conn_credit, _base_credit_data())  # payer_account_id=None
-    cout = cout_reel_mois_credit_via_bankin(
-        conn_credit, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01"
-    )
+    cout = cout_reel_mois_credit_via_bankin(conn_credit, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01")
     assert cout == pytest.approx(0.0)
 
 
 def test_cout_reel_sans_transaction_retourne_0(conn_credit_avec_payer):
     """Aucune transaction pour ce mois : coût = 0.0."""
     conn, credit_id, _ = conn_credit_avec_payer
-    cout = cout_reel_mois_credit_via_bankin(
-        conn, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01"
-    )
+    cout = cout_reel_mois_credit_via_bankin(conn, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01")
     assert cout == pytest.approx(0.0)
 
 
@@ -302,13 +294,11 @@ def test_cout_reel_avec_transaction_echeance_pret(conn_credit_avec_payer):
     conn.execute(
         "INSERT INTO transactions(person_id, account_id, date, type, amount, category) "
         "VALUES (1, ?, '2025-01-15', 'DEPENSE', 1025.0, 'echeance pret immobilier')",
-        (payer_id,)
+        (payer_id,),
     )
     conn.commit()
 
-    cout = cout_reel_mois_credit_via_bankin(
-        conn, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01"
-    )
+    cout = cout_reel_mois_credit_via_bankin(conn, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01")
     assert cout == pytest.approx(1025.0)
 
 
@@ -320,11 +310,9 @@ def test_cout_reel_ignore_transactions_hors_mois(conn_credit_avec_payer):
     conn.execute(
         "INSERT INTO transactions(person_id, account_id, date, type, amount, category) "
         "VALUES (1, ?, '2025-02-15', 'DEPENSE', 1025.0, 'echeance pret immobilier')",
-        (payer_id,)
+        (payer_id,),
     )
     conn.commit()
 
-    cout = cout_reel_mois_credit_via_bankin(
-        conn, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01"
-    )
+    cout = cout_reel_mois_credit_via_bankin(conn, credit_id=credit_id, mois_yyyy_mm_01="2025-01-01")
     assert cout == pytest.approx(0.0)

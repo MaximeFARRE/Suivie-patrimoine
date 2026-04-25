@@ -2,14 +2,16 @@
 services/pdf_export.py
 Génère un bilan patrimonial en PDF (fpdf2 + matplotlib).
 """
+
 from __future__ import annotations
 
 import io
 from datetime import date
 from typing import Optional
 
-import pandas as pd
 import matplotlib
+import pandas as pd
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -17,6 +19,7 @@ import matplotlib.pyplot as plt
 def _try_import_fpdf():
     try:
         from fpdf import FPDF
+
         return FPDF
     except ImportError:
         return None
@@ -31,7 +34,7 @@ def _money(x: float) -> str:
 
 def _pie_image(labels: list, values: list) -> Optional[bytes]:
     """Génère un camembert matplotlib et le retourne en bytes PNG."""
-    filtered = [(l, v) for l, v in zip(labels, values) if v > 0]
+    filtered = [(label, value) for label, value in zip(labels, values) if value > 0]
     if not filtered:
         return None
     fl, fv = zip(*filtered)
@@ -168,7 +171,9 @@ def generate_patrimoine_pdf(
             pdf.image(img_buf, x=30, w=150)
         except Exception:
             # Fallback : écrire dans un fichier temporaire
-            import tempfile, os
+            import os
+            import tempfile
+
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
             tmp.write(pie_bytes)
             tmp.close()
@@ -188,7 +193,9 @@ def generate_patrimoine_pdf(
             try:
                 pdf.image(img_buf2, x=10, w=190)
             except Exception:
-                import tempfile, os
+                import os
+                import tempfile
+
                 tmp2 = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                 tmp2.write(line_bytes)
                 tmp2.close()

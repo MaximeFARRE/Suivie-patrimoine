@@ -2,17 +2,20 @@
 Repository Immobilier — biens directs (RP, locatif, parking, etc.)
 et remontée automatique des SCPI détenues dans des comptes titres / AV.
 """
+
 import sqlite3
-import pandas as pd
 from typing import Optional
+
+import pandas as pd
 
 from services.repositories import df_from_rows
 
-
 # ── Création / migration des tables ───────────────────────────────────────────
 
+
 def ensure_tables(conn: sqlite3.Connection) -> None:
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS immobiliers (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             name                TEXT    NOT NULL UNIQUE,
@@ -26,9 +29,11 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
             effective_date      TEXT    NOT NULL DEFAULT (date('now')),
             created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
         );
-    """)
+    """
+    )
 
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS immobilier_shares (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
             property_id       INTEGER NOT NULL,
@@ -40,9 +45,11 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (property_id) REFERENCES immobiliers(id) ON DELETE CASCADE,
             FOREIGN KEY (person_id)   REFERENCES people(id)      ON DELETE CASCADE
         );
-    """)
+    """
+    )
 
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS immobilier_history (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             property_id         INTEGER NOT NULL,
@@ -56,33 +63,46 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
             created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (property_id) REFERENCES immobiliers(id) ON DELETE CASCADE
         );
-    """)
+    """
+    )
 
     conn.commit()
 
 
 # ── CRUD biens directs ────────────────────────────────────────────────────────
 
+
 def list_properties(conn: sqlite3.Connection) -> pd.DataFrame:
     ensure_tables(conn)
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT id, name, property_type, valuation_eur, debt_eur,
                monthly_rent_eur, annual_charges_eur, annual_tax_eur,
                note, effective_date, created_at
         FROM immobiliers ORDER BY name;
-    """).fetchall()
-    return df_from_rows(rows, [
-        "id", "name", "property_type", "valuation_eur", "debt_eur",
-        "monthly_rent_eur", "annual_charges_eur", "annual_tax_eur",
-        "note", "effective_date", "created_at",
-    ])
+    """
+    ).fetchall()
+    return df_from_rows(
+        rows,
+        [
+            "id",
+            "name",
+            "property_type",
+            "valuation_eur",
+            "debt_eur",
+            "monthly_rent_eur",
+            "annual_charges_eur",
+            "annual_tax_eur",
+            "note",
+            "effective_date",
+            "created_at",
+        ],
+    )
 
 
 def get_property(conn: sqlite3.Connection, property_id: int):
     ensure_tables(conn)
-    return conn.execute(
-        "SELECT * FROM immobiliers WHERE id = ?;", (property_id,)
-    ).fetchone()
+    return conn.execute("SELECT * FROM immobiliers WHERE id = ?;", (property_id,)).fetchone()
 
 
 def create_property(
@@ -101,30 +121,44 @@ def create_property(
     if not effective_date:
         effective_date = pd.Timestamp.today().date().isoformat()
 
-    cur = conn.execute("""
+    cur = conn.execute(
+        """
         INSERT INTO immobiliers(name, property_type, valuation_eur, debt_eur,
             monthly_rent_eur, annual_charges_eur, annual_tax_eur, note, effective_date)
         VALUES (?,?,?,?,?,?,?,?,?);
-    """, (
-        name.strip(), property_type,
-        float(valuation_eur), float(debt_eur),
-        float(monthly_rent_eur), float(annual_charges_eur), float(annual_tax_eur),
-        note, effective_date,
-    ))
+    """,
+        (
+            name.strip(),
+            property_type,
+            float(valuation_eur),
+            float(debt_eur),
+            float(monthly_rent_eur),
+            float(annual_charges_eur),
+            float(annual_tax_eur),
+            note,
+            effective_date,
+        ),
+    )
     property_id = int(cur.lastrowid)
 
     # Entrée initiale dans l'historique
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO immobilier_history(property_id, valuation_eur, debt_eur,
             monthly_rent_eur, annual_charges_eur, annual_tax_eur, note, effective_date)
         VALUES (?,?,?,?,?,?,?,?);
-    """, (
-        property_id,
-        float(valuation_eur), float(debt_eur),
-        float(monthly_rent_eur), float(annual_charges_eur), float(annual_tax_eur),
-        f"Création{' — ' + note if note else ''}",
-        effective_date,
-    ))
+    """,
+        (
+            property_id,
+            float(valuation_eur),
+            float(debt_eur),
+            float(monthly_rent_eur),
+            float(annual_charges_eur),
+            float(annual_tax_eur),
+            f"Création{' — ' + note if note else ''}",
+            effective_date,
+        ),
+    )
 
     conn.commit()
     return property_id
@@ -146,30 +180,44 @@ def update_property(
     if not effective_date:
         effective_date = pd.Timestamp.today().date().isoformat()
 
-    conn.execute("""
+    conn.execute(
+        """
         UPDATE immobiliers
         SET property_type = ?, valuation_eur = ?, debt_eur = ?,
             monthly_rent_eur = ?, annual_charges_eur = ?, annual_tax_eur = ?,
             note = ?, effective_date = ?
         WHERE id = ?;
-    """, (
-        property_type,
-        float(valuation_eur), float(debt_eur),
-        float(monthly_rent_eur), float(annual_charges_eur), float(annual_tax_eur),
-        note, effective_date,
-        int(property_id),
-    ))
+    """,
+        (
+            property_type,
+            float(valuation_eur),
+            float(debt_eur),
+            float(monthly_rent_eur),
+            float(annual_charges_eur),
+            float(annual_tax_eur),
+            note,
+            effective_date,
+            int(property_id),
+        ),
+    )
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO immobilier_history(property_id, valuation_eur, debt_eur,
             monthly_rent_eur, annual_charges_eur, annual_tax_eur, note, effective_date)
         VALUES (?,?,?,?,?,?,?,?);
-    """, (
-        int(property_id),
-        float(valuation_eur), float(debt_eur),
-        float(monthly_rent_eur), float(annual_charges_eur), float(annual_tax_eur),
-        note, effective_date,
-    ))
+    """,
+        (
+            int(property_id),
+            float(valuation_eur),
+            float(debt_eur),
+            float(monthly_rent_eur),
+            float(annual_charges_eur),
+            float(annual_tax_eur),
+            note,
+            effective_date,
+        ),
+    )
 
     conn.commit()
 
@@ -184,39 +232,56 @@ def replace_shares(
 ) -> None:
     """Insère ou met à jour la quote-part d'une personne pour un bien."""
     ensure_tables(conn)
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO immobilier_shares(property_id, person_id, pct, initial_invest_eur, initial_date)
         VALUES (?,?,?,?,?)
         ON CONFLICT(property_id, person_id) DO UPDATE SET
             pct               = excluded.pct,
             initial_invest_eur = excluded.initial_invest_eur,
             initial_date      = excluded.initial_date;
-    """, (int(property_id), int(person_id), float(pct), float(initial_invest_eur), initial_date))
+    """,
+        (int(property_id), int(person_id), float(pct), float(initial_invest_eur), initial_date),
+    )
     conn.commit()
 
 
 def list_history(conn: sqlite3.Connection, property_id: int, limit: int = 20) -> pd.DataFrame:
     ensure_tables(conn)
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT id, effective_date, created_at, valuation_eur, debt_eur,
                monthly_rent_eur, annual_charges_eur, annual_tax_eur, note
         FROM immobilier_history
         WHERE property_id = ?
         ORDER BY effective_date DESC, id DESC
         LIMIT ?;
-    """, (int(property_id), int(limit))).fetchall()
-    return df_from_rows(rows, [
-        "id", "effective_date", "created_at",
-        "valuation_eur", "debt_eur", "monthly_rent_eur",
-        "annual_charges_eur", "annual_tax_eur", "note",
-    ])
+    """,
+        (int(property_id), int(limit)),
+    ).fetchall()
+    return df_from_rows(
+        rows,
+        [
+            "id",
+            "effective_date",
+            "created_at",
+            "valuation_eur",
+            "debt_eur",
+            "monthly_rent_eur",
+            "annual_charges_eur",
+            "annual_tax_eur",
+            "note",
+        ],
+    )
 
 
 # ── Positions par personne (biens directs) ────────────────────────────────────
 
+
 def list_positions_for_person(conn: sqlite3.Connection, person_id: int) -> pd.DataFrame:
     ensure_tables(conn)
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT
             imm.id            AS property_id,
             imm.name,
@@ -235,23 +300,39 @@ def list_positions_for_person(conn: sqlite3.Connection, person_id: int) -> pd.Da
         JOIN immobiliers imm ON imm.id = s.property_id
         WHERE s.person_id = ?
         ORDER BY imm.name;
-    """, (int(person_id),)).fetchall()
-    return df_from_rows(rows, [
-        "property_id", "name", "property_type",
-        "valuation_eur", "debt_eur", "monthly_rent_eur",
-        "annual_charges_eur", "annual_tax_eur", "note", "effective_date",
-        "pct", "initial_invest_eur", "initial_date",
-    ])
+    """,
+        (int(person_id),),
+    ).fetchall()
+    return df_from_rows(
+        rows,
+        [
+            "property_id",
+            "name",
+            "property_type",
+            "valuation_eur",
+            "debt_eur",
+            "monthly_rent_eur",
+            "annual_charges_eur",
+            "annual_tax_eur",
+            "note",
+            "effective_date",
+            "pct",
+            "initial_invest_eur",
+            "initial_date",
+        ],
+    )
 
 
 # ── Remontée automatique des SCPI ─────────────────────────────────────────────
+
 
 def list_scpi_positions_for_person(conn: sqlite3.Connection, person_id: int) -> pd.DataFrame:
     """
     Détecte automatiquement les SCPI détenues via des transactions (comptes titres / AV).
     asset_type = 'scpi' → on calcule les parts nettes et la dernière valorisation connue.
     """
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT
             a.id     AS asset_id,
             a.symbol,
@@ -272,14 +353,25 @@ def list_scpi_positions_for_person(conn: sqlite3.Connection, person_id: int) -> 
           AND a.asset_type = 'scpi'
         GROUP BY a.id
         HAVING qty > 0.0001;
-    """, (int(person_id),)).fetchall()
-    return df_from_rows(rows, [
-        "asset_id", "symbol", "name", "currency",
-        "qty", "last_price", "last_price_date",
-    ])
+    """,
+        (int(person_id),),
+    ).fetchall()
+    return df_from_rows(
+        rows,
+        [
+            "asset_id",
+            "symbol",
+            "name",
+            "currency",
+            "qty",
+            "last_price",
+            "last_price_date",
+        ],
+    )
 
 
 # ── Agrégation directe + SCPI ─────────────────────────────────────────────────
+
 
 def aggregate_positions(conn: sqlite3.Connection, person_id: int) -> pd.DataFrame:
     """
@@ -297,34 +389,36 @@ def aggregate_positions(conn: sqlite3.Connection, person_id: int) -> pd.DataFram
     direct_names_lower = set()
 
     for _, r in direct_df.iterrows():
-        pct      = float(r.get("pct")              or 100.0)
+        pct = float(r.get("pct") or 100.0)
         pct_frac = pct / 100.0
-        valo     = float(r.get("valuation_eur")    or 0.0)
-        dette    = float(r.get("debt_eur")         or 0.0)
-        loyer_m  = float(r.get("monthly_rent_eur") or 0.0)
+        valo = float(r.get("valuation_eur") or 0.0)
+        dette = float(r.get("debt_eur") or 0.0)
+        loyer_m = float(r.get("monthly_rent_eur") or 0.0)
         loyers_a = loyer_m * 12.0
-        rdt      = (loyers_a / valo * 100.0) if valo > 0 else None
+        rdt = (loyers_a / valo * 100.0) if valo > 0 else None
 
         name = str(r.get("name") or "")
         direct_names_lower.add(name.lower())
 
-        rows.append({
-            "property_id":     r.get("property_id"),
-            "nom":             name,
-            "type":            str(r.get("property_type") or "AUTRE"),
-            "source":          "Direct",
-            "valeur_totale":   valo,
-            "pct":             pct,
-            "valeur_detenue":  valo * pct_frac,
-            "dette_totale":    dette,
-            "dette_imputable": dette * pct_frac,
-            "valeur_nette":    (valo - dette) * pct_frac,
-            "loyer_mensuel":   loyer_m,
-            "loyers_annuels":  loyers_a,
-            "rendement_brut":  rdt,
-            "note":            str(r.get("note") or ""),
-            "effective_date":  str(r.get("effective_date") or ""),
-        })
+        rows.append(
+            {
+                "property_id": r.get("property_id"),
+                "nom": name,
+                "type": str(r.get("property_type") or "AUTRE"),
+                "source": "Direct",
+                "valeur_totale": valo,
+                "pct": pct,
+                "valeur_detenue": valo * pct_frac,
+                "dette_totale": dette,
+                "dette_imputable": dette * pct_frac,
+                "valeur_nette": (valo - dette) * pct_frac,
+                "loyer_mensuel": loyer_m,
+                "loyers_annuels": loyers_a,
+                "rendement_brut": rdt,
+                "note": str(r.get("note") or ""),
+                "effective_date": str(r.get("effective_date") or ""),
+            }
+        )
 
     # --- SCPI automatiques ---
     scpi_df = list_scpi_positions_for_person(conn, person_id)
@@ -335,31 +429,33 @@ def aggregate_positions(conn: sqlite3.Connection, person_id: int) -> pd.DataFram
         if name.lower() in direct_names_lower:
             continue
 
-        qty   = float(r.get("qty")        or 0.0)
+        qty = float(r.get("qty") or 0.0)
         price = float(r.get("last_price") or 0.0)
-        valo  = qty * price
+        valo = qty * price
 
-        rows.append({
-            "property_id":     None,
-            "nom":             name,
-            "type":            "SCPI",
-            "source":          "Actif existant",
-            "valeur_totale":   valo,
-            "pct":             100.0,
-            "valeur_detenue":  valo,
-            "dette_totale":    0.0,
-            "dette_imputable": 0.0,
-            "valeur_nette":    valo,
-            "loyer_mensuel":   0.0,
-            "loyers_annuels":  0.0,
-            "rendement_brut":  None,
-            "note":            (
-                f"{r.get('symbol','')} · {qty:.4f} parts"
-                f" @ {price:.2f} {r.get('currency','EUR')}"
-                f" · prix au {r.get('last_price_date','?')}"
-            ),
-            "effective_date":  str(r.get("last_price_date") or ""),
-        })
+        rows.append(
+            {
+                "property_id": None,
+                "nom": name,
+                "type": "SCPI",
+                "source": "Actif existant",
+                "valeur_totale": valo,
+                "pct": 100.0,
+                "valeur_detenue": valo,
+                "dette_totale": 0.0,
+                "dette_imputable": 0.0,
+                "valeur_nette": valo,
+                "loyer_mensuel": 0.0,
+                "loyers_annuels": 0.0,
+                "rendement_brut": None,
+                "note": (
+                    f"{r.get('symbol','')} · {qty:.4f} parts"
+                    f" @ {price:.2f} {r.get('currency','EUR')}"
+                    f" · prix au {r.get('last_price_date','?')}"
+                ),
+                "effective_date": str(r.get("last_price_date") or ""),
+            }
+        )
 
     if not rows:
         return pd.DataFrame()

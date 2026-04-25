@@ -20,10 +20,10 @@ Usage :
             finally:
                 self._overlay.stop()
 """
-import math
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsBlurEffect
-from PyQt6.QtCore import Qt, QTimer, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont
+
+from PyQt6.QtCore import QRectF, Qt, QTimer
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtWidgets import QGraphicsBlurEffect, QLabel, QVBoxLayout, QWidget
 
 
 class _SpinnerWidget(QWidget):
@@ -36,7 +36,7 @@ class _SpinnerWidget(QWidget):
         self.setFixedSize(size, size)
 
         self._timer = QTimer(self)
-        self._timer.setInterval(30)          # ~33 fps
+        self._timer.setInterval(30)  # ~33 fps
         self._timer.timeout.connect(self._tick)
 
     def start(self) -> None:
@@ -57,19 +57,17 @@ class _SpinnerWidget(QWidget):
         pen_width = 3  # Plus fin pour un look moderne
 
         # Arc de fond (gris discret)
-        p.setPen(QPen(QColor(80, 90, 110, 40), pen_width, Qt.PenStyle.SolidLine,
-                      Qt.PenCapStyle.RoundCap))
+        p.setPen(QPen(QColor(80, 90, 110, 40), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         margin = pen_width // 2 + 4
         rect = QRectF(margin, margin, size - 2 * margin, size - 2 * margin)
         p.drawArc(rect, 0, 360 * 16)
 
         # Arc animé (bleu accent)
-        gradient_color = QColor(96, 165, 250)   # ACCENT_BLUE #60a5fa
-        p.setPen(QPen(gradient_color, pen_width, Qt.PenStyle.SolidLine,
-                      Qt.PenCapStyle.RoundCap))
+        gradient_color = QColor(96, 165, 250)  # ACCENT_BLUE #60a5fa
+        p.setPen(QPen(gradient_color, pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         # Animation plus fluide
         start_angle = int(-self._angle * 16)
-        span_angle  = int(90 * 16)  # Arc plus court (90° au lieu de 270°)
+        span_angle = int(90 * 16)  # Arc plus court (90° au lieu de 270°)
         p.drawArc(rect, start_angle, span_angle)
         p.end()
 
@@ -105,12 +103,14 @@ class LoadingOverlay(QWidget):
         layout.addWidget(self._label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Fond semi-transparent
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             #LoadingOverlay {
                 background-color: rgba(14, 17, 23, 140);
                 border-radius: 8px;
             }
-        """)
+        """
+        )
 
         self._blur_radius = 10
 
@@ -122,7 +122,7 @@ class LoadingOverlay(QWidget):
         """Affiche l'overlay et démarre l'animation."""
         self._label.setText(text)
         self._label.setVisible(bool(text))
-        
+
         parent = self.parentWidget()
         if parent:
             self.resize(parent.size())
@@ -134,7 +134,7 @@ class LoadingOverlay(QWidget):
                 blur_effect = QGraphicsBlurEffect()
                 blur_effect.setBlurRadius(self._blur_radius)
                 parent.setGraphicsEffect(blur_effect)
-        
+
         self.raise_()
         self.show()
         self._spinner.start()

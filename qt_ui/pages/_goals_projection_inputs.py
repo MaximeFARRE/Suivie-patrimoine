@@ -7,6 +7,7 @@ Ce module contient les fonctions pures (sans widgets Qt) qui transforment
 les valeurs de l'UI en ScenarioParams et vice-versa. Il ne touche pas à
 l'affichage, seulement à la collecte et la normalisation des paramètres.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -15,15 +16,15 @@ from services.projections import ScenarioParams
 
 # Mapping paramètre preset → valeur par défaut si preset absent
 _PRESET_FIELD_DEFAULTS: dict[str, float] = {
-    "return_liquidites_pct":  2.0,
-    "return_bourse_pct":      7.0,
-    "return_immobilier_pct":  3.5,
-    "return_pe_pct":          10.0,
+    "return_liquidites_pct": 2.0,
+    "return_bourse_pct": 7.0,
+    "return_immobilier_pct": 3.5,
+    "return_pe_pct": 10.0,
     "return_entreprises_pct": 5.0,
-    "inflation_pct":          2.0,
-    "income_growth_pct":      1.0,
-    "expense_growth_pct":     1.0,
-    "fire_multiple":          25.0,
+    "inflation_pct": 2.0,
+    "income_growth_pct": 1.0,
+    "expense_growth_pct": 1.0,
+    "fire_multiple": 25.0,
 }
 
 
@@ -37,10 +38,7 @@ def extract_preset_values(params: dict) -> dict[str, float]:
     Returns:
         Dict {champ: valeur float} avec fallback sur les defaults.
     """
-    return {
-        field: float(params.get(field, default))
-        for field, default in _PRESET_FIELD_DEFAULTS.items()
-    }
+    return {field: float(params.get(field, default)) for field, default in _PRESET_FIELD_DEFAULTS.items()}
 
 
 def build_scenario_params(
@@ -115,7 +113,8 @@ def extract_scenario_display_row(sc_row: dict, safe_float_fn) -> dict:
         "Excl. RP": "Oui" if int(safe_float_fn(sc_row.get("exclude_primary_residence"), 0)) else "",
         "Inflation %": round(safe_float_fn(sc_row.get("inflation_pct"), 0.0), 2),
         "Épargne personnalisée": (
-            "—" if sc_row.get("monthly_savings_override") is None
+            "—"
+            if sc_row.get("monthly_savings_override") is None
             else round(safe_float_fn(sc_row.get("monthly_savings_override")), 2)
         ),
         "Multiple FIRE": round(safe_float_fn(sc_row.get("fire_multiple"), 25.0), 2),

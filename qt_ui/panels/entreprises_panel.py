@@ -4,22 +4,42 @@ Correctif : ajout d'un onglet "Créer / Modifier" permettant de :
   - créer une nouvelle entreprise avec ses parts,
   - mettre à jour la valorisation d'une entreprise existante.
 """
+
 import logging
+
 import pandas as pd
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFormLayout, QLineEdit, QDoubleSpinBox, QComboBox, QPushButton,
-    QDateEdit, QScrollArea,
-)
-from qt_ui.components.animated_tab import AnimatedTabWidget
 from PyQt6.QtCore import QDate, Qt
-from qt_ui.widgets import DataTableWidget, MetricLabel
-from qt_ui.theme import (
-    BG_PRIMARY, STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS,
-    STYLE_INPUT_FOCUS, STYLE_FORM_LABEL, STYLE_TITLE, STYLE_SECTION,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_TAB_INNER,
-    STYLE_SCROLLAREA, BORDER_SUBTLE, TEXT_SECONDARY,
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
+
+from qt_ui.components.animated_tab import AnimatedTabWidget
+from qt_ui.theme import (
+    BG_PRIMARY,
+    BORDER_SUBTLE,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_FORM_LABEL,
+    STYLE_INPUT_FOCUS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_TAB_INNER,
+    STYLE_TITLE,
+    TEXT_SECONDARY,
+)
+from qt_ui.widgets import DataTableWidget, MetricLabel
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +67,7 @@ class EntreprisesPanel(QWidget):
         tabs.setStyleSheet(STYLE_TAB_INNER)
 
         tabs.addTab(self._build_overview_tab(), "📊  Vue d'ensemble")
-        tabs.addTab(self._build_edit_tab(),     "🏢  Créer / Modifier")
+        tabs.addTab(self._build_edit_tab(), "🏢  Créer / Modifier")
         tabs.currentChanged.connect(self._on_tab_changed)
 
         layout.addWidget(tabs)
@@ -68,10 +88,10 @@ class EntreprisesPanel(QWidget):
 
         # ── Ligne 1 de KPIs : valorisation ────────────────────────────────
         kpi_row1 = QHBoxLayout()
-        self._kpi_nb          = MetricLabel("Nb entreprises", "—")
-        self._kpi_valo_brute  = MetricLabel("Valorisation brute (part)", "—")
-        self._kpi_nette       = MetricLabel("Valeur nette des parts", "—")
-        self._kpi_pv          = MetricLabel("Plus-value latente", "—")
+        self._kpi_nb = MetricLabel("Nb entreprises", "—")
+        self._kpi_valo_brute = MetricLabel("Valorisation brute (part)", "—")
+        self._kpi_nette = MetricLabel("Valeur nette des parts", "—")
+        self._kpi_pv = MetricLabel("Plus-value latente", "—")
         for w2 in (self._kpi_nb, self._kpi_valo_brute, self._kpi_nette, self._kpi_pv):
             kpi_row1.addWidget(w2)
         kpi_row1.addStretch()
@@ -80,9 +100,9 @@ class EntreprisesPanel(QWidget):
         # ── Ligne 2 de KPIs : investissement & dettes ─────────────────────
         kpi_row2 = QHBoxLayout()
         self._kpi_invest = MetricLabel("Investi initial total", "—")
-        self._kpi_cca    = MetricLabel("CCA total", "—")
-        self._kpi_dette  = MetricLabel("Dettes totales", "—")
-        self._kpi_total  = MetricLabel("Total engagé (invest+CCA)", "—")
+        self._kpi_cca = MetricLabel("CCA total", "—")
+        self._kpi_dette = MetricLabel("Dettes totales", "—")
+        self._kpi_total = MetricLabel("Total engagé (invest+CCA)", "—")
         for w2 in (self._kpi_invest, self._kpi_cca, self._kpi_dette, self._kpi_total):
             kpi_row2.addWidget(w2)
         kpi_row2.addStretch()
@@ -299,9 +319,9 @@ class EntreprisesPanel(QWidget):
 
             df = ent_repo.list_positions_for_person(self._conn, person_id=self._person_id)
             if df is None or df.empty:
-                self._table.set_dataframe(pd.DataFrame([{
-                    "Info": "Aucune entreprise. Créez-en une dans l'onglet 🏢 Créer / Modifier."
-                }]))
+                self._table.set_dataframe(
+                    pd.DataFrame([{"Info": "Aucune entreprise. Créez-en une dans l'onglet 🏢 Créer / Modifier."}])
+                )
                 self._kpi_nb.set_content("Nb entreprises", "0")
                 self._kpi_total.set_content("Valeur totale des parts", "0,00 €")
                 return
@@ -312,8 +332,7 @@ class EntreprisesPanel(QWidget):
             try:
                 d = df.copy()
                 # Convertir les colonnes numériques
-                for col in ("valuation_eur", "debt_eur", "pct",
-                            "initial_invest_eur", "cca_eur"):
+                for col in ("valuation_eur", "debt_eur", "pct", "initial_invest_eur", "cca_eur"):
                     if col in d.columns:
                         d[col] = pd.to_numeric(d[col], errors="coerce").fillna(0.0)
 
@@ -327,18 +346,21 @@ class EntreprisesPanel(QWidget):
                 valo_nette = valo_brute - dette_part
                 # Engagements de la personne
                 total_invest = float(d["initial_invest_eur"].sum())
-                total_cca    = float(d["cca_eur"].sum())
+                total_cca = float(d["cca_eur"].sum())
                 total_engage = total_invest + total_cca
                 # Plus-value latente = valeur nette - total engagé
                 pv = valo_nette - total_engage
 
-                fmt = lambda v: f"{v:,.2f} €".replace(",", " ")
+                def fmt(value: float) -> str:
+                    return f"{value:,.2f} €".replace(",", " ")
 
                 self._kpi_valo_brute.set_content("Valorisation brute (part)", fmt(valo_brute))
                 self._kpi_nette.set_content("Valeur nette des parts", fmt(valo_nette))
                 self._kpi_pv.set_content(
-                    "Plus-value latente", f"{pv:+,.2f} €".replace(",", " "),
-                    delta=f"{pv:+.2f}", delta_positive=pv >= 0,
+                    "Plus-value latente",
+                    f"{pv:+,.2f} €".replace(",", " "),
+                    delta=f"{pv:+.2f}",
+                    delta_positive=pv >= 0,
                 )
                 self._kpi_invest.set_content("Investi initial total", fmt(total_invest))
                 self._kpi_cca.set_content("CCA total", fmt(total_cca))
@@ -357,9 +379,7 @@ class EntreprisesPanel(QWidget):
                         h["enterprise_id"] = eid
                         hist_frames.append(h)
                 if hist_frames:
-                    self._hist_table.set_dataframe(
-                        pd.concat(hist_frames, ignore_index=True)
-                    )
+                    self._hist_table.set_dataframe(pd.concat(hist_frames, ignore_index=True))
             except Exception as e:
                 logger.warning("Erreur chargement historique entreprises: %s", e, exc_info=True)
 
@@ -372,6 +392,7 @@ class EntreprisesPanel(QWidget):
     def _refresh_enterprise_combo(self) -> None:
         try:
             from services import entreprises_repository as ent_repo
+
             df = ent_repo.list_enterprises(self._conn)
             # Bloquer les signaux pendant le remplissage pour éviter les appels multiples
             self._upd_enterprise.blockSignals(True)
@@ -390,6 +411,7 @@ class EntreprisesPanel(QWidget):
         """Pré-remplit les champs de mise à jour avec les valeurs actuelles."""
         try:
             from services import entreprises_repository as ent_repo
+
             eid = self._upd_enterprise.currentData()
             if eid is None:
                 return
@@ -437,9 +459,9 @@ class EntreprisesPanel(QWidget):
                     enterprise_id=eid,
                     shares_by_person_id={
                         self._person_id: {
-                            "pct":          pct,
-                            "initial":      self._ent_initial.value(),
-                            "cca":          self._ent_cca.value(),
+                            "pct": pct,
+                            "initial": self._ent_initial.value(),
+                            "cca": self._ent_cca.value(),
                             "initial_date": self._ent_invest_date.date().toString("yyyy-MM-dd"),
                         }
                     },
@@ -486,9 +508,7 @@ class EntreprisesPanel(QWidget):
             )
             name = self._upd_enterprise.currentText()
             self._update_status.setStyleSheet(STYLE_STATUS_SUCCESS)
-            self._update_status.setText(
-                f"✅  « {name} » mise à jour → {self._upd_valo.value():,.2f} €."
-            )
+            self._update_status.setText(f"✅  « {name} » mise à jour → {self._upd_valo.value():,.2f} €.")
         except Exception as e:
             logger.error("Erreur mise à jour entreprise: %s", e, exc_info=True)
             self._update_status.setStyleSheet(STYLE_STATUS_ERROR)

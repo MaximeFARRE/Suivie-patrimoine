@@ -20,8 +20,12 @@ def test_portfolio_weekly_returns_are_cashflow_adjusted():
         }
     )
 
-    with patch("services.bourse_advanced_analytics.bourse_analytics.get_bourse_weekly_series", return_value=weekly), patch(
-        "services.bourse_advanced_analytics._portfolio_weekly_net_flows_eur", return_value=flows
+    with (
+        patch(
+            "services.bourse_advanced_analytics.bourse_analytics.get_bourse_weekly_series",
+            return_value=weekly,
+        ),
+        patch("services.bourse_advanced_analytics._portfolio_weekly_net_flows_eur", return_value=flows),
     ):
         out = baa._portfolio_weekly_returns(conn=None, person_id=1)
 
@@ -46,8 +50,9 @@ def test_risk_return_cagr_is_driven_by_adjusted_returns_not_raw_value():
         }
     )
 
-    with patch("services.bourse_advanced_analytics._portfolio_weekly_returns", return_value=adjusted), patch(
-        "services.bourse_advanced_analytics._compute_beta", return_value=None
+    with (
+        patch("services.bourse_advanced_analytics._portfolio_weekly_returns", return_value=adjusted),
+        patch("services.bourse_advanced_analytics._compute_beta", return_value=None),
     ):
         payload = baa.get_risk_return_payload(conn=None, person_id=1)
 

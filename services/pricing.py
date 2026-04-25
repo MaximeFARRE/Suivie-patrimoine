@@ -1,7 +1,7 @@
 from __future__ import annotations
+
 import datetime as dt
 import time
-import requests
 
 _PRICE_CACHE_TTL_SEC = 15
 _PRICE_CACHE: dict[str, tuple[float, tuple[float | None, str]]] = {}

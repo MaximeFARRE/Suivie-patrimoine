@@ -1,6 +1,7 @@
 import logging
-import pandas as pd
 from typing import Optional
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,7 @@ def _compute_savings_streak(savings_series: pd.Series) -> int:
 
 
 def _empty_passive_income_df() -> pd.DataFrame:
-    return pd.DataFrame(
-        columns=["mois", "dividendes", "interets", "revenus_passifs"]
-    )
+    return pd.DataFrame(columns=["mois", "dividendes", "interets", "revenus_passifs"])
 
 
 def get_passive_income_monthly_for_scope(
@@ -126,7 +125,6 @@ def get_passive_income_monthly_for_scope(
     return piv[["mois", "dividendes", "interets", "revenus_passifs"]].sort_values("mois").reset_index(drop=True)
 
 
-
 def get_cashflow_for_scope(
     conn,
     scope_type: str,
@@ -164,16 +162,30 @@ def get_cashflow_for_scope(
 
     try:
         rows_inc = conn.execute(income_sql.format(where_clause=where_clause), params).fetchall()
-        income_df = pd.DataFrame(rows_inc, columns=["mois", "amount"]) if rows_inc else pd.DataFrame(columns=["mois", "amount"])
+        income_df = (
+            pd.DataFrame(rows_inc, columns=["mois", "amount"]) if rows_inc else pd.DataFrame(columns=["mois", "amount"])
+        )
     except Exception as exc:
-        logger.exception("get_cashflow_for_scope: échec requête revenus (scope=%s id=%s)", scope, scope_id, exc_info=exc)
+        logger.exception(
+            "get_cashflow_for_scope: échec requête revenus (scope=%s id=%s)",
+            scope,
+            scope_id,
+            exc_info=exc,
+        )
         income_df = pd.DataFrame(columns=["mois", "amount"])
 
     try:
         rows_exp = conn.execute(expense_sql.format(where_clause=where_clause), params).fetchall()
-        expense_df = pd.DataFrame(rows_exp, columns=["mois", "amount"]) if rows_exp else pd.DataFrame(columns=["mois", "amount"])
+        expense_df = (
+            pd.DataFrame(rows_exp, columns=["mois", "amount"]) if rows_exp else pd.DataFrame(columns=["mois", "amount"])
+        )
     except Exception as exc:
-        logger.exception("get_cashflow_for_scope: échec requête dépenses (scope=%s id=%s)", scope, scope_id, exc_info=exc)
+        logger.exception(
+            "get_cashflow_for_scope: échec requête dépenses (scope=%s id=%s)",
+            scope,
+            scope_id,
+            exc_info=exc,
+        )
         expense_df = pd.DataFrame(columns=["mois", "amount"])
 
     try:
@@ -184,7 +196,11 @@ def get_cashflow_for_scope(
 
     income_with_passive = pd.merge(
         income_df.rename(columns={"amount": "income_manual"}),
-        passive_df[["mois", "revenus_passifs"]] if not passive_df.empty else pd.DataFrame(columns=["mois", "revenus_passifs"]),
+        (
+            passive_df[["mois", "revenus_passifs"]]
+            if not passive_df.empty
+            else pd.DataFrame(columns=["mois", "revenus_passifs"])
+        ),
         on="mois",
         how="outer",
     )
@@ -198,10 +214,7 @@ def get_cashflow_for_scope(
         if "revenus_passifs" in income_with_passive.columns
         else pd.Series(0.0, index=income_with_passive.index)
     )
-    income_with_passive["income"] = (
-        income_manual.fillna(0.0)
-        + revenus_passifs.fillna(0.0)
-    )
+    income_with_passive["income"] = income_manual.fillna(0.0) + revenus_passifs.fillna(0.0)
 
     merged = pd.merge(
         income_with_passive[["mois", "income"]],
@@ -252,31 +265,21 @@ def get_person_monthly_savings_series(
             person_id,
             exc,
         )
-        return pd.DataFrame(
-            columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"]
-        )
+        return pd.DataFrame(columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"])
 
     if df_raw is None or df_raw.empty:
-        return pd.DataFrame(
-            columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"]
-        )
+        return pd.DataFrame(columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"])
 
     n_mois = int(n_mois)
     if n_mois <= 0:
-        return pd.DataFrame(
-            columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"]
-        )
+        return pd.DataFrame(columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"])
 
     # Renommage des colonnes SSOT → colonnes attendues
-    df = df_raw.rename(
-        columns={"income": "revenus", "expenses": "depenses", "savings": "epargne"}
-    ).copy()
+    df = df_raw.rename(columns={"income": "revenus", "expenses": "depenses", "savings": "epargne"}).copy()
     df["mois_dt"] = pd.to_datetime(df["mois_dt"], errors="coerce").dt.to_period("M").dt.to_timestamp()
     df = df.dropna(subset=["mois_dt"]).copy()
     if df.empty:
-        return pd.DataFrame(
-            columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"]
-        )
+        return pd.DataFrame(columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"])
 
     # Ancre de fin: mois fourni (même si date intra-mois) sinon dernier mois observé.
     end_anchor = pd.to_datetime(end_month, errors="coerce") if end_month else pd.NaT
@@ -288,12 +291,7 @@ def get_person_monthly_savings_series(
     df = df[df["mois_dt"] <= end_anchor].copy()
     start_anchor = end_anchor - pd.DateOffset(months=n_mois - 1)
     full_months = pd.date_range(start=start_anchor, end=end_anchor, freq="MS")
-    df = (
-        df.set_index("mois_dt")
-        .reindex(full_months, fill_value=0.0)
-        .rename_axis("mois_dt")
-        .reset_index()
-    )
+    df = df.set_index("mois_dt").reindex(full_months, fill_value=0.0).rename_axis("mois_dt").reset_index()
     for col in ["revenus", "depenses", "epargne"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
     df["epargne"] = df["revenus"] - df["depenses"]
@@ -301,15 +299,14 @@ def get_person_monthly_savings_series(
 
     # Taux d'épargne : NA si pas de revenus ce mois-là
     df["taux_epargne"] = df.apply(
-        lambda r: round(float(r["epargne"]) / float(r["revenus"]) * 100, 1)
-        if _to_float(r["revenus"]) > 0 else pd.NA,
+        lambda r: (round(float(r["epargne"]) / float(r["revenus"]) * 100, 1) if _to_float(r["revenus"]) > 0 else pd.NA),
         axis=1,
     )
 
     return df[["mois", "revenus", "depenses", "epargne", "taux_epargne"]].reset_index(drop=True)
 
-def compute_savings_metrics(conn_or_df, person_id: Optional[int] = None,
-                            n_mois: int = 24) -> dict:
+
+def compute_savings_metrics(conn_or_df, person_id: Optional[int] = None, n_mois: int = 24) -> dict:
     """
     Point d'entrée unique (SSOT) pour toutes les métriques d'épargne.
 
@@ -348,8 +345,9 @@ def compute_savings_metrics(conn_or_df, person_id: Optional[int] = None,
 
     if df is None or df.empty:
         logger.info(
-            "compute_savings_metrics: aucune donnée revenus/dépenses "
-            "pour person_id=%s (n_mois=%s)", person_id, n_mois,
+            "compute_savings_metrics: aucune donnée revenus/dépenses " "pour person_id=%s (n_mois=%s)",
+            person_id,
+            n_mois,
         )
         return _empty_savings_result()
 
@@ -362,8 +360,8 @@ def compute_savings_metrics(conn_or_df, person_id: Optional[int] = None,
     else:
         avg_rate_12m = 0.0
         logger.debug(
-            "compute_savings_metrics: aucun mois avec revenus > 0 "
-            "sur les 12 derniers mois (person_id=%s)", person_id,
+            "compute_savings_metrics: aucun mois avec revenus > 0 " "sur les 12 derniers mois (person_id=%s)",
+            person_id,
         )
 
     months_with_data = last12[
@@ -402,9 +400,7 @@ def _empty_savings_result() -> dict:
         "avg_monthly_savings": 0.0,
         "savings_rate_12m": 0.0,
         "positive_savings_streak": 0,
-        "monthly_series": pd.DataFrame(
-            columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"]
-        ),
+        "monthly_series": pd.DataFrame(columns=["mois", "revenus", "depenses", "epargne", "taux_epargne"]),
         "avg_rate_12m": 0.0,
         "avg_savings_12m": 0.0,
         "has_cashflow": False,
@@ -437,8 +433,8 @@ def get_family_flux_summary(
         par_compte           DataFrame[Personne, Compte, Solde (flux), Opérations]
         dernieres_operations DataFrame — 50 dernières opérations (colonnes dispo)
     """
-    from services import repositories as repo
     from services import calculations as calc
+    from services import repositories as repo
 
     today = pd.Timestamp.today()
     yr = int(year) if year is not None else int(today.year)
@@ -467,16 +463,14 @@ def get_family_flux_summary(
     for _, p in people.iterrows():
         pid = int(p["id"])
         tx_p = tx_all[tx_all["person_id"] == pid].copy()
-        lignes_p.append({
-            "Personne": str(p["name"]),
-            "Solde (flux)": calc.solde_compte(tx_p),
-            "Opérations": len(tx_p),
-        })
-    df_par_personne = (
-        pd.DataFrame(lignes_p)
-        .sort_values("Solde (flux)", ascending=False)
-        .reset_index(drop=True)
-    )
+        lignes_p.append(
+            {
+                "Personne": str(p["name"]),
+                "Solde (flux)": calc.solde_compte(tx_p),
+                "Opérations": len(tx_p),
+            }
+        )
+    df_par_personne = pd.DataFrame(lignes_p).sort_values("Solde (flux)", ascending=False).reset_index(drop=True)
 
     # ── Ventilation par compte ────────────────────────────────────────────
     df_par_compte = pd.DataFrame()
@@ -485,48 +479,51 @@ def get_family_flux_summary(
         for _, a in accounts.iterrows():
             acc_id = int(a["id"])
             pid = int(a["person_id"])
-            person_name = (
-                str(people.loc[people["id"] == pid, "name"].iloc[0])
-                if pid in people["id"].values
-                else "?"
-            )
+            person_name = str(people.loc[people["id"] == pid, "name"].iloc[0]) if pid in people["id"].values else "?"
             tx_c = tx_all[tx_all["account_id"] == acc_id].copy()
-            lignes_c.append({
-                "Personne": person_name,
-                "Compte": str(a["name"]),
-                "Solde (flux)": calc.solde_compte(tx_c),
-                "Opérations": len(tx_c),
-            })
-        df_par_compte = (
-            pd.DataFrame(lignes_c)
-            .sort_values("Solde (flux)", ascending=False)
-            .reset_index(drop=True)
-        )
+            lignes_c.append(
+                {
+                    "Personne": person_name,
+                    "Compte": str(a["name"]),
+                    "Solde (flux)": calc.solde_compte(tx_c),
+                    "Opérations": len(tx_c),
+                }
+            )
+        df_par_compte = pd.DataFrame(lignes_c).sort_values("Solde (flux)", ascending=False).reset_index(drop=True)
 
     # ── Dernières opérations ──────────────────────────────────────────────
-    cols_last = ["date", "person_name", "account_name", "type",
-                 "asset_symbol", "amount", "fees", "category", "note"]
+    cols_last = [
+        "date",
+        "person_name",
+        "account_name",
+        "type",
+        "asset_symbol",
+        "amount",
+        "fees",
+        "category",
+        "note",
+    ]
     cols_present = [c for c in cols_last if c in tx_all.columns]
     df_dernieres = tx_all[cols_present].head(50).copy() if cols_present else pd.DataFrame()
 
     return {
-        "solde_total":           solde_total,
-        "cashflow_mois":         cashflow_du_mois,
-        "n_operations":          n_ops,
-        "par_personne":          df_par_personne,
-        "par_compte":            df_par_compte,
-        "dernieres_operations":  df_dernieres,
+        "solde_total": solde_total,
+        "cashflow_mois": cashflow_du_mois,
+        "n_operations": n_ops,
+        "par_personne": df_par_personne,
+        "par_compte": df_par_compte,
+        "dernieres_operations": df_dernieres,
     }
 
 
 def _empty_flux_result() -> dict:
     """Résultat vide retourné par get_family_flux_summary en cas d'erreur."""
     return {
-        "solde_total":          0.0,
-        "cashflow_mois":        0.0,
-        "n_operations":         0,
-        "par_personne":         pd.DataFrame(columns=["Personne", "Solde (flux)", "Opérations"]),
-        "par_compte":           pd.DataFrame(columns=["Personne", "Compte", "Solde (flux)", "Opérations"]),
+        "solde_total": 0.0,
+        "cashflow_mois": 0.0,
+        "n_operations": 0,
+        "par_personne": pd.DataFrame(columns=["Personne", "Solde (flux)", "Opérations"]),
+        "par_compte": pd.DataFrame(columns=["Personne", "Compte", "Solde (flux)", "Opérations"]),
         "dernieres_operations": pd.DataFrame(),
     }
 
@@ -548,9 +545,7 @@ def _compute_savings_kpis_from_cashflow(monthly_df: pd.DataFrame) -> dict:
             "has_cashflow": False,
         }
 
-    with_data = monthly_df[
-        (monthly_df["income"] != 0.0) | (monthly_df["expenses"] != 0.0)
-    ].copy()
+    with_data = monthly_df[(monthly_df["income"] != 0.0) | (monthly_df["expenses"] != 0.0)].copy()
     recent = with_data.sort_values("mois_dt", ascending=False).head(12)
 
     if recent.empty:
@@ -562,11 +557,7 @@ def _compute_savings_kpis_from_cashflow(monthly_df: pd.DataFrame) -> dict:
         avg_income = _to_float(recent["income"].mean())
         avg_expenses = _to_float(recent["expenses"].mean())
         avg_savings = avg_income - avg_expenses
-        monthly_rates = (
-            recent.loc[recent["income"] > 0, "savings"]
-            / recent.loc[recent["income"] > 0, "income"]
-            * 100.0
-        )
+        monthly_rates = recent.loc[recent["income"] > 0, "savings"] / recent.loc[recent["income"] > 0, "income"] * 100.0
         savings_rate = _to_float(monthly_rates.mean()) if not monthly_rates.empty else 0.0
 
     # Streak : série continue de mois avec épargne positive.

@@ -15,24 +15,24 @@ def sens_flux(type_operation: str) -> int:
     Négatifs  : opérations qui DEBITENT le compte (sortie d'argent).
     """
     positifs = {
-        "DEPOT",       # dépôt d'argent sur le compte → +
-        "ENTREE",      # entrée générique (alias DEPOT) → +
-        "CREDIT",      # crédit générique → +
-        "VENTE",       # cession d'actif, cash entrant → +
-        "DIVIDENDE",   # revenu financier → +
-        "INTERETS",    # intérêts reçus → +
-        "LOYER",       # loyer perçu → +
+        "DEPOT",  # dépôt d'argent sur le compte → +
+        "ENTREE",  # entrée générique (alias DEPOT) → +
+        "CREDIT",  # crédit générique → +
+        "VENTE",  # cession d'actif, cash entrant → +
+        "DIVIDENDE",  # revenu financier → +
+        "INTERETS",  # intérêts reçus → +
+        "LOYER",  # loyer perçu → +
         "ABONDEMENT",  # abondement employeur (PEE) → +
     }
     negatifs = {
-        "RETRAIT",              # retrait d'argent du compte → -
-        "SORTIE",               # sortie générique (alias RETRAIT) → -
-        "DEBIT",                # débit générique → -
-        "ACHAT",                # achat d'actif, cash sortant → -
-        "DEPENSE",              # dépense courante → -
-        "FRAIS",                # frais bancaires/courtage → -
-        "IMPOT",                # impôt → -
-        "REMBOURSEMENT_CREDIT", # remboursement d'emprunt → -
+        "RETRAIT",  # retrait d'argent du compte → -
+        "SORTIE",  # sortie générique (alias RETRAIT) → -
+        "DEBIT",  # débit générique → -
+        "ACHAT",  # achat d'actif, cash sortant → -
+        "DEPENSE",  # dépense courante → -
+        "FRAIS",  # frais bancaires/courtage → -
+        "IMPOT",  # impôt → -
+        "REMBOURSEMENT_CREDIT",  # remboursement d'emprunt → -
     }
 
     type_op = (type_operation or "").strip().upper()
@@ -53,6 +53,7 @@ def sens_flux(type_operation: str) -> int:
 def sens_flux_safe(type_operation: str) -> int:
     """Version safe de sens_flux : retourne 0 pour les types inconnus (neutre)."""
     import logging
+
     try:
         return sens_flux(type_operation)
     except ValueError:

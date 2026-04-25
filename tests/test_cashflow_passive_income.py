@@ -5,15 +5,9 @@ from services.cashflow import get_cashflow_for_scope, get_person_monthly_savings
 
 def test_person_cashflow_includes_dividendes_and_interets(conn_with_person):
     conn = conn_with_person
-    conn.execute(
-        "INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'CTO', 'CTO', 'EUR')"
-    )
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Salaire', 1000)"
-    )
-    conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Vie', 300)"
-    )
+    conn.execute("INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'CTO', 'CTO', 'EUR')")
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Salaire', 1000)")
+    conn.execute("INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Vie', 300)")
     conn.execute(
         "INSERT INTO transactions(date, person_id, account_id, type, amount, fees) VALUES ('2025-03-10', 1, 2, 'DIVIDENDE', 50, 0)"
     )
@@ -55,9 +49,7 @@ def test_family_cashflow_includes_passive_income_for_all_people(conn):
 
 def test_monthly_savings_series_uses_passive_income(conn_with_person):
     conn = conn_with_person
-    conn.execute(
-        "INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'PEA', 'PEA', 'EUR')"
-    )
+    conn.execute("INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'PEA', 'PEA', 'EUR')")
     conn.execute(
         "INSERT INTO transactions(date, person_id, account_id, type, amount, fees) VALUES ('2025-05-10', 1, 2, 'DIVIDENDE', 120, 0)"
     )

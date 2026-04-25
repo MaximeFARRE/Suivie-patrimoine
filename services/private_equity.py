@@ -1,7 +1,8 @@
 # services/private_equity.py
 import pandas as pd
+
+from services import market_history, positions
 from services import repositories as repo
-from services import positions, market_history
 from services.asset_panel_mapping import INVESTMENT_ACCOUNT_TYPES, is_asset_type_in_panel
 
 TX_INVEST = "INVEST"
@@ -14,8 +15,10 @@ STATUS_EN_COURS = "EN_COURS"
 STATUS_SORTI = "SORTI"
 STATUS_FAILLITE = "FAILLITE"
 
+
 def _parse_date(s: str) -> pd.Timestamp:
     return pd.to_datetime(s, errors="coerce")
+
 
 def build_pe_positions(projects: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFrame:
     """
@@ -51,13 +54,31 @@ def build_pe_positions(projects: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFrame
     cash_out = tx2[tx2["tx_type"].isin([TX_DISTRIB, TX_VENTE])].groupby("project_id")["amount"].sum()
 
     # Last valo = dernière tx VALO (amount = valeur totale snapshot)
-    valo = tx2[tx2["tx_type"] == TX_VALO].sort_values("date_dt").groupby("project_id").tail(1).set_index("project_id")["amount"]
+    valo = (
+        tx2[tx2["tx_type"] == TX_VALO]
+        .sort_values("date_dt")
+        .groupby("project_id")
+        .tail(1)
+        .set_index("project_id")["amount"]
+    )
 
     # Entry date = première INVEST
-    entry = tx2[tx2["tx_type"] == TX_INVEST].sort_values("date_dt").groupby("project_id").head(1).set_index("project_id")["date_dt"]
+    entry = (
+        tx2[tx2["tx_type"] == TX_INVEST]
+        .sort_values("date_dt")
+        .groupby("project_id")
+        .head(1)
+        .set_index("project_id")["date_dt"]
+    )
 
     # Exit effective : si projet sort i -> exit_date si dispo sinon dernière VENTE
-    last_sale = tx2[tx2["tx_type"] == TX_VENTE].sort_values("date_dt").groupby("project_id").tail(1).set_index("project_id")["date_dt"]
+    last_sale = (
+        tx2[tx2["tx_type"] == TX_VENTE]
+        .sort_values("date_dt")
+        .groupby("project_id")
+        .tail(1)
+        .set_index("project_id")["date_dt"]
+    )
 
     out = projects.copy()
     out["invested"] = out["id"].map(invested).fillna(0.0)
@@ -88,17 +109,26 @@ def build_pe_positions(projects: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFrame
     mask = den > 0
     out.loc[mask, "moic"] = (out.loc[mask, "cash_out"] + out.loc[mask, "value_used"]) / den[mask]
 
-
     return out
+
 
 def compute_pe_kpis(positions: pd.DataFrame) -> dict:
     if positions.empty:
         return {
-            "invested": 0.0, "cash_out": 0.0, "value": 0.0, "pnl": 0.0, "moic": None,
-            "n_total": 0, "n_en_cours": 0, "n_sortis": 0, "n_faillite": 0,
-            "n_en_perte": 0, "n_en_gain": 0,
+            "invested": 0.0,
+            "cash_out": 0.0,
+            "value": 0.0,
+            "pnl": 0.0,
+            "moic": None,
+            "n_total": 0,
+            "n_en_cours": 0,
+            "n_sortis": 0,
+            "n_faillite": 0,
+            "n_en_perte": 0,
+            "n_en_gain": 0,
             "success_rate": None,
-            "avg_holding_days": None, "avg_exit_days": None,
+            "avg_holding_days": None,
+            "avg_exit_days": None,
         }
 
     fees = float(positions["fees"].sum()) if "fees" in positions.columns else 0.0
@@ -129,7 +159,9 @@ def compute_pe_kpis(positions: pd.DataFrame) -> dict:
         success_rate = None
         avg_exit_days = None
 
-    avg_holding_days = float(positions["holding_days"].dropna().mean()) if positions["holding_days"].notna().any() else None
+    avg_holding_days = (
+        float(positions["holding_days"].dropna().mean()) if positions["holding_days"].notna().any() else None
+    )
 
     return {
         "invested": invested,
@@ -148,7 +180,6 @@ def compute_pe_kpis(positions: pd.DataFrame) -> dict:
         "avg_holding_days": avg_holding_days,
         "avg_exit_days": avg_exit_days,
     }
-
 
 
 def build_pe_monthly_series(tx: pd.DataFrame) -> pd.DataFrame:
@@ -258,7 +289,6 @@ def build_pe_portfolio_value_series(projects: pd.DataFrame, tx: pd.DataFrame) ->
     return pd.DataFrame(rows)
 
 
-
 def compute_platform_cash(
     pe_tx: pd.DataFrame,
     cash_tx: pd.DataFrame,
@@ -328,24 +358,34 @@ def compute_platform_cash(
 
         # Cash tx manuels après base_date
         cash_after = c_p[c_p["date_dt"] >= base_date] if not c_p.empty else c_p
-        deposits = float(cash_after[cash_after["tx_type"] == "DEPOSIT"]["amount"].sum()) if not cash_after.empty else 0.0
-        withdraws = float(cash_after[cash_after["tx_type"] == "WITHDRAW"]["amount"].sum()) if not cash_after.empty else 0.0
+        deposits = (
+            float(cash_after[cash_after["tx_type"] == "DEPOSIT"]["amount"].sum()) if not cash_after.empty else 0.0
+        )
+        withdraws = (
+            float(cash_after[cash_after["tx_type"] == "WITHDRAW"]["amount"].sum()) if not cash_after.empty else 0.0
+        )
 
         # Impact PE après base_date
         pe_after = pe_p[pe_p["date_dt"] >= base_date] if not pe_p.empty else pe_p
 
         invest = float(pe_after[pe_after["tx_type"] == "INVEST"]["amount"].sum()) if not pe_after.empty else 0.0
         fees = float(pe_after[pe_after["tx_type"] == "FEES"]["amount"].sum()) if not pe_after.empty else 0.0
-        cash_in = float(pe_after[pe_after["tx_type"].isin(["DISTRIB", "VENTE"])]["amount"].sum()) if not pe_after.empty else 0.0
+        cash_in = (
+            float(pe_after[pe_after["tx_type"].isin(["DISTRIB", "VENTE"])]["amount"].sum())
+            if not pe_after.empty
+            else 0.0
+        )
 
         cash = base_cash + deposits - withdraws + cash_in - invest - fees
 
-        rows.append({
-            "platform": plat,
-            "cash": cash,
-            "last_adjust_date": last_adjust_date,
-            "last_adjust_amount": last_adjust_amount,
-        })
+        rows.append(
+            {
+                "platform": plat,
+                "cash": cash,
+                "last_adjust_date": last_adjust_date,
+                "last_adjust_amount": last_adjust_amount,
+            }
+        )
 
     return pd.DataFrame(rows).sort_values("cash", ascending=False)
 
@@ -459,16 +499,36 @@ def get_account_based_pe_assets_asof(conn, person_id: int, asof_date: str) -> pd
     """
     accounts = repo.list_accounts(conn, person_id=person_id)
     if accounts is None or accounts.empty:
-        return pd.DataFrame(columns=[
-            "asset_id", "symbol", "asset_type", "quantity", "asset_ccy",
-            "last_price", "value_eur", "cost_eur", "pnl_eur", "valuation_status",
-        ])
+        return pd.DataFrame(
+            columns=[
+                "asset_id",
+                "symbol",
+                "asset_type",
+                "quantity",
+                "asset_ccy",
+                "last_price",
+                "value_eur",
+                "cost_eur",
+                "pnl_eur",
+                "valuation_status",
+            ]
+        )
     inv_acc = accounts[accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)].copy()
     if inv_acc.empty:
-        return pd.DataFrame(columns=[
-            "asset_id", "symbol", "asset_type", "quantity", "asset_ccy",
-            "last_price", "value_eur", "cost_eur", "pnl_eur", "valuation_status",
-        ])
+        return pd.DataFrame(
+            columns=[
+                "asset_id",
+                "symbol",
+                "asset_type",
+                "quantity",
+                "asset_ccy",
+                "last_price",
+                "value_eur",
+                "cost_eur",
+                "pnl_eur",
+                "valuation_status",
+            ]
+        )
     inv_account_ids = [int(x) for x in inv_acc["id"].tolist()]
 
     pos = positions.compute_positions_asof(
@@ -478,24 +538,42 @@ def get_account_based_pe_assets_asof(conn, person_id: int, asof_date: str) -> pd
         account_ids=inv_account_ids,
     )
     if pos is None or pos.empty:
-        return pd.DataFrame(columns=[
-            "asset_id", "symbol", "asset_type", "quantity", "asset_ccy",
-            "last_price", "value_eur", "cost_eur", "pnl_eur", "valuation_status",
-        ])
+        return pd.DataFrame(
+            columns=[
+                "asset_id",
+                "symbol",
+                "asset_type",
+                "quantity",
+                "asset_ccy",
+                "last_price",
+                "value_eur",
+                "cost_eur",
+                "pnl_eur",
+                "valuation_status",
+            ]
+        )
 
     aid_num = pd.to_numeric(pos["asset_id"], errors="coerce")
     asset_ids = aid_num.dropna().astype(int).tolist()
     at_map = _account_asset_type_by_id(conn, asset_ids)
     p = pos.copy()
-    p["asset_type"] = aid_num.apply(
-        lambda aid: at_map.get(int(aid), "autre") if pd.notna(aid) else "autre"
-    )
+    p["asset_type"] = aid_num.apply(lambda aid: at_map.get(int(aid), "autre") if pd.notna(aid) else "autre")
     p = p[p["asset_type"].apply(lambda at: is_asset_type_in_panel(at, "private_equity"))].copy()
     if p.empty:
-        return pd.DataFrame(columns=[
-            "asset_id", "symbol", "asset_type", "quantity", "asset_ccy",
-            "last_price", "value_eur", "cost_eur", "pnl_eur", "valuation_status",
-        ])
+        return pd.DataFrame(
+            columns=[
+                "asset_id",
+                "symbol",
+                "asset_type",
+                "quantity",
+                "asset_ccy",
+                "last_price",
+                "value_eur",
+                "cost_eur",
+                "pnl_eur",
+                "valuation_status",
+            ]
+        )
 
     p["quantity"] = pd.to_numeric(p["quantity"], errors="coerce").fillna(0.0)
     p = p[p["quantity"] > 0].copy()
@@ -538,18 +616,20 @@ def get_account_based_pe_assets_asof(conn, person_id: int, asof_date: str) -> pd
 
         px_data = price_cache[cache_key]
         if px_data is None:
-            rows.append({
-                "asset_id": aid,
-                "symbol": sym,
-                "asset_type": atype,
-                "quantity": qty,
-                "asset_ccy": ccy,
-                "last_price": None,
-                "value_eur": None,
-                "cost_eur": None,
-                "pnl_eur": None,
-                "valuation_status": "missing_price",
-            })
+            rows.append(
+                {
+                    "asset_id": aid,
+                    "symbol": sym,
+                    "asset_type": atype,
+                    "quantity": qty,
+                    "asset_ccy": ccy,
+                    "last_price": None,
+                    "value_eur": None,
+                    "cost_eur": None,
+                    "pnl_eur": None,
+                    "valuation_status": "missing_price",
+                }
+            )
             continue
         px, px_ccy, status = px_data
         used_ccy = ccy or str(px_ccy or "EUR").upper()
@@ -597,18 +677,20 @@ def get_account_based_pe_assets_asof(conn, person_id: int, asof_date: str) -> pd
                     cost_eur = (qty * buy_px_native * float(buy_rate)) if buy_rate is not None else None
 
         pnl_eur = (float(value_eur) - float(cost_eur)) if (value_eur is not None and cost_eur is not None) else None
-        rows.append({
-            "asset_id": aid,
-            "symbol": sym,
-            "asset_type": atype,
-            "quantity": qty,
-            "asset_ccy": used_ccy,
-            "last_price": float(px),
-            "value_eur": None if value_eur is None else float(value_eur),
-            "cost_eur": None if cost_eur is None else float(cost_eur),
-            "pnl_eur": None if pnl_eur is None else float(pnl_eur),
-            "valuation_status": status,
-        })
+        rows.append(
+            {
+                "asset_id": aid,
+                "symbol": sym,
+                "asset_type": atype,
+                "quantity": qty,
+                "asset_ccy": used_ccy,
+                "last_price": float(px),
+                "value_eur": None if value_eur is None else float(value_eur),
+                "cost_eur": None if cost_eur is None else float(cost_eur),
+                "pnl_eur": None if pnl_eur is None else float(pnl_eur),
+                "valuation_status": status,
+            }
+        )
     out = pd.DataFrame(rows)
     if out.empty:
         return out

@@ -1,27 +1,62 @@
 """
 Panel Dépenses — remplace ui/depenses_scanner.py
 """
+
 import logging
+from datetime import date
+
 import pandas as pd
 import plotly.express as px
-from datetime import date
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QLineEdit, QGroupBox
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt
 
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_BTN_PRIMARY, STYLE_INPUT, STYLE_GROUP, STYLE_SECTION,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING,
-    STYLE_BTN_UNDO, plotly_layout, plotly_time_series_layout,
+    BG_PRIMARY,
+    STYLE_BTN_PRIMARY,
+    STYLE_BTN_UNDO,
+    STYLE_GROUP,
+    STYLE_INPUT,
+    STYLE_SECTION,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    plotly_layout,
+    plotly_time_series_layout,
 )
-from qt_ui.widgets import PlotlyView, DataTableWidget, KpiCard, LoadingOverlay
+from qt_ui.widgets import DataTableWidget, KpiCard, LoadingOverlay, PlotlyView
 
 logger = logging.getLogger(__name__)
 
-CATEGORIES_DEPENSES = ["Loyer", "Remboursement crédit", "Nourriture", "Éducation", "Transports", "Autres"]
-MOIS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+CATEGORIES_DEPENSES = [
+    "Loyer",
+    "Remboursement crédit",
+    "Nourriture",
+    "Éducation",
+    "Transports",
+    "Autres",
+]
+MOIS_FR = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+]
 
 
 class DepensesPanel(QWidget):
@@ -167,6 +202,7 @@ class DepensesPanel(QWidget):
             return
 
         from services.depenses_repository import ajouter_depense
+
         mois = self._get_mois()
         cat = self._cat_combo.currentText()
         ajouter_depense(self._conn, self._person_id, mois, cat, montant)
@@ -177,6 +213,7 @@ class DepensesPanel(QWidget):
 
     def _on_undo(self) -> None:
         from services.depenses_repository import derniere_depense, supprimer_depense_par_id
+
         mois = self._get_mois()
         last = derniere_depense(self._conn, self._person_id, mois)
         if last is None:
@@ -193,6 +230,7 @@ class DepensesPanel(QWidget):
         self._overlay.start("Chargement des dépenses…")
         try:
             from services.depenses_repository import depenses_du_mois, depenses_par_mois
+
             mois = self._get_mois()
 
             # Données du mois
@@ -213,10 +251,15 @@ class DepensesPanel(QWidget):
             if "categorie" in df_mois.columns and "montant" in df_mois.columns:
                 df_cat = df_mois.groupby("categorie", as_index=False)["montant"].sum()
                 df_cat = df_cat.sort_values("montant", ascending=False)
-                fig_cat = px.bar(df_cat, x="categorie", y="montant",
-                                 template="plotly_dark",
-                                 labels={"categorie": "Catégorie", "montant": "Montant (€)"},
-                                 color="montant", color_continuous_scale="Reds")
+                fig_cat = px.bar(
+                    df_cat,
+                    x="categorie",
+                    y="montant",
+                    template="plotly_dark",
+                    labels={"categorie": "Catégorie", "montant": "Montant (€)"},
+                    color="montant",
+                    color_continuous_scale="Reds",
+                )
                 fig_cat.update_layout(**plotly_layout(showlegend=False))
                 self._chart_cat.set_figure(fig_cat)
 
@@ -229,8 +272,13 @@ class DepensesPanel(QWidget):
                     total_col = [c for c in df_hist.columns if c not in ("mois", "person_id", "person_name")]
                     if total_col:
                         df_hist["total"] = df_hist[total_col].sum(axis=1)
-                        fig_h = px.bar(df_hist, x="mois", y="total", template="plotly_dark",
-                                       labels={"mois": "Mois", "total": "Total dépenses (€)"})
+                        fig_h = px.bar(
+                            df_hist,
+                            x="mois",
+                            y="total",
+                            template="plotly_dark",
+                            labels={"mois": "Mois", "total": "Total dépenses (€)"},
+                        )
                         fig_h.update_layout(**plotly_time_series_layout())
                         self._chart_hist.set_figure(fig_h)
             except Exception as e:

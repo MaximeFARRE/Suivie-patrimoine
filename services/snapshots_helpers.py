@@ -116,8 +116,10 @@ def _snapshot_row_to_dict(
         except (KeyError, IndexError, TypeError, ValueError):
             if warn_invalid_fields:
                 _logger.warning(
-                    "get_person_snapshot_at_week: colonne '%s' absente ou invalide "
-                    "pour person_id=%s semaine=%s", key, person_id, week_str,
+                    "get_person_snapshot_at_week: colonne '%s' absente ou invalide " "pour person_id=%s semaine=%s",
+                    key,
+                    person_id,
+                    week_str,
                 )
             return 0.0
 
@@ -132,4 +134,3 @@ def _snapshot_row_to_dict(
         "ent_value": _val("ent_value"),
         "credits_remaining": _val("credits_remaining"),
     }
-

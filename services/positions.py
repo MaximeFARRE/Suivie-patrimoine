@@ -1,8 +1,13 @@
 from __future__ import annotations
-import pandas as pd
+
 import sqlite3
 
-def compute_positions_asof(conn: sqlite3.Connection, person_id: int, asof_date: str, account_ids: list[int] | None = None) -> pd.DataFrame:
+import pandas as pd
+
+
+def compute_positions_asof(
+    conn: sqlite3.Connection, person_id: int, asof_date: str, account_ids: list[int] | None = None
+) -> pd.DataFrame:
     params = [int(person_id), str(asof_date)]
     where_acc = ""
     if account_ids:
@@ -32,7 +37,7 @@ def compute_positions_asof(conn: sqlite3.Connection, person_id: int, asof_date: 
     ).fetchall()
 
     if not rows:
-        return pd.DataFrame(columns=["account_id","asset_id","symbol","asset_ccy","quantity"])
+        return pd.DataFrame(columns=["account_id", "asset_id", "symbol", "asset_ccy", "quantity"])
 
     _cols_pos = ["account_id", "asset_id", "symbol", "asset_ccy", "type", "quantity"]
     try:
@@ -43,6 +48,6 @@ def compute_positions_asof(conn: sqlite3.Connection, person_id: int, asof_date: 
     df["q_signed"] = df["quantity"]
     df.loc[df["type"] == "VENTE", "q_signed"] = -df.loc[df["type"] == "VENTE", "quantity"]
 
-    g = df.groupby(["account_id","asset_id","symbol","asset_ccy"], as_index=False)["q_signed"].sum()
+    g = df.groupby(["account_id", "asset_id", "symbol", "asset_ccy"], as_index=False)["q_signed"].sum()
     g = g.rename(columns={"q_signed": "quantity"})
     return g[g["quantity"] > 1e-12].copy()

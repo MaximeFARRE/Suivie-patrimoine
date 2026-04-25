@@ -5,22 +5,45 @@ Correctifs :
   - Ajoute un onglet Saisie pour créer des projets et enregistrer des transactions
     (avec champs quantité et prix unitaire).
 """
+
 import logging
+
 import pandas as pd
+from PyQt6.QtCore import QDate
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFormLayout, QLineEdit, QDoubleSpinBox, QComboBox, QPushButton,
-    QDateEdit, QScrollArea, QMessageBox,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
+
 from qt_ui.components.animated_tab import AnimatedTabWidget
-from PyQt6.QtCore import QDate, Qt
-from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS, STYLE_BTN_DANGER,
-    STYLE_INPUT_FOCUS, STYLE_FORM_LABEL, STYLE_TITLE, STYLE_SECTION,
-    STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING, STYLE_TAB_INNER,
-    STYLE_SCROLLAREA, BORDER_SUBTLE,
+    BG_PRIMARY,
+    BORDER_SUBTLE,
+    STYLE_BTN_DANGER,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_FORM_LABEL,
+    STYLE_INPUT_FOCUS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    STYLE_TAB_INNER,
+    STYLE_TITLE,
 )
+from qt_ui.widgets import DataTableWidget, MetricLabel
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +87,7 @@ class PrivateEquityPanel(QWidget):
         tabs.setStyleSheet(STYLE_TAB_INNER)
 
         tabs.addTab(self._build_overview_tab(), "📊  Vue d'ensemble")
-        tabs.addTab(self._build_saisie_tab(),   "➕  Saisie")
+        tabs.addTab(self._build_saisie_tab(), "➕  Saisie")
         tabs.currentChanged.connect(self._on_tab_changed)
 
         layout.addWidget(tabs)
@@ -85,10 +108,10 @@ class PrivateEquityPanel(QWidget):
 
         # ── Ligne 1 de KPIs : vue financière ──────────────────────────────
         kpi_row1 = QHBoxLayout()
-        self._kpi_value    = MetricLabel("Valeur PE totale", "—")
+        self._kpi_value = MetricLabel("Valeur PE totale", "—")
         self._kpi_invested = MetricLabel("Investi total", "—")
-        self._kpi_pnl      = MetricLabel("PnL latent", "—")
-        self._kpi_moic     = MetricLabel("MOIC global", "—")
+        self._kpi_pnl = MetricLabel("PnL latent", "—")
+        self._kpi_moic = MetricLabel("MOIC global", "—")
         for w2 in (self._kpi_value, self._kpi_invested, self._kpi_pnl, self._kpi_moic):
             kpi_row1.addWidget(w2)
         kpi_row1.addStretch()
@@ -96,13 +119,18 @@ class PrivateEquityPanel(QWidget):
 
         # ── Ligne 2 de KPIs : activité & performance ───────────────────────
         kpi_row2 = QHBoxLayout()
-        self._kpi_cash_out   = MetricLabel("Distributions reçues", "—")
-        self._kpi_fees       = MetricLabel("Frais totaux", "—")
-        self._kpi_projets    = MetricLabel("Projets", "—")
-        self._kpi_success    = MetricLabel("Taux de réussite", "—")
-        self._kpi_holding    = MetricLabel("Durée moy. détention", "—")
-        for w2 in (self._kpi_cash_out, self._kpi_fees, self._kpi_projets,
-                   self._kpi_success, self._kpi_holding):
+        self._kpi_cash_out = MetricLabel("Distributions reçues", "—")
+        self._kpi_fees = MetricLabel("Frais totaux", "—")
+        self._kpi_projets = MetricLabel("Projets", "—")
+        self._kpi_success = MetricLabel("Taux de réussite", "—")
+        self._kpi_holding = MetricLabel("Durée moy. détention", "—")
+        for w2 in (
+            self._kpi_cash_out,
+            self._kpi_fees,
+            self._kpi_projets,
+            self._kpi_success,
+            self._kpi_holding,
+        ):
             kpi_row2.addWidget(w2)
         kpi_row2.addStretch()
         layout.addLayout(kpi_row2)
@@ -281,8 +309,12 @@ class PrivateEquityPanel(QWidget):
     def _on_pe_tx_type_changed(self, tx_type: str) -> None:
         """Affiche quantité et prix unitaire seulement pour INVEST et VENTE."""
         show = tx_type in ("INVEST", "VENTE")
-        for widget in (self._pe_tx_qty_lbl, self._pe_tx_quantity,
-                       self._pe_tx_price_lbl, self._pe_tx_unitprice):
+        for widget in (
+            self._pe_tx_qty_lbl,
+            self._pe_tx_quantity,
+            self._pe_tx_price_lbl,
+            self._pe_tx_unitprice,
+        ):
             widget.setVisible(show)
 
     def _set_tx_status(self, text: str, tone: str = "neutral") -> None:
@@ -333,7 +365,9 @@ class PrivateEquityPanel(QWidget):
         project_name = str(tx.get("project_name") or "")
         amount = tx.get("amount")
         try:
-            amount_txt = f"{float(amount):,.2f} €".replace(",", " ") if amount is not None and not pd.isna(amount) else "—"
+            amount_txt = (
+                f"{float(amount):,.2f} €".replace(",", " ") if amount is not None and not pd.isna(amount) else "—"
+            )
         except Exception:
             amount_txt = "—"
 
@@ -357,6 +391,7 @@ class PrivateEquityPanel(QWidget):
 
         try:
             from services import private_equity_repository as pe_repo
+
             pe_repo.delete_pe_transaction(self._conn, tx_id=tx_id)
             self._load_data()
             self._refresh_project_combo()
@@ -384,27 +419,37 @@ class PrivateEquityPanel(QWidget):
 
     def _load_data(self) -> None:
         try:
-            from services import private_equity_repository as pe_repo
             from services import private_equity as pe
+            from services import private_equity_repository as pe_repo
+
             self._btn_delete_tx.setEnabled(False)
             self._pe_tx_raw_df = pd.DataFrame()
 
             asof = pd.Timestamp.today().date().isoformat()
-            account_assets = pe.get_account_based_pe_assets_asof(
-                self._conn, person_id=self._person_id, asof_date=asof
-            )
+            account_assets = pe.get_account_based_pe_assets_asof(self._conn, person_id=self._person_id, asof_date=asof)
             if account_assets is not None and not account_assets.empty:
                 display_cols = [
-                    c for c in [
-                        "symbol", "asset_type", "quantity", "last_price",
-                        "asset_ccy", "value_eur", "cost_eur", "pnl_eur", "valuation_status",
-                    ] if c in account_assets.columns
+                    c
+                    for c in [
+                        "symbol",
+                        "asset_type",
+                        "quantity",
+                        "last_price",
+                        "asset_ccy",
+                        "value_eur",
+                        "cost_eur",
+                        "pnl_eur",
+                        "valuation_status",
+                    ]
+                    if c in account_assets.columns
                 ]
-                self._table_account_assets.set_dataframe(account_assets[display_cols] if display_cols else account_assets)
+                self._table_account_assets.set_dataframe(
+                    account_assets[display_cols] if display_cols else account_assets
+                )
                 if "value_eur" in account_assets.columns:
-                    account_assets_value = _finite_float(
-                        pd.to_numeric(account_assets["value_eur"], errors="coerce").dropna().sum()
-                    ) or 0.0
+                    account_assets_value = (
+                        _finite_float(pd.to_numeric(account_assets["value_eur"], errors="coerce").dropna().sum()) or 0.0
+                    )
                 else:
                     account_assets_value = 0.0
                 if "cost_eur" in account_assets.columns:
@@ -420,18 +465,18 @@ class PrivateEquityPanel(QWidget):
                 else:
                     account_assets_pnl = None
             else:
-                self._table_account_assets.set_dataframe(pd.DataFrame([{
-                    "Info": "Aucun actif mappé Private Equity dans les comptes."
-                }]))
+                self._table_account_assets.set_dataframe(
+                    pd.DataFrame([{"Info": "Aucun actif mappé Private Equity dans les comptes."}])
+                )
                 account_assets_value = 0.0
                 account_assets_invested = None
                 account_assets_pnl = None
 
             projects = pe_repo.list_pe_projects(self._conn, person_id=self._person_id)
             if projects is None or projects.empty:
-                self._table_projects.set_dataframe(pd.DataFrame([{
-                    "Info": "Aucun projet PE. Créez-en un dans l'onglet ➕ Saisie."
-                }]))
+                self._table_projects.set_dataframe(
+                    pd.DataFrame([{"Info": "Aucun projet PE. Créez-en un dans l'onglet ➕ Saisie."}])
+                )
                 self._table_tx.set_dataframe(pd.DataFrame())
                 if account_assets_value > 0:
                     self._kpi_value.set_content("Valeur PE totale", _fmt_eur(account_assets_value))
@@ -439,11 +484,11 @@ class PrivateEquityPanel(QWidget):
                     self._kpi_value.set_content("Valeur PE totale", "—")
                 self._kpi_invested.set_content(
                     "Investi total",
-                    _fmt_eur(account_assets_invested) if account_assets_invested is not None else "—",
+                    (_fmt_eur(account_assets_invested) if account_assets_invested is not None else "—"),
                 )
                 self._kpi_pnl.set_content(
                     "PnL latent",
-                    "—" if account_assets_pnl is None else f"{account_assets_pnl:+,.2f} €".replace(",", " "),
+                    ("—" if account_assets_pnl is None else f"{account_assets_pnl:+,.2f} €".replace(",", " ")),
                     delta="" if account_assets_pnl is None else f"{account_assets_pnl:+.2f}",
                     delta_positive=True if account_assets_pnl is None else account_assets_pnl >= 0,
                 )
@@ -460,26 +505,25 @@ class PrivateEquityPanel(QWidget):
                     self._table_projects.set_dataframe(positions)
                     kpis = pe.compute_pe_kpis(positions)
 
-                    total_val  = (_finite_float(kpis.get("value")) or 0.0) + account_assets_value
-                    total_inv  = (_finite_float(kpis.get("invested")) or 0.0) + (account_assets_invested or 0.0)
-                    pnl        = (_finite_float(kpis.get("pnl")) or 0.0) + (account_assets_pnl or 0.0)
-                    moic       = kpis.get("moic")
-                    cash_out   = _finite_float(kpis.get("cash_out"))
-                    fees       = _finite_float(kpis.get("fees"))
-                    n_total    = int(kpis.get("n_total", 0))
+                    total_val = (_finite_float(kpis.get("value")) or 0.0) + account_assets_value
+                    total_inv = (_finite_float(kpis.get("invested")) or 0.0) + (account_assets_invested or 0.0)
+                    pnl = (_finite_float(kpis.get("pnl")) or 0.0) + (account_assets_pnl or 0.0)
+                    moic = kpis.get("moic")
+                    cash_out = _finite_float(kpis.get("cash_out"))
+                    fees = _finite_float(kpis.get("fees"))
+                    n_total = int(kpis.get("n_total", 0))
                     n_en_cours = int(kpis.get("n_en_cours", 0))
-                    n_sortis   = int(kpis.get("n_sortis", 0))
+                    n_sortis = int(kpis.get("n_sortis", 0))
                     n_faillite = int(kpis.get("n_faillite", 0))
-                    success    = _finite_float(kpis.get("success_rate"))
-                    avg_days   = _finite_float(kpis.get("avg_holding_days"))
+                    success = _finite_float(kpis.get("success_rate"))
+                    avg_days = _finite_float(kpis.get("avg_holding_days"))
 
                     # Ligne 1
                     self._kpi_value.set_content("Valeur PE totale", _fmt_eur(total_val))
-                    self._kpi_invested.set_content(
-                        "Investi total", _fmt_eur(total_inv)
-                    )
+                    self._kpi_invested.set_content("Investi total", _fmt_eur(total_inv))
                     self._kpi_pnl.set_content(
-                        "PnL latent", f"{pnl:+,.2f} €".replace(",", " "),
+                        "PnL latent",
+                        f"{pnl:+,.2f} €".replace(",", " "),
                         delta=f"{pnl:+.2f}",
                         delta_positive=pnl >= 0,
                     )
@@ -489,12 +533,8 @@ class PrivateEquityPanel(QWidget):
                     )
 
                     # Ligne 2
-                    self._kpi_cash_out.set_content(
-                        "Distributions reçues", _fmt_eur(cash_out)
-                    )
-                    self._kpi_fees.set_content(
-                        "Frais totaux", _fmt_eur(fees)
-                    )
+                    self._kpi_cash_out.set_content("Distributions reçues", _fmt_eur(cash_out))
+                    self._kpi_fees.set_content("Frais totaux", _fmt_eur(fees))
                     proj_label = (
                         f"{n_en_cours} en cours"
                         + (f" · {n_sortis} sortis" if n_sortis else "")
@@ -519,8 +559,13 @@ class PrivateEquityPanel(QWidget):
                 try:
                     wanted_cols = [
                         "id",
-                        "project_name", "date", "tx_type",
-                        "amount", "quantity", "unit_price", "note",
+                        "project_name",
+                        "date",
+                        "tx_type",
+                        "amount",
+                        "quantity",
+                        "unit_price",
+                        "note",
                     ]
                     cols = [c for c in wanted_cols if c in tx.columns]
                     self._table_tx.set_dataframe(tx[cols] if cols else tx)
@@ -530,9 +575,9 @@ class PrivateEquityPanel(QWidget):
             else:
                 # Pas encore de transactions → projets bruts
                 self._table_projects.set_dataframe(projects)
-                self._table_tx.set_dataframe(pd.DataFrame([{
-                    "Info": "Aucune transaction. Saisissez-en une dans l'onglet ➕ Saisie."
-                }]))
+                self._table_tx.set_dataframe(
+                    pd.DataFrame([{"Info": "Aucune transaction. Saisissez-en une dans l'onglet ➕ Saisie."}])
+                )
                 self._pe_tx_raw_df = pd.DataFrame()
                 if account_assets_value > 0:
                     self._kpi_value.set_content("Valeur PE totale", _fmt_eur(account_assets_value))
@@ -540,11 +585,11 @@ class PrivateEquityPanel(QWidget):
                     self._kpi_value.set_content("Valeur PE totale", "—")
                 self._kpi_invested.set_content(
                     "Investi total",
-                    _fmt_eur(account_assets_invested) if account_assets_invested is not None else "—",
+                    (_fmt_eur(account_assets_invested) if account_assets_invested is not None else "—"),
                 )
                 self._kpi_pnl.set_content(
                     "PnL latent",
-                    "—" if account_assets_pnl is None else f"{account_assets_pnl:+,.2f} €".replace(",", " "),
+                    ("—" if account_assets_pnl is None else f"{account_assets_pnl:+,.2f} €".replace(",", " ")),
                     delta="" if account_assets_pnl is None else f"{account_assets_pnl:+.2f}",
                     delta_positive=True if account_assets_pnl is None else account_assets_pnl >= 0,
                 )
@@ -561,6 +606,7 @@ class PrivateEquityPanel(QWidget):
     def _refresh_project_combo(self) -> None:
         try:
             from services import private_equity_repository as pe_repo
+
             projects = pe_repo.list_pe_projects(self._conn, person_id=self._person_id)
             self._pe_tx_project.blockSignals(True)
             self._pe_tx_project.clear()
@@ -576,6 +622,7 @@ class PrivateEquityPanel(QWidget):
     def _save_project(self) -> None:
         try:
             from services import private_equity_repository as pe_repo
+
             name = self._pe_proj_name.text().strip()
             if not name:
                 self._pe_proj_status.setStyleSheet(STYLE_STATUS_ERROR)
@@ -606,18 +653,19 @@ class PrivateEquityPanel(QWidget):
     def _save_pe_transaction(self) -> None:
         try:
             from services import private_equity_repository as pe_repo
+
             project_id = self._pe_tx_project.currentData()
             if project_id is None:
                 self._pe_tx_status.setStyleSheet(STYLE_STATUS_ERROR)
                 self._pe_tx_status.setText("❌  Sélectionnez un projet.")
                 return
 
-            tx_type  = self._pe_tx_type.currentText()
+            tx_type = self._pe_tx_type.currentText()
             date_str = self._pe_tx_date.date().toString("yyyy-MM-dd")
-            amount   = self._pe_tx_amount.value()
+            amount = self._pe_tx_amount.value()
 
             # Quantité et prix unitaire : seulement pour INVEST / VENTE
-            quantity   = None
+            quantity = None
             unit_price = None
             if self._pe_tx_quantity.isVisible():
                 q = self._pe_tx_quantity.value()

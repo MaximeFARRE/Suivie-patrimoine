@@ -2,34 +2,53 @@
 Fenêtre principale de l'application Patrimoine.
 Contient la barre de navigation latérale + l'AnimatedStackedWidget central.
 """
+
 import logging
 import time
-from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QPushButton, QLabel, QFrame, QSizePolicy, QStatusBar,
-    QComboBox
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont
 
-from services.common_utils import fmt_amount, row_get
-from services.global_search_service import query_global_search
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
+)
+
+from qt_ui.components.animated_stack import AnimatedStackedWidget
 from qt_ui.pages.famille_page import FamillePage
-from qt_ui.pages.personnes_page import PersonnesPage
-from qt_ui.pages.import_page import ImportPage
 from qt_ui.pages.goals_projection_page import GoalsProjectionPage
+from qt_ui.pages.import_page import ImportPage
+from qt_ui.pages.personnes_page import PersonnesPage
 from qt_ui.pages.settings_page import SettingsPage
 from qt_ui.theme import (
-    BG_PRIMARY, BG_SIDEBAR, BG_CARD, BG_ACTIVE, BORDER_SUBTLE, BORDER_DEFAULT,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_DARK, TEXT_DISABLED,
+    BG_ACTIVE,
+    BG_CARD,
+    BG_PRIMARY,
+    BG_SIDEBAR,
+    BORDER_DEFAULT,
+    BORDER_SUBTLE,
     STYLE_NAV_BTN,
+    TEXT_DARK,
+    TEXT_DISABLED,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
 )
-from qt_ui.components.animated_stack import AnimatedStackedWidget
+from services.common_utils import fmt_amount, row_get
+from services.global_search_service import query_global_search
 
 logger = logging.getLogger(__name__)
 
 
 # ── Background rebuild thread (AM-30) ────────────────────────────────────────
+
 
 class AutoRebuildThread(QThread):
     """
@@ -60,16 +79,17 @@ class AutoRebuildThread(QThread):
     def run(self) -> None:
         try:
             import sqlite3
-            from services.db import DB_PATH
+
             from services import repositories as repo
             from services import snapshots as snap
+            from services.db import DB_PATH
 
             # ── Connexion dédiée à ce thread ────────────────────────────
             conn = sqlite3.connect(str(DB_PATH), check_same_thread=True)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON;")
             conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA cache_size = -32000;")   # 32 MB
+            conn.execute("PRAGMA cache_size = -32000;")  # 32 MB
             conn.execute("PRAGMA synchronous = NORMAL;")
 
             # ── Liste des personnes ─────────────────────────────────────
@@ -84,12 +104,10 @@ class AutoRebuildThread(QThread):
                 if self._is_cancelled:
                     logger.info("AutoRebuildThread cancelled before person")
                     break
-                
+
                 pid = int(person["id"])
                 name = str(person.get("name", f"#{pid}"))
-                self.progress.emit(
-                    f"🔄 Rebuild auto ({i}/{total}) — {name}…"
-                )
+                self.progress.emit(f"🔄 Rebuild auto ({i}/{total}) — {name}…")
                 try:
                     if not snap.has_new_transactions_since_person_watermark(conn, pid):
                         logger.info("AutoRebuild %s : skipped (no new tx)", name)
@@ -99,7 +117,7 @@ class AutoRebuildThread(QThread):
                         person_id=pid,
                         safety_weeks=4,
                         fallback_lookback_days=90,
-                        cancel_check=lambda: self._is_cancelled
+                        cancel_check=lambda: self._is_cancelled,
                     )
                     logger.info(
                         "AutoRebuild %s : %s",
@@ -109,9 +127,7 @@ class AutoRebuildThread(QThread):
                     if bool(result.get("did_run")) and int(result.get("n_ok", 0)) > 0:
                         self._did_work = True
                 except Exception as exc:
-                    logger.warning(
-                        "AutoRebuild %s — erreur ignorée : %s", name, exc
-                    )
+                    logger.warning("AutoRebuild %s — erreur ignorée : %s", name, exc)
 
             conn.close()
             self.finished_ok.emit()
@@ -136,12 +152,14 @@ class NavSidebar(QFrame):
         super().__init__(parent)
         self._mw = main_window
         self.setFixedWidth(220)
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            f"""
             NavSidebar {{
                 background-color: {BG_SIDEBAR};
                 border-right: 1px solid {BORDER_SUBTLE};
             }}
-        """)
+        """
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 16, 8, 16)
@@ -162,7 +180,9 @@ class NavSidebar(QFrame):
 
         # Navigation principale
         nav_label = QLabel("NAVIGATION")
-        nav_label.setStyleSheet(f"color: {TEXT_DISABLED}; font-size: 10px; padding: 8px 16px 4px 16px; letter-spacing: 1px;")
+        nav_label.setStyleSheet(
+            f"color: {TEXT_DISABLED}; font-size: 10px; padding: 8px 16px 4px 16px; letter-spacing: 1px;"
+        )
         layout.addWidget(nav_label)
 
         self._btn_famille = NavButton("🏠  Famille")
@@ -185,7 +205,9 @@ class NavSidebar(QFrame):
 
         # Personnes
         self._person_label = QLabel("PERSONNES")
-        self._person_label.setStyleSheet(f"color: {TEXT_DISABLED}; font-size: 10px; padding: 8px 16px 4px 16px; letter-spacing: 1px;")
+        self._person_label.setStyleSheet(
+            f"color: {TEXT_DISABLED}; font-size: 10px; padding: 8px 16px 4px 16px; letter-spacing: 1px;"
+        )
         layout.addWidget(self._person_label)
 
         self._person_buttons: list[QPushButton] = []
@@ -251,6 +273,7 @@ class NavSidebar(QFrame):
 
 class MainWindow(QMainWindow):
     """Fenêtre principale de l'application."""
+
     _SHOW_GLOBAL_SEARCH = False
 
     def __init__(self, conn):
@@ -343,25 +366,19 @@ class MainWindow(QMainWindow):
             header.setFixedHeight(0)
             return header
 
-        header.setStyleSheet(
-            f"background: {BG_SIDEBAR}; border-bottom: 1px solid {BORDER_SUBTLE};"
-        )
+        header.setStyleSheet(f"background: {BG_SIDEBAR}; border-bottom: 1px solid {BORDER_SUBTLE};")
         row = QHBoxLayout(header)
         row.setContentsMargins(16, 10, 16, 10)
         row.setSpacing(12)
 
         title = QLabel("Recherche globale")
-        title.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 12px; font-weight: bold;"
-        )
+        title.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px; font-weight: bold;")
         row.addWidget(title)
 
         self._search_box = QComboBox()
         self._search_box.setEditable(True)
         self._search_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self._search_box.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
+        self._search_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._search_box.setMinimumWidth(420)
         self._search_box.setMaxVisibleItems(12)
         self._search_box.setStyleSheet(
@@ -388,9 +405,7 @@ class MainWindow(QMainWindow):
 
         line_edit = self._search_box.lineEdit()
         if line_edit is not None:
-            line_edit.setPlaceholderText(
-                "Personne, compte, actif, transaction…"
-            )
+            line_edit.setPlaceholderText("Personne, compte, actif, transaction…")
             line_edit.setClearButtonEnabled(True)
             line_edit.textEdited.connect(self._on_global_search_text_edited)
             line_edit.returnPressed.connect(self._on_global_search_return_pressed)
@@ -561,8 +576,11 @@ class MainWindow(QMainWindow):
         did_work = bool(getattr(self._rebuild_thread, "_did_work", False))
         logger.info("AutoRebuild terminé — did_work=%s", did_work)
         self._status.showMessage(
-            "✅ Rebuild auto terminé — données à jour." if did_work
-            else "✅ Rebuild auto terminé — aucune donnée nouvelle.",
+            (
+                "✅ Rebuild auto terminé — données à jour."
+                if did_work
+                else "✅ Rebuild auto terminé — aucune donnée nouvelle."
+            ),
             5000,
         )
         # Rafraîchir la page active seulement si des snapshots ont changé
@@ -580,6 +598,7 @@ class MainWindow(QMainWindow):
     def _load_people(self) -> None:
         try:
             from services import repositories as repo
+
             people = repo.list_people(self._conn)
             self._sidebar.populate_people(people)
         except Exception as e:

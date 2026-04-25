@@ -1,6 +1,7 @@
 import sqlite3
-import pandas as pd
 from typing import Optional
+
+import pandas as pd
 
 from services.repositories import df_from_rows
 
@@ -36,14 +37,13 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
         """
     )
 
-
     # --- migrations safe (si une ancienne table existe sans colonnes) ---
     cols = [r[1] for r in conn.execute("PRAGMA table_info(enterprise_shares);").fetchall()]
     if "initial_invest_date" not in cols:
         conn.execute("ALTER TABLE enterprise_shares ADD COLUMN initial_invest_date TEXT;")
 
     if "cca_eur" not in cols:
-        conn.execute("ALTER TABLE enterprise_shares ADD COLUMN cca_eur REAL NOT NULL DEFAULT 0;");
+        conn.execute("ALTER TABLE enterprise_shares ADD COLUMN cca_eur REAL NOT NULL DEFAULT 0;")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS enterprise_history (
@@ -61,13 +61,13 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
     cols_h = [r[1] for r in conn.execute("PRAGMA table_info(enterprise_history);").fetchall()]
     if "effective_date" not in cols_h:
         conn.execute("ALTER TABLE enterprise_history ADD COLUMN effective_date TEXT;")
-        conn.execute("UPDATE enterprise_history SET effective_date = COALESCE(effective_date, substr(changed_at, 1, 10));")
+        conn.execute(
+            "UPDATE enterprise_history SET effective_date = COALESCE(effective_date, substr(changed_at, 1, 10));"
+        )
         conn.execute("UPDATE enterprise_history SET effective_date = COALESCE(effective_date, date('now'));")
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eh_ent_date ON enterprise_history(enterprise_id, effective_date);")
     conn.commit()
-
-
 
 
 def list_enterprises(conn: sqlite3.Connection) -> pd.DataFrame:
@@ -102,7 +102,15 @@ def list_shares(conn: sqlite3.Connection, enterprise_id: int) -> pd.DataFrame:
     ).fetchall()
     return df_from_rows(
         rows,
-        ["enterprise_id", "person_id", "pct", "person_name", "initial_invest_eur", "cca_eur", "initial_invest_date"],
+        [
+            "enterprise_id",
+            "person_id",
+            "pct",
+            "person_name",
+            "initial_invest_eur",
+            "cca_eur",
+            "initial_invest_date",
+        ],
     )
 
 
@@ -130,7 +138,6 @@ def list_positions_for_person(conn: sqlite3.Connection, person_id: int) -> pd.Da
         WHERE es.person_id = ?
         ORDER BY e.name;
         """,
-
         (int(person_id),),
     ).fetchall()
 
@@ -151,7 +158,15 @@ def list_positions_for_person(conn: sqlite3.Connection, person_id: int) -> pd.Da
     )
 
 
-def create_enterprise(conn: sqlite3.Connection,name: str,entity_type: str,valuation_eur: float,debt_eur: float,note: Optional[str],effective_date: Optional[str] = None,) -> int:
+def create_enterprise(
+    conn: sqlite3.Connection,
+    name: str,
+    entity_type: str,
+    valuation_eur: float,
+    debt_eur: float,
+    note: Optional[str],
+    effective_date: Optional[str] = None,
+) -> int:
     ensure_tables(conn)
     cur = conn.execute(
         """
@@ -164,7 +179,6 @@ def create_enterprise(conn: sqlite3.Connection,name: str,entity_type: str,valuat
 
     if effective_date is None:
         effective_date = pd.Timestamp.today().date().isoformat()
-
 
     # Historique initial
     conn.execute(
@@ -180,8 +194,6 @@ def create_enterprise(conn: sqlite3.Connection,name: str,entity_type: str,valuat
             "Création" if not note else f"Création — {note}",
         ),
     )
-
-
 
     conn.commit()
     return enterprise_id
@@ -203,7 +215,6 @@ def replace_shares(conn, enterprise_id: int, shares_by_person_id: dict) -> None:
             cca = 0.0
             initial_date = None
 
-
         conn.execute(
             """
             INSERT INTO enterprise_shares(enterprise_id, person_id, pct, initial_invest_eur, cca_eur, initial_invest_date)
@@ -212,12 +223,17 @@ def replace_shares(conn, enterprise_id: int, shares_by_person_id: dict) -> None:
             (int(enterprise_id), int(person_id), pct, initial, cca, initial_date),
         )
 
-
     conn.commit()
 
 
-
-def update_enterprise(conn: sqlite3.Connection, enterprise_id: int, entity_type: str, valuation_eur: float, debt_eur: float, note: Optional[str]) -> None:
+def update_enterprise(
+    conn: sqlite3.Connection,
+    enterprise_id: int,
+    entity_type: str,
+    valuation_eur: float,
+    debt_eur: float,
+    note: Optional[str],
+) -> None:
     ensure_tables(conn)
 
     conn.execute(
