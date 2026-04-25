@@ -1,15 +1,21 @@
 """
 Panel Sankey — remplace ui/sankey.py
 """
+
 import logging
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton
+
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+
+from qt_ui.theme import (
+    BG_PRIMARY,
+    CHART_SANKEY,
+    STYLE_BTN_PRIMARY,
+    STYLE_INPUT,
+    STYLE_TITLE,
+    TEXT_PRIMARY,
+    plotly_layout,
 )
 from qt_ui.widgets import PlotlyView
-from qt_ui.theme import (
-    BG_PRIMARY, STYLE_INPUT, STYLE_BTN_PRIMARY, STYLE_TITLE,
-    TEXT_PRIMARY, CHART_SANKEY, plotly_layout,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +62,11 @@ class SankeyPanel(QWidget):
 
     def _load_sankey(self) -> None:
         try:
-            from services.sankey import build_cashflow_sankey
-            import plotly.graph_objects as go
             from datetime import date
+
+            import plotly.graph_objects as go
+
+            from services.sankey import build_cashflow_sankey
 
             today = date.today()
             idx = self._period_combo.currentIndex()
@@ -91,22 +99,24 @@ class SankeyPanel(QWidget):
                 self._chart.clear_figure()
                 return
 
-            fig = go.Figure(go.Sankey(
-                arrangement="snap",
-                node=dict(
-                    label=data["labels"],
-                    pad=15,
-                    thickness=20,
-                    color="#2563eb",
-                    line=dict(color=BG_PRIMARY, width=0.5),
-                ),
-                link=dict(
-                    source=data["sources"],
-                    target=data["targets"],
-                    value=data["values"],
-                    color=CHART_SANKEY,
-                ),
-            ))
+            fig = go.Figure(
+                go.Sankey(
+                    arrangement="snap",
+                    node=dict(
+                        label=data["labels"],
+                        pad=15,
+                        thickness=20,
+                        color="#2563eb",
+                        line=dict(color=BG_PRIMARY, width=0.5),
+                    ),
+                    link=dict(
+                        source=data["sources"],
+                        target=data["targets"],
+                        value=data["values"],
+                        color=CHART_SANKEY,
+                    ),
+                )
+            )
             fig.update_layout(
                 **plotly_layout(),
                 font=dict(color=TEXT_PRIMARY, size=12),

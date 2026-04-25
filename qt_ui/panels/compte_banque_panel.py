@@ -1,20 +1,34 @@
 """
 Panel d'un compte Banque — remplace ui/compte_banque.py
 """
+
 import logging
+
 import pandas as pd
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox, QMenu
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import pyqtSignal
+
 from qt_ui.components.animated_tab import AnimatedTabWidget
-from qt_ui.widgets import DataTableWidget, MetricLabel
 from qt_ui.panels.saisie_panel import SaisiePanel
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_SECTION, STYLE_TAB_INNER, STYLE_BTN_DANGER,
-    STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_WARNING, STYLE_STATUS_ERROR,
+    BG_PRIMARY,
+    STYLE_BTN_DANGER,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    STYLE_TAB_INNER,
 )
+from qt_ui.widgets import DataTableWidget, MetricLabel
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +78,12 @@ class CompteBanquePanel(QWidget):
         dash_v.addWidget(lbl_hist)
         self._table_recent = DataTableWidget()
         self._table_recent.setMinimumHeight(300)
-        self._table_recent.set_filter_config([
-            {"col": "type",     "kind": "combo",      "label": "Type"},
-            {"col": "category", "kind": "combo",      "label": "Catégorie"},
-        ])
+        self._table_recent.set_filter_config(
+            [
+                {"col": "type", "kind": "combo", "label": "Type"},
+                {"col": "category", "kind": "combo", "label": "Catégorie"},
+            ]
+        )
         self._table_recent.set_combo_delegate("category", [])
         self._table_recent.cell_changed.connect(self._on_recent_table_cell_changed)
         self._install_tx_context_menu(self._table_recent)
@@ -86,12 +102,14 @@ class CompteBanquePanel(QWidget):
         hist_v.setContentsMargins(8, 8, 8, 8)
         self._hist_table = DataTableWidget()
         self._hist_table.setMinimumHeight(400)
-        self._hist_table.set_filter_config([
-            {"col": "type",     "kind": "combo",        "label": "Type"},
-            {"col": "date",     "kind": "date_range",   "label": "Date"},
-            {"col": "amount",   "kind": "number_range", "label": "Montant"},
-            {"col": "category", "kind": "combo",        "label": "Catégorie"},
-        ])
+        self._hist_table.set_filter_config(
+            [
+                {"col": "type", "kind": "combo", "label": "Type"},
+                {"col": "date", "kind": "date_range", "label": "Date"},
+                {"col": "amount", "kind": "number_range", "label": "Montant"},
+                {"col": "category", "kind": "combo", "label": "Catégorie"},
+            ]
+        )
         self._hist_table.set_combo_delegate("category", [])
         self._hist_table.cell_changed.connect(self._on_hist_table_cell_changed)
         self._install_tx_context_menu(self._hist_table)
@@ -129,9 +147,7 @@ class CompteBanquePanel(QWidget):
             confirm.setInformativeText(
                 "Cette action supprimera aussi toutes les transactions associées et est irréversible."
             )
-            confirm.setStandardButtons(
-                QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes
-            )
+            confirm.setStandardButtons(QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes)
             btn_delete = confirm.button(QMessageBox.StandardButton.Yes)
             if btn_delete is not None:
                 btn_delete.setText("Supprimer")
@@ -150,6 +166,7 @@ class CompteBanquePanel(QWidget):
             )
 
             from services import snapshots as wk_snap
+
             wk_snap.rebuild_snapshots_person_from_last(
                 self._conn,
                 person_id=self._person_id,
@@ -161,10 +178,7 @@ class CompteBanquePanel(QWidget):
             QMessageBox.information(
                 self,
                 "Compte supprimé",
-                (
-                    f"Le compte « {account_name} » a été supprimé.\n"
-                    f"Transactions supprimées : {tx_deleted}."
-                ),
+                (f"Le compte « {account_name} » a été supprimé.\n" f"Transactions supprimées : {tx_deleted}."),
             )
             self.account_deleted.emit(int(self._person_id), int(self._account_id))
         except Exception as e:
@@ -179,7 +193,7 @@ class CompteBanquePanel(QWidget):
     def _load_dashboard(self) -> None:
         try:
             from services import repositories as repo
-            from services.calculations import solde_compte, interets_12_mois
+            from services.calculations import interets_12_mois, solde_compte
 
             tx = repo.list_transactions(self._conn, account_id=self._account_id, limit=100000)
             if tx is None or tx.empty:
@@ -194,8 +208,21 @@ class CompteBanquePanel(QWidget):
             self._kpi_interets.set_content("Intérêts 12 mois", f"{interets_12m:,.2f} €".replace(",", " "))
 
             tx = tx.copy()
-            tx["etat"] = tx["analysis_state"].apply(self._format_analysis_state) if "analysis_state" in tx.columns else "Normale"
-            cols = ["date", "type", "amount", "fees", "category", "etat", "note", "id", "is_hidden_from_cashflow", "is_internal_transfer"]
+            tx["etat"] = (
+                tx["analysis_state"].apply(self._format_analysis_state) if "analysis_state" in tx.columns else "Normale"
+            )
+            cols = [
+                "date",
+                "type",
+                "amount",
+                "fees",
+                "category",
+                "etat",
+                "note",
+                "id",
+                "is_hidden_from_cashflow",
+                "is_internal_transfer",
+            ]
             cols = [c for c in cols if c in tx.columns]
             recent_df = tx[cols].head(50).copy()
             self._table_recent.set_dataframe(recent_df)
@@ -215,17 +242,33 @@ class CompteBanquePanel(QWidget):
                 self._hist_table.set_dataframe(pd.DataFrame())
                 return
             tx = tx.copy()
-            tx["etat"] = tx["analysis_state"].apply(self._format_analysis_state) if "analysis_state" in tx.columns else "Normale"
+            tx["etat"] = (
+                tx["analysis_state"].apply(self._format_analysis_state) if "analysis_state" in tx.columns else "Normale"
+            )
             if "type" in tx.columns:
                 tx["type"] = tx["type"].apply(lambda t: afficher_type_operation(str(t)))
             cols = [
-                "date", "type", "amount", "fees", "category", "etat", "note", "id",
-                "is_hidden_from_cashflow", "is_internal_transfer", "analysis_state",
+                "date",
+                "type",
+                "amount",
+                "fees",
+                "category",
+                "etat",
+                "note",
+                "id",
+                "is_hidden_from_cashflow",
+                "is_internal_transfer",
+                "analysis_state",
             ]
             cols = [c for c in cols if c in tx.columns]
             hist_df = tx[cols].copy()
             self._hist_table.set_dataframe(hist_df)
-            for hidden_col in ("id", "is_hidden_from_cashflow", "is_internal_transfer", "analysis_state"):
+            for hidden_col in (
+                "id",
+                "is_hidden_from_cashflow",
+                "is_internal_transfer",
+                "analysis_state",
+            ):
                 self._hist_table.hide_column(hidden_col)
             self._configure_category_delegate(self._hist_table, hist_df)
         except Exception as exc:
@@ -360,7 +403,11 @@ class CompteBanquePanel(QWidget):
                 ok = repo.hide_transaction(self._conn, tx_id, hidden=not is_hidden)
                 if ok:
                     self._set_tx_status(
-                        "✅ Transaction masquée de l'analyse." if not is_hidden else "✅ Transaction réintégrée dans l'analyse.",
+                        (
+                            "✅ Transaction masquée de l'analyse."
+                            if not is_hidden
+                            else "✅ Transaction réintégrée dans l'analyse."
+                        ),
                         "success",
                     )
                 else:
@@ -369,7 +416,11 @@ class CompteBanquePanel(QWidget):
                 ok = repo.mark_transaction_as_internal_transfer(self._conn, tx_id, value=not is_internal)
                 if ok:
                     self._set_tx_status(
-                        "✅ Transaction marquée comme virement interne." if not is_internal else "✅ Marquage virement interne retiré.",
+                        (
+                            "✅ Transaction marquée comme virement interne."
+                            if not is_internal
+                            else "✅ Marquage virement interne retiré."
+                        ),
                         "success",
                     )
                 else:

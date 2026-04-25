@@ -5,24 +5,41 @@ Remplace st.dataframe() et st.data_editor() de Streamlit.
 AM-12 : FilterBar avec filtres combo / date_range / number_range
 AM-13 : Tri amélioré via PandasTableModel.sort() + indicateur visuel
 """
+
 import pandas as pd
-from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal, QDate, QTimer
+from PyQt6.QtCore import QAbstractTableModel, QDate, QModelIndex, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QTableView, QWidget, QVBoxLayout, QHBoxLayout, QAbstractItemView,
-    QHeaderView, QLineEdit, QLabel, QStyledItemDelegate, QComboBox,
-    QDoubleSpinBox, QDateEdit, QPushButton, QSizePolicy, QFrame,
+    QAbstractItemView,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QStyledItemDelegate,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtGui import QColor, QPainter, QBrush
+
 from qt_ui.components.skeleton_handler import SkeletonHandler
-
 from qt_ui.theme import (
-    BG_CARD, BG_CARD_ALT, STYLE_TABLE, STYLE_INPUT,
-    STYLE_INPUT_FOCUS, TEXT_MUTED, BORDER_DEFAULT, BG_HOVER,
-    ACCENT_BLUE, TEXT_SECONDARY,
+    ACCENT_BLUE,
+    BG_CARD,
+    BG_CARD_ALT,
+    BG_HOVER,
+    BORDER_DEFAULT,
+    STYLE_INPUT,
+    STYLE_TABLE,
+    TEXT_MUTED,
+    TEXT_SECONDARY,
 )
-
 
 # ─── Modèle Pandas ─────────────────────────────────────────────────────────────
+
 
 class PandasTableModel(QAbstractTableModel):
     """Modèle Qt pour afficher un DataFrame pandas dans un QTableView."""
@@ -119,9 +136,9 @@ class PandasTableModel(QAbstractTableModel):
             return
         self.layoutAboutToBeChanged.emit()
         col_name = self._df.columns[column]
-        ascending = (order == Qt.SortOrder.AscendingOrder)
+        ascending = order == Qt.SortOrder.AscendingOrder
         try:
-            self._df.sort_values(by=col_name, ascending=ascending, inplace=True, kind='mergesort')
+            self._df.sort_values(by=col_name, ascending=ascending, inplace=True, kind="mergesort")
             self._df.reset_index(drop=True, inplace=True)
         except Exception:
             pass  # Parfois le tri échoue sur des types mixtes/objets
@@ -129,6 +146,7 @@ class PandasTableModel(QAbstractTableModel):
 
 
 # ─── Delegate ComboBox ─────────────────────────────────────────────────────────
+
 
 class ComboBoxDelegate(QStyledItemDelegate):
     """Délégué affichant un QComboBox pour les cellules éditables."""
@@ -463,6 +481,7 @@ class FilterBar(QWidget):
 
 # ─── DataTableWidget ───────────────────────────────────────────────────────────
 
+
 class DataTableWidget(QWidget):
     """
     Widget complet : tableau + en-têtes stylisés + barre de recherche + FilterBar optionnelle.
@@ -707,9 +726,7 @@ class DataTableWidget(QWidget):
         """Rend une colonne éditable via une liste déroulante. Persistant entre les set_dataframe()."""
         self._combo_delegates[col_name] = list(items)
         self._model.set_editable_cols(self._model._editable_cols | {col_name})
-        self._view.setEditTriggers(
-            self._view.editTriggers() | QAbstractItemView.EditTrigger.DoubleClicked
-        )
+        self._view.setEditTriggers(self._view.editTriggers() | QAbstractItemView.EditTrigger.DoubleClicked)
         self._apply_delegates()
 
     def hide_column(self, col_name: str) -> None:
@@ -792,12 +809,7 @@ class DataTableWidget(QWidget):
             self._search_blob = pd.Series(dtype="object")
             return self._search_blob
         # Concatène chaque ligne en un texte unique réutilisable pour les recherches.
-        self._search_blob = (
-            self._full_df.fillna("")
-            .astype(str)
-            .agg(" ".join, axis=1)
-            .str.lower()
-        )
+        self._search_blob = self._full_df.fillna("").astype(str).agg(" ".join, axis=1).str.lower()
         return self._search_blob
 
     def _apply_text_filter(self, df: pd.DataFrame, query: str) -> pd.DataFrame:
@@ -809,11 +821,6 @@ class DataTableWidget(QWidget):
         if df is self._full_df:
             blob = self._ensure_search_blob()
         else:
-            blob = (
-                df.fillna("")
-                .astype(str)
-                .agg(" ".join, axis=1)
-                .str.lower()
-            )
+            blob = df.fillna("").astype(str).agg(" ".join, axis=1).str.lower()
         mask = blob.str.contains(query_norm, regex=False, na=False)
         return df[mask]

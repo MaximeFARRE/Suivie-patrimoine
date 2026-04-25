@@ -5,8 +5,8 @@ Objectif:
 - éviter la dispersion de règles `asset_type -> panel` dans les services/UI
 - exposer des helpers simples réutilisables par les calculs métier
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 ASSET_TYPES_CANONICAL = [
     "action",
@@ -65,4 +65,3 @@ def asset_types_for_panel(panel: str) -> set[str]:
 
 def is_asset_type_in_panel(asset_type: str | None, panel: str) -> bool:
     return panel_for_asset_type(asset_type) == str(panel or "").strip().lower()
-

@@ -3,6 +3,7 @@ Requêtes SQL élémentaires utilisées par les panels Qt.
 Centralise les lookups directs (assets, prices, credits) afin que la UI
 n'exécute plus de SQL brut.  Retourne des sqlite3.Row ou None.
 """
+
 from __future__ import annotations
 
 
@@ -85,10 +86,13 @@ def get_credit_account_and_person(conn, credit_id: int):
 
 def asset_symbol_exists(conn, symbol: str) -> bool:
     """Retourne True si un actif avec ce symbole existe déjà."""
-    return conn.execute(
-        "SELECT id FROM assets WHERE symbol = ?",
-        (symbol,),
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            "SELECT id FROM assets WHERE symbol = ?",
+            (symbol,),
+        ).fetchone()
+        is not None
+    )
 
 
 def get_asset_symbol_name(conn, asset_id: int):

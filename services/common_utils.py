@@ -2,6 +2,7 @@
 Utilitaires bas niveau partagés par tous les services.
 Pas de dépendances internes — importer librement.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -34,4 +35,3 @@ def fmt_amount(value: Any) -> str:
     """Formate un montant avec séparateur d'espace et 2 décimales."""
     num = safe_float(value, 0.0)
     return f"{num:,.2f}".replace(",", " ")
-

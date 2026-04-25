@@ -1,6 +1,7 @@
 """
 Page Objectifs & Projection.
 """
+
 import logging
 from datetime import date
 from typing import Optional
@@ -16,10 +17,10 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
-    QGridLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -32,43 +33,70 @@ from PyQt6.QtWidgets import (
 )
 
 from qt_ui.components.animated_tab import AnimatedTabWidget
+from qt_ui.pages._goals_projection_charts import build_fire_progress_chart, build_projection_chart
+from qt_ui.pages._goals_projection_inputs import (
+    build_scenario_params,
+    build_scenario_payload_from_params,
+    extract_preset_values,
+    extract_scenario_display_row,
+)
+from qt_ui.panels.backtest_portfolio_panel import BacktestPortefeuillePanel
+from qt_ui.panels.prevision_avancee_panel import PrevisionAvanceePanel
 from qt_ui.theme import (
-    BG_ACTIVE, BG_CARD, BG_PRIMARY, BG_SIDEBAR,
-    BORDER_DEFAULT, BORDER_SUBTLE,
-    COLOR_SUCCESS, COLOR_WARNING, STYLE_BTN_DANGER, STYLE_BTN_PRIMARY,
-    STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS, STYLE_GROUP, STYLE_INPUT_FOCUS,
-    STYLE_SCROLLAREA, STYLE_SECTION, STYLE_STATUS, STYLE_STATUS_ERROR, STYLE_STATUS_SUCCESS,
+    BG_ACTIVE,
+    BG_CARD,
+    BG_PRIMARY,
+    BG_SIDEBAR,
+    BORDER_DEFAULT,
+    BORDER_SUBTLE,
+    COLOR_SUCCESS,
+    COLOR_WARNING,
+    STYLE_BTN_DANGER,
+    STYLE_BTN_PRIMARY,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_GROUP,
+    STYLE_INPUT_FOCUS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
     STYLE_STATUS_WARNING,
-    STYLE_TAB, STYLE_TITLE, STYLE_TITLE_LARGE, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    plotly_layout,
+    STYLE_TAB,
+    STYLE_TITLE,
+    STYLE_TITLE_LARGE,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
 )
 from qt_ui.widgets import DataTableWidget, KpiCard, MetricLabel, PlotlyView
-from qt_ui.pages._goals_projection_charts import build_projection_chart, build_fire_progress_chart
-from qt_ui.pages._goals_projection_inputs import (
-    extract_preset_values,
-    build_scenario_params,
-    extract_scenario_display_row,
-    build_scenario_payload_from_params,
-)
-from services.goals_projection_repository import (
-    create_goal, create_scenario, delete_goal, delete_scenario,
-    compute_goal_monthly_required_amount, list_goals, list_people_for_scope, list_scenarios,
-    update_goal, update_scenario,
-)
-from services.projections import ScenarioParams
-from services.projection_service import ProjectionService
-from services.simulation_presets_repository import (
-    get_all_presets, initialize_default_presets, PRESET_DEFAULTS,
-)
 from services.common_utils import safe_float
+from services.goals_projection_repository import (
+    compute_goal_monthly_required_amount,
+    create_goal,
+    create_scenario,
+    delete_goal,
+    delete_scenario,
+    list_goals,
+    list_people_for_scope,
+    list_scenarios,
+    update_goal,
+    update_scenario,
+)
 from services.native_milestones import (
     NATIVE_MILESTONE_DEFINITIONS,
     build_native_milestones_for_scope,
     get_featured_milestone_for_category,
     get_scope_milestone_metrics,
 )
-from qt_ui.panels.prevision_avancee_panel import PrevisionAvanceePanel
-from qt_ui.panels.backtest_portfolio_panel import BacktestPortefeuillePanel
+from services.projection_service import ProjectionService
+from services.projections import ScenarioParams
+from services.simulation_presets_repository import (
+    PRESET_DEFAULTS,
+    get_all_presets,
+    initialize_default_presets,
+)
 from utils.format_monnaie import money
 
 logger = logging.getLogger(__name__)
@@ -107,7 +135,12 @@ _MILESTONE_PROGRESS_STYLE = f"""
 """
 
 _PRIORITY_ITEMS = [("Basse", "LOW"), ("Normale", "NORMAL"), ("Haute", "HIGH")]
-_STATUS_ITEMS = [("Actif", "ACTIVE"), ("Atteint", "ACHIEVED"), ("En pause", "PAUSED"), ("Annulé", "CANCELLED")]
+_STATUS_ITEMS = [
+    ("Actif", "ACTIVE"),
+    ("Atteint", "ACHIEVED"),
+    ("En pause", "PAUSED"),
+    ("Annulé", "CANCELLED"),
+]
 
 
 class NativeMilestoneCard(QGroupBox):
@@ -181,6 +214,7 @@ class NativeMilestoneCard(QGroupBox):
         self._progress_bar.setValue(int(round(progress_pct)))
         self._progress_label.setText(f"{progress_pct:.1f} %")
         self._subtitle_label.setText(str(milestone.get("subtitle") or ""))
+
 
 class GoalEditDialog(QDialog):
     def __init__(self, goal_data: Optional[dict] = None, parent=None):
@@ -286,7 +320,9 @@ class GoalEditDialog(QDialog):
             "category": self._category.text().strip() or None,
             "target_amount": float(self._target_amount.value()),
             "current_amount": float(self._current_amount.value()),
-            "target_date": self._target_date.date().toString("yyyy-MM-dd") if self._use_target_date.isChecked() else None,
+            "target_date": (
+                self._target_date.date().toString("yyyy-MM-dd") if self._use_target_date.isChecked() else None
+            ),
             "priority": str(self._priority.currentData() or "NORMAL"),
             "status": str(self._status.currentData() or "ACTIVE"),
             "notes": self._notes.text().strip() or None,
@@ -308,9 +344,9 @@ class GoalsProjectionPage(QWidget):
         self._native_metrics: dict = {}
         self._featured_milestone: Optional[dict] = None
         self._active_scenario_name: str = "Personnalisé"
-        self._active_preset: Optional[str] = None   # 'pessimiste' | 'realiste' | 'optimiste' | None
-        self._presets_cache: dict = {}               # {preset_key: params_dict}
-        self._rp_value_for_scope: float = 0.0       # valeur RP pour affichage
+        self._active_preset: Optional[str] = None  # 'pessimiste' | 'realiste' | 'optimiste' | None
+        self._presets_cache: dict = {}  # {preset_key: params_dict}
+        self._rp_value_for_scope: float = 0.0  # valeur RP pour affichage
         self._build_ui()
         self._load_scope_options()
 
@@ -478,9 +514,13 @@ class GoalsProjectionPage(QWidget):
             QPushButton:hover {{ background: {BG_ACTIVE}; }}
         """
         self._btn_preset_pessimiste = QPushButton("Pessimiste")
-        self._btn_preset_realiste   = QPushButton("Réaliste")
-        self._btn_preset_optimiste  = QPushButton("Optimiste")
-        for btn in (self._btn_preset_pessimiste, self._btn_preset_realiste, self._btn_preset_optimiste):
+        self._btn_preset_realiste = QPushButton("Réaliste")
+        self._btn_preset_optimiste = QPushButton("Optimiste")
+        for btn in (
+            self._btn_preset_pessimiste,
+            self._btn_preset_realiste,
+            self._btn_preset_optimiste,
+        ):
             btn.setStyleSheet(_PRESET_BTN_BASE)
         self._btn_preset_pessimiste.clicked.connect(lambda: self._apply_preset("pessimiste"))
         self._btn_preset_realiste.clicked.connect(lambda: self._apply_preset("realiste"))
@@ -516,17 +556,17 @@ class GoalsProjectionPage(QWidget):
             s.setStyleSheet(STYLE_INPUT_FOCUS)
             return s
 
-        self._spin_return_liq   = _make_return_spin(2.0)
-        self._spin_return_bourse= _make_return_spin(7.0)
-        self._spin_return_immo  = _make_return_spin(3.5)
-        self._spin_return_pe    = _make_return_spin(10.0)
-        self._spin_return_ent   = _make_return_spin(5.0)
+        self._spin_return_liq = _make_return_spin(2.0)
+        self._spin_return_bourse = _make_return_spin(7.0)
+        self._spin_return_immo = _make_return_spin(3.5)
+        self._spin_return_pe = _make_return_spin(10.0)
+        self._spin_return_ent = _make_return_spin(5.0)
 
         returns_form.addRow("Liquidités / épargne :", self._spin_return_liq)
         returns_form.addRow("Bourse (ETF, actions) :", self._spin_return_bourse)
-        returns_form.addRow("Immobilier locatif :",    self._spin_return_immo)
-        returns_form.addRow("Private Equity :",        self._spin_return_pe)
-        returns_form.addRow("Entreprises :",           self._spin_return_ent)
+        returns_form.addRow("Immobilier locatif :", self._spin_return_immo)
+        returns_form.addRow("Private Equity :", self._spin_return_pe)
+        returns_form.addRow("Entreprises :", self._spin_return_ent)
 
         self._lbl_weighted_return = QLabel("Rendement global effectif : — %")
         self._lbl_weighted_return.setStyleSheet(
@@ -640,8 +680,13 @@ class GoalsProjectionPage(QWidget):
         self._chk_savings_override.toggled.connect(self._spin_savings_override.setEnabled)
         self._chk_net_override.toggled.connect(self._spin_net_override.setEnabled)
         self._chk_exclude_rp.toggled.connect(self._on_exclude_rp_changed)
-        for _spin in (self._spin_return_liq, self._spin_return_bourse, self._spin_return_immo,
-                      self._spin_return_pe, self._spin_return_ent):
+        for _spin in (
+            self._spin_return_liq,
+            self._spin_return_bourse,
+            self._spin_return_immo,
+            self._spin_return_pe,
+            self._spin_return_ent,
+        ):
             _spin.valueChanged.connect(self._on_params_changed)
 
         lbl_chart = QLabel("Courbe de projection")
@@ -826,7 +871,9 @@ class GoalsProjectionPage(QWidget):
         exclude_rp = self._chk_exclude_rp.isChecked() if hasattr(self, "_chk_exclude_rp") else False
         try:
             self._base_data = ProjectionService.get_projection_base(
-                self._conn, self._scope_type, self._scope_id,
+                self._conn,
+                self._scope_type,
+                self._scope_id,
                 exclude_primary_residence=exclude_rp,
             )
         except Exception as exc:
@@ -880,9 +927,15 @@ class GoalsProjectionPage(QWidget):
 
         # Bloquer _on_params_changed pendant le remplissage
         spins = [
-            self._spin_return_liq, self._spin_return_bourse, self._spin_return_immo,
-            self._spin_return_pe, self._spin_return_ent, self._spin_inflation,
-            self._spin_income_growth, self._spin_expense_growth, self._spin_fire_multiple,
+            self._spin_return_liq,
+            self._spin_return_bourse,
+            self._spin_return_immo,
+            self._spin_return_pe,
+            self._spin_return_ent,
+            self._spin_inflation,
+            self._spin_income_growth,
+            self._spin_expense_growth,
+            self._spin_fire_multiple,
         ]
         for _spin in spins:
             _spin.blockSignals(True)
@@ -907,9 +960,9 @@ class GoalsProjectionPage(QWidget):
     def _update_preset_buttons_style(self) -> None:
         """Surligne le bouton du preset actif; grise les autres."""
         _ACTIVE_STYLES = {
-            "pessimiste": f"QPushButton {{ background: #ef4444; color: white; border: none; border-radius: 4px; padding: 5px 14px; font-size: 13px; font-weight: bold; }}",
-            "realiste":   f"QPushButton {{ background: #22c55e; color: white; border: none; border-radius: 4px; padding: 5px 14px; font-size: 13px; font-weight: bold; }}",
-            "optimiste":  f"QPushButton {{ background: #60a5fa; color: white; border: none; border-radius: 4px; padding: 5px 14px; font-size: 13px; font-weight: bold; }}",
+            "pessimiste": "QPushButton { background: #ef4444; color: white; border: none; border-radius: 4px; padding: 5px 14px; font-size: 13px; font-weight: bold; }",
+            "realiste": "QPushButton { background: #22c55e; color: white; border: none; border-radius: 4px; padding: 5px 14px; font-size: 13px; font-weight: bold; }",
+            "optimiste": "QPushButton { background: #60a5fa; color: white; border: none; border-radius: 4px; padding: 5px 14px; font-size: 13px; font-weight: bold; }",
         }
         _BASE_STYLE = f"""
             QPushButton {{
@@ -921,8 +974,8 @@ class GoalsProjectionPage(QWidget):
         """
         pairs = [
             ("pessimiste", self._btn_preset_pessimiste),
-            ("realiste",   self._btn_preset_realiste),
-            ("optimiste",  self._btn_preset_optimiste),
+            ("realiste", self._btn_preset_realiste),
+            ("optimiste", self._btn_preset_optimiste),
         ]
         for key, btn in pairs:
             btn.setStyleSheet(_ACTIVE_STYLES[key] if key == self._active_preset else _BASE_STYLE)
@@ -974,7 +1027,9 @@ class GoalsProjectionPage(QWidget):
         """Recharge la base de projection avec ou sans RP."""
         try:
             self._base_data = ProjectionService.get_projection_base(
-                self._conn, self._scope_type, self._scope_id,
+                self._conn,
+                self._scope_type,
+                self._scope_id,
                 exclude_primary_residence=checked,
             )
             self._update_weighted_return_label()
@@ -1091,7 +1146,7 @@ class GoalsProjectionPage(QWidget):
 
     def _reset_projection_inputs_to_real_data(self) -> None:
         avg_savings = safe_float(self._base_data.get("avg_monthly_savings"))
-        base_net    = safe_float(self._base_data.get("net_worth"))
+        base_net = safe_float(self._base_data.get("net_worth"))
 
         self._spin_horizon_years.setValue(10)
         self._spin_inflation.setValue(2.0)
@@ -1121,10 +1176,10 @@ class GoalsProjectionPage(QWidget):
 
         # Rendements par classe — avec fallback sur expected_return_pct pour anciens scénarios
         fallback_return = safe_float(scenario_row.get("expected_return_pct"), 6.0)
-        self._spin_return_liq.setValue(safe_float(scenario_row.get("return_liquidites_pct"),  fallback_return * 0.3))
-        self._spin_return_bourse.setValue(safe_float(scenario_row.get("return_bourse_pct"),   fallback_return))
+        self._spin_return_liq.setValue(safe_float(scenario_row.get("return_liquidites_pct"), fallback_return * 0.3))
+        self._spin_return_bourse.setValue(safe_float(scenario_row.get("return_bourse_pct"), fallback_return))
         self._spin_return_immo.setValue(safe_float(scenario_row.get("return_immobilier_pct"), fallback_return * 0.6))
-        self._spin_return_pe.setValue(safe_float(scenario_row.get("return_pe_pct"),           fallback_return * 1.5))
+        self._spin_return_pe.setValue(safe_float(scenario_row.get("return_pe_pct"), fallback_return * 1.5))
         self._spin_return_ent.setValue(safe_float(scenario_row.get("return_entreprises_pct"), fallback_return * 0.8))
 
         # RP exclusion
@@ -1203,7 +1258,7 @@ class GoalsProjectionPage(QWidget):
                 scope_type=self._scope_type,
                 scope_id=self._scope_id,
                 engine_type="legacy",
-                options={"params": params, "exclude_primary_residence": exc_rp}
+                options={"params": params, "exclude_primary_residence": exc_rp},
             )
             if self._projection_df.empty:
                 self._set_projection_empty_state("Projection indisponible pour ce scope.")
@@ -1211,7 +1266,8 @@ class GoalsProjectionPage(QWidget):
             self._standard_projection_results = {}
             if self._chk_show_standard.isChecked():
                 for sc in ProjectionService.build_standard_scenarios(
-                    self._base_data, int(params.horizon_years),
+                    self._base_data,
+                    int(params.horizon_years),
                     presets=self._presets_cache or None,
                 ):
                     self._standard_projection_results[sc.label] = ProjectionService.generate_projection(
@@ -1219,7 +1275,7 @@ class GoalsProjectionPage(QWidget):
                         scope_type=self._scope_type,
                         scope_id=self._scope_id,
                         engine_type="legacy",
-                        options={"params": sc, "exclude_primary_residence": exc_rp}
+                        options={"params": sc, "exclude_primary_residence": exc_rp},
                     )
             self._update_weighted_return_label()
 
@@ -1267,7 +1323,9 @@ class GoalsProjectionPage(QWidget):
         fire_progress_now = safe_float(self._projection_df.iloc[0].get("fire_progress_pct"))
 
         fire_target_raw = self._projection_df.iloc[-1].get("fire_target")
-        fire_target = safe_float(fire_target_raw) if fire_target_raw is not None and not pd.isna(fire_target_raw) else None
+        fire_target = (
+            safe_float(fire_target_raw) if fire_target_raw is not None and not pd.isna(fire_target_raw) else None
+        )
 
         savings_value = (
             safe_float(self._base_data.get("avg_monthly_savings"))
@@ -1275,34 +1333,65 @@ class GoalsProjectionPage(QWidget):
             else safe_float(params.monthly_savings_override)
         )
         savings_label = (
-            "Basée sur revenus - dépenses"
-            if params.monthly_savings_override is None
-            else "Valeur personnalisée"
+            "Basée sur revenus - dépenses" if params.monthly_savings_override is None else "Valeur personnalisée"
         )
 
         fire_info = ProjectionService.estimate_fire_reach_date(self._projection_df)
         fire_date = fire_info.get("fire_date_label") or "Non atteint sur l'horizon"
         fire_reached = bool(fire_info.get("fire_reached"))
 
-        self._kpi_current_net.set_content("Patrimoine actuel", money(current_net), subtitle=self._scope_label(), tone="blue")
-        self._kpi_horizon_net.set_content("Patrimoine projeté à horizon", money(projected_horizon), subtitle=f"{params.horizon_years} an(s)", tone="green" if projected_horizon >= current_net else "alert")
-        
+        self._kpi_current_net.set_content(
+            "Patrimoine actuel", money(current_net), subtitle=self._scope_label(), tone="blue"
+        )
+        self._kpi_horizon_net.set_content(
+            "Patrimoine projeté à horizon",
+            money(projected_horizon),
+            subtitle=f"{params.horizon_years} an(s)",
+            tone="green" if projected_horizon >= current_net else "alert",
+        )
+
         if fire_target is None:
             self._kpi_fire_target.set_content("Objectif FIRE", "N/A", subtitle="Dépenses inconnues", tone="neutral")
             if hasattr(self, "_lbl_fire_alert") and self._lbl_fire_alert:
-                self._lbl_fire_alert.setText("<b>Qualité des données (DQ-09)</b> : Les dépenses de base sont absentes ou incomplètes. Objectif FIRE non calculable.")
+                self._lbl_fire_alert.setText(
+                    "<b>Qualité des données (DQ-09)</b> : Les dépenses de base sont absentes ou incomplètes. Objectif FIRE non calculable."
+                )
                 self._lbl_fire_alert.setVisible(True)
         else:
-            self._kpi_fire_target.set_content("Objectif FIRE", money(fire_target), subtitle=f"Multiple {params.fire_multiple:.2f}", tone="purple")
+            self._kpi_fire_target.set_content(
+                "Objectif FIRE",
+                money(fire_target),
+                subtitle=f"Multiple {params.fire_multiple:.2f}",
+                tone="purple",
+            )
             if hasattr(self, "_lbl_fire_alert") and self._lbl_fire_alert:
                 self._lbl_fire_alert.setVisible(False)
 
-        self._kpi_fire_progress.set_content("Progression FIRE", f"{fire_progress_now:.1f}%", subtitle="Aujourd'hui", tone="success" if fire_progress_now >= 100 else "primary")
-        self._kpi_monthly_savings.set_content("Épargne mensuelle", money(savings_value), subtitle=savings_label, tone="success" if savings_value >= 0 else "alert")
-        self._kpi_fire_date.set_content("Date FIRE estimée", fire_date, subtitle="Projection actuelle", tone="success" if fire_reached else "neutral")
+        self._kpi_fire_progress.set_content(
+            "Progression FIRE",
+            f"{fire_progress_now:.1f}%",
+            subtitle="Aujourd'hui",
+            tone="success" if fire_progress_now >= 100 else "primary",
+        )
+        self._kpi_monthly_savings.set_content(
+            "Épargne mensuelle",
+            money(savings_value),
+            subtitle=savings_label,
+            tone="success" if savings_value >= 0 else "alert",
+        )
+        self._kpi_fire_date.set_content(
+            "Date FIRE estimée",
+            fire_date,
+            subtitle="Projection actuelle",
+            tone="success" if fire_reached else "neutral",
+        )
 
-        self._metric_income.set_content("Revenus mensuels moyens", money(self._base_data.get("avg_monthly_income", 0.0)))
-        self._metric_expenses.set_content("Dépenses mensuelles moyennes", money(self._base_data.get("avg_monthly_expenses", 0.0)))
+        self._metric_income.set_content(
+            "Revenus mensuels moyens", money(self._base_data.get("avg_monthly_income", 0.0))
+        )
+        self._metric_expenses.set_content(
+            "Dépenses mensuelles moyennes", money(self._base_data.get("avg_monthly_expenses", 0.0))
+        )
 
     def _build_projection_chart(self, active_df: pd.DataFrame) -> go.Figure:
         """Délègue la construction du graphique de projection au module dédié."""
@@ -1323,7 +1412,7 @@ class GoalsProjectionPage(QWidget):
         current_net = safe_float(self._base_data.get("net_worth"))
         fire_target_raw = self._projection_df.iloc[-1].get("fire_target")
         fire_target_str = money(fire_target_raw) if fire_target_raw is not None else "N/A"
-        
+
         fire_info = ProjectionService.estimate_fire_reach_date(self._projection_df)
         if fire_info.get("fire_reached"):
             status_line = (
@@ -1356,7 +1445,9 @@ class GoalsProjectionPage(QWidget):
         except Exception:
             return None
 
-    def _goal_required_monthly_amount(self, target_amount: float, current_amount: float, target_date_raw: Optional[str]) -> float:
+    def _goal_required_monthly_amount(
+        self, target_amount: float, current_amount: float, target_date_raw: Optional[str]
+    ) -> float:
         try:
             return compute_goal_monthly_required_amount(target_amount, current_amount, target_date_raw)
         except Exception:
@@ -1428,18 +1519,20 @@ class GoalsProjectionPage(QWidget):
             progress_pct = min((current_amount / target_amount) * 100.0, 999.0) if target_amount > 0 else 0.0
             monthly_needed = self._goal_required_monthly_amount(target_amount, current_amount, goal.get("target_date"))
             goal_status = self._goal_status_with_alert(goal.to_dict(), monthly_needed)
-            rows.append({
-                "id": int(goal["id"]),
-                "Nom": str(goal.get("name") or ""),
-                "Catégorie": str(goal.get("category") or ""),
-                "Montant cible": target_amount,
-                "Montant actuel": current_amount,
-                "Avancement": self._goal_progress_bar(progress_pct),
-                "Progression %": round(progress_pct, 1),
-                "Date cible": str(goal.get("target_date") or "—"),
-                "Montant mensuel nécessaire": round(monthly_needed, 2),
-                "Statut": goal_status,
-            })
+            rows.append(
+                {
+                    "id": int(goal["id"]),
+                    "Nom": str(goal.get("name") or ""),
+                    "Catégorie": str(goal.get("category") or ""),
+                    "Montant cible": target_amount,
+                    "Montant actuel": current_amount,
+                    "Avancement": self._goal_progress_bar(progress_pct),
+                    "Progression %": round(progress_pct, 1),
+                    "Date cible": str(goal.get("target_date") or "—"),
+                    "Montant mensuel nécessaire": round(monthly_needed, 2),
+                    "Statut": goal_status,
+                }
+            )
 
         display_df = pd.DataFrame(rows)
         self._goals_table.set_dataframe(display_df)
@@ -1501,7 +1594,9 @@ class GoalsProjectionPage(QWidget):
             QMessageBox.information(self, "Objectifs", "Sélectionnez un objectif à supprimer.")
             return
         answer = QMessageBox.question(
-            self, "Confirmer la suppression", "Supprimer cet objectif ?",
+            self,
+            "Confirmer la suppression",
+            "Supprimer cet objectif ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
@@ -1525,7 +1620,11 @@ class GoalsProjectionPage(QWidget):
             QMessageBox.warning(self, "Objectifs", "Objectif introuvable.")
             return
         try:
-            update_goal(self._conn, goal_id, {"status": "ACHIEVED", "current_amount": safe_float(goal_row.get("target_amount"))})
+            update_goal(
+                self._conn,
+                goal_id,
+                {"status": "ACHIEVED", "current_amount": safe_float(goal_row.get("target_amount"))},
+            )
             self._refresh_goals_tab()
             self._goals_status.setStyleSheet(STYLE_STATUS_SUCCESS)
             self._goals_status.setText("✅ Objectif marqué comme atteint.")
@@ -1551,10 +1650,7 @@ class GoalsProjectionPage(QWidget):
             self._scenarios_status.setText(f"Périmètre {self._scope_label()} : 0 scénario.")
             return
 
-        rows = [
-            extract_scenario_display_row(sc.to_dict(), safe_float)
-            for _, sc in self._scenarios_raw_df.iterrows()
-        ]
+        rows = [extract_scenario_display_row(sc.to_dict(), safe_float) for _, sc in self._scenarios_raw_df.iterrows()]
         display_df = pd.DataFrame(rows)
         self._scenarios_table.set_dataframe(display_df)
         self._scenarios_table.hide_column("id")
@@ -1579,9 +1675,7 @@ class GoalsProjectionPage(QWidget):
             return
 
         params = self._build_projection_params()
-        payload = build_scenario_payload_from_params(
-            params, scenario_name, self._scope_type, self._scope_id
-        )
+        payload = build_scenario_payload_from_params(params, scenario_name, self._scope_type, self._scope_id)
         try:
             create_scenario(self._conn, payload)
             self._refresh_scenarios_tab()
@@ -1611,7 +1705,9 @@ class GoalsProjectionPage(QWidget):
             QMessageBox.information(self, "Scénarios", "Sélectionnez un scénario à supprimer.")
             return
         answer = QMessageBox.question(
-            self, "Confirmer la suppression", "Supprimer ce scénario ?",
+            self,
+            "Confirmer la suppression",
+            "Supprimer ce scénario ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
@@ -1641,4 +1737,3 @@ class GoalsProjectionPage(QWidget):
             QMessageBox.warning(self, "Validation", str(exc))
         except Exception as exc:
             QMessageBox.critical(self, "Erreur", f"Impossible de définir le scénario par défaut :\n{exc}")
-

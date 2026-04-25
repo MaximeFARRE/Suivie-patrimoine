@@ -1,15 +1,27 @@
 """
 Panel d'ajout de compte — remplace ui/compte_ajout.py
 """
+
 import logging
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QLineEdit, QGroupBox
-)
+
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+)
+
 from qt_ui.theme import (
-    STYLE_INPUT, STYLE_BTN_CREATE, STYLE_GROUP,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, ACCENT_BLUE,
+    ACCENT_BLUE,
+    STYLE_BTN_CREATE,
+    STYLE_GROUP,
+    STYLE_INPUT,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
 )
 from utils.libelles import SOUS_TYPES_LIVRET
 
@@ -35,6 +47,7 @@ _SOUS_TYPES_LIVRET_CODES = list(SOUS_TYPES_LIVRET.keys())
 
 class AjoutComptePanel(QGroupBox):
     """Panel pliable pour ajouter un compte. Émet account_created() lors du succès."""
+
     account_created = pyqtSignal()
 
     def __init__(self, conn, person_id: int, parent=None):
@@ -132,6 +145,7 @@ class AjoutComptePanel(QGroupBox):
 
         try:
             from services import repositories as repo
+
             repo.create_account(
                 self._conn,
                 self._person_id,

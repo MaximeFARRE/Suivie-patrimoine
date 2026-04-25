@@ -10,12 +10,14 @@ Cas couverts :
 - ventilation par compte (colonnes + valeurs)
 - year/month None → utilise le mois courant sans planter
 """
-import pytest
+
 import pandas as pd
+import pytest
+
 from services.cashflow import get_family_flux_summary
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def conn_famille(conn):
@@ -23,29 +25,26 @@ def conn_famille(conn):
     conn.execute("INSERT INTO people(name) VALUES ('Alice')")
     conn.execute("INSERT INTO people(name) VALUES ('Bob')")
     conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (1, 'Banque Alice', 'BANQUE', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (1, 'Banque Alice', 'BANQUE', 'EUR')"
     )
     conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) "
-        "VALUES (2, 'Banque Bob', 'BANQUE', 'EUR')"
+        "INSERT INTO accounts(person_id, name, account_type, currency) " "VALUES (2, 'Banque Bob', 'BANQUE', 'EUR')"
     )
     conn.commit()
     return conn
 
 
-def _insert_tx(conn, person_id: int, account_id: int,
-               date: str, tx_type: str, amount: float) -> None:
+def _insert_tx(conn, person_id: int, account_id: int, date: str, tx_type: str, amount: float) -> None:
     """Helper : insère une transaction minimale."""
     conn.execute(
-        "INSERT INTO transactions(person_id, account_id, date, type, amount) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO transactions(person_id, account_id, date, type, amount) " "VALUES (?, ?, ?, ?, ?)",
         (person_id, account_id, date, tx_type, amount),
     )
     conn.commit()
 
 
 # ── Cas limites ───────────────────────────────────────────────────────────────
+
 
 def test_family_flux_aucune_personne_retourne_vide(conn):
     """Sans personne en base, la fonction retourne un résultat vide sans planter."""
@@ -75,6 +74,7 @@ def test_family_flux_year_month_none_ne_plante_pas(conn_famille):
 
 # ── Calculs nominaux ──────────────────────────────────────────────────────────
 
+
 def test_family_flux_solde_total(conn_famille):
     """Le solde total agrège les transactions des deux personnes."""
     _insert_tx(conn_famille, 1, 1, "2025-01-10", "DEPOT", 1000.0)
@@ -102,6 +102,7 @@ def test_family_flux_cashflow_mois_filtre(conn_famille):
 
 # ── Ventilation par personne ──────────────────────────────────────────────────
 
+
 def test_family_flux_par_personne_colonnes(conn_famille):
     """Le DataFrame par_personne a les bonnes colonnes et une ligne par personne."""
     _insert_tx(conn_famille, 1, 1, "2025-01-10", "DEPOT", 500.0)
@@ -122,13 +123,14 @@ def test_family_flux_par_personne_soldes_isoles(conn_famille):
     df = result["par_personne"]
 
     alice_row = df[df["Personne"] == "Alice"]
-    bob_row   = df[df["Personne"] == "Bob"]
+    bob_row = df[df["Personne"] == "Bob"]
 
     assert float(alice_row["Solde (flux)"].iloc[0]) == pytest.approx(800.0)
     assert float(bob_row["Solde (flux)"].iloc[0]) == pytest.approx(300.0)
 
 
 # ── Ventilation par compte ────────────────────────────────────────────────────
+
 
 def test_family_flux_par_compte_colonnes(conn_famille):
     """Le DataFrame par_compte a les bonnes colonnes et une ligne par compte."""
@@ -158,12 +160,17 @@ def test_family_flux_par_compte_solde_correct(conn_famille):
 
 # ── Clés de retour ────────────────────────────────────────────────────────────
 
+
 def test_family_flux_cles_retour_completes(conn_famille):
     """Le dictionnaire retourné contient toutes les clés attendues."""
     result = get_family_flux_summary(conn_famille, year=2025, month=1)
 
     expected_keys = {
-        "solde_total", "cashflow_mois", "n_operations",
-        "par_personne", "par_compte", "dernieres_operations",
+        "solde_total",
+        "cashflow_mois",
+        "n_operations",
+        "par_personne",
+        "par_compte",
+        "dernieres_operations",
     }
     assert expected_keys <= result.keys()

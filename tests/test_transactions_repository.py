@@ -4,12 +4,8 @@ from services import repositories as repo
 def _seed_people_accounts_assets(conn):
     conn.execute("INSERT INTO people(name) VALUES ('Alice')")
     conn.execute("INSERT INTO people(name) VALUES ('Bob')")
-    conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) VALUES (1, 'PEA Alice', 'PEA', 'EUR')"
-    )
-    conn.execute(
-        "INSERT INTO accounts(person_id, name, account_type, currency) VALUES (2, 'CTO Bob', 'CTO', 'EUR')"
-    )
+    conn.execute("INSERT INTO accounts(person_id, name, account_type, currency) VALUES (1, 'PEA Alice', 'PEA', 'EUR')")
+    conn.execute("INSERT INTO accounts(person_id, name, account_type, currency) VALUES (2, 'CTO Bob', 'CTO', 'EUR')")
     conn.execute(
         "INSERT INTO assets(symbol, name, asset_type, currency) VALUES ('CW8', 'Amundi MSCI World', 'etf', 'EUR')"
     )

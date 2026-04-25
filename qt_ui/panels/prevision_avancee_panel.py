@@ -3,6 +3,7 @@ Panel Prévision avancée — moteur déterministe, Monte Carlo, stress tests.
 Consomme uniquement services.prevision (façade publique) et
 services.simulation_presets_repository pour les hypothèses de rendement.
 """
+
 import logging
 import math
 import time
@@ -51,25 +52,25 @@ logger = logging.getLogger(__name__)
 
 # Correspondance champ preset → clé PrevisionConfig par classe d'actif
 _RETURN_FIELDS = {
-    "Liquidités":  ("return_liquidites_pct",  "vol_liquidites_pct"),
-    "Bourse":      ("return_bourse_pct",       "vol_bourse_pct"),
-    "Immobilier":  ("return_immobilier_pct",   "vol_immobilier_pct"),
-    "PE":          ("return_pe_pct",           "vol_pe_pct"),
-    "Entreprises": ("return_entreprises_pct",  "vol_entreprises_pct"),
-    "Crypto":      (None,                      "vol_crypto_pct"),
+    "Liquidités": ("return_liquidites_pct", "vol_liquidites_pct"),
+    "Bourse": ("return_bourse_pct", "vol_bourse_pct"),
+    "Immobilier": ("return_immobilier_pct", "vol_immobilier_pct"),
+    "PE": ("return_pe_pct", "vol_pe_pct"),
+    "Entreprises": ("return_entreprises_pct", "vol_entreprises_pct"),
+    "Crypto": (None, "vol_crypto_pct"),
 }
 
 _PRESET_LABELS = {
     "pessimiste": "😟  Pessimiste",
-    "realiste":   "📊  Réaliste",
-    "optimiste":  "🚀  Optimiste",
+    "realiste": "📊  Réaliste",
+    "optimiste": "🚀  Optimiste",
 }
 
 # Couleurs des 3 scénarios pour les graphiques
 _PRESET_COLORS = {
     "pessimiste": "#ef4444",
-    "realiste":   "#60a5fa",
-    "optimiste":  "#22c55e",
+    "realiste": "#60a5fa",
+    "optimiste": "#22c55e",
 }
 
 _CRYPTO_RETURN_DEFAULT = 0.0
@@ -77,8 +78,10 @@ _CRYPTO_RETURN_DEFAULT = 0.0
 
 # ─── Threads ─────────────────────────────────────────────────────────────
 
+
 class _PrevisionThread(QThread):
     """Exécute run_prevision dans un thread séparé."""
+
     finished = pyqtSignal(object)
     error = pyqtSignal(str)
 
@@ -93,16 +96,14 @@ class _PrevisionThread(QThread):
         try:
             from services.db import get_conn
             from services.projection_service import ProjectionService
+
             with get_conn() as conn:
                 result = ProjectionService.generate_projection(
-                    conn=conn, 
-                    scope_type=self._scope_type, 
+                    conn=conn,
+                    scope_type=self._scope_type,
                     scope_id=self._scope_id,
                     engine_type="advanced",
-                    options={
-                        "config": self._config,
-                        "engine": self._engine
-                    }
+                    options={"config": self._config, "engine": self._engine},
                 )
             self.finished.emit(result)
         except Exception as exc:
@@ -112,6 +113,7 @@ class _PrevisionThread(QThread):
 
 class _StressThread(QThread):
     """Exécute run_stress_prevision dans un thread séparé."""
+
     finished = pyqtSignal(object)
     error = pyqtSignal(str)
 
@@ -126,16 +128,14 @@ class _StressThread(QThread):
         try:
             from services.db import get_conn
             from services.projection_service import ProjectionService
+
             with get_conn() as conn:
                 result = ProjectionService.generate_projection(
-                    conn=conn, 
-                    scope_type=self._scope_type, 
+                    conn=conn,
+                    scope_type=self._scope_type,
                     scope_id=self._scope_id,
                     engine_type="advanced",
-                    options={
-                        "config": self._config,
-                        "scenario": self._scenario
-                    }
+                    options={"config": self._config, "scenario": self._scenario},
                 )
             self.finished.emit(result)
         except Exception as exc:
@@ -149,7 +149,8 @@ class _MultiScenarioThread(QThread):
     déterministe pour le même scope, puis renvoie les 3 résultats.
     Les presets sont chargés depuis la DB dans le thread.
     """
-    finished = pyqtSignal(object)   # dict[str, PrevisionResult]
+
+    finished = pyqtSignal(object)  # dict[str, PrevisionResult]
     error = pyqtSignal(str)
 
     def __init__(self, scope_type: str, scope_id: Optional[int], base_params: dict):
@@ -168,8 +169,10 @@ class _MultiScenarioThread(QThread):
         try:
             from services.db import get_conn
             from services.projection_service import ProjectionService
-            from services.prevision_models import PrevisionConfig
-            from services.simulation_presets_repository import get_preset, initialize_default_presets
+            from services.simulation_presets_repository import (
+                get_preset,
+                initialize_default_presets,
+            )
 
             with get_conn() as conn:
                 initialize_default_presets(conn, self._scope_type, self._scope_id)
@@ -178,21 +181,18 @@ class _MultiScenarioThread(QThread):
                     p = get_preset(conn, preset_key, self._scope_type, self._scope_id)
                     config = _build_config_from_preset(p, self._base_params)
                     results[preset_key] = ProjectionService.generate_projection(
-                        conn=conn, 
-                        scope_type=self._scope_type, 
+                        conn=conn,
+                        scope_type=self._scope_type,
                         scope_id=self._scope_id,
                         engine_type="advanced",
-                        options={
-                            "config": config,
-                            "engine": "deterministic"
-                        }
+                        options={"config": config, "engine": "deterministic"},
                     )
-            
+
             multi_warnings = set()
             for res in results.values():
                 if res and res.base:
                     multi_warnings.update(getattr(res.base, "warnings", []))
-            
+
             self.finished.emit({"results": results, "warnings": list(multi_warnings)})
         except Exception as exc:
             logger.error("Erreur multi-scenario thread: %s", exc)
@@ -200,6 +200,7 @@ class _MultiScenarioThread(QThread):
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────
+
 
 def _pct(value: float) -> str:
     if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -243,20 +244,20 @@ def _build_config_from_preset(preset_data: dict, base_params: dict):
     from services.prevision_models import PrevisionConfig
 
     expected_returns = {
-        "Liquidités":  _pct_val(preset_data, "return_liquidites_pct",  2.0),
-        "Bourse":      _pct_val(preset_data, "return_bourse_pct",       7.0),
-        "Immobilier":  _pct_val(preset_data, "return_immobilier_pct",   3.5),
-        "PE":          _pct_val(preset_data, "return_pe_pct",          10.0),
-        "Entreprises": _pct_val(preset_data, "return_entreprises_pct",  5.0),
-        "Crypto":      _CRYPTO_RETURN_DEFAULT,
+        "Liquidités": _pct_val(preset_data, "return_liquidites_pct", 2.0),
+        "Bourse": _pct_val(preset_data, "return_bourse_pct", 7.0),
+        "Immobilier": _pct_val(preset_data, "return_immobilier_pct", 3.5),
+        "PE": _pct_val(preset_data, "return_pe_pct", 10.0),
+        "Entreprises": _pct_val(preset_data, "return_entreprises_pct", 5.0),
+        "Crypto": _CRYPTO_RETURN_DEFAULT,
     }
     expected_volatilities = {
-        "Liquidités":  _pct_val(preset_data, "vol_liquidites_pct",   1.0),
-        "Bourse":      _pct_val(preset_data, "vol_bourse_pct",       15.0),
-        "Immobilier":  _pct_val(preset_data, "vol_immobilier_pct",    5.0),
-        "PE":          _pct_val(preset_data, "vol_pe_pct",           20.0),
-        "Entreprises": _pct_val(preset_data, "vol_entreprises_pct",  15.0),
-        "Crypto":      _pct_val(preset_data, "vol_crypto_pct",       50.0),
+        "Liquidités": _pct_val(preset_data, "vol_liquidites_pct", 1.0),
+        "Bourse": _pct_val(preset_data, "vol_bourse_pct", 15.0),
+        "Immobilier": _pct_val(preset_data, "vol_immobilier_pct", 5.0),
+        "PE": _pct_val(preset_data, "vol_pe_pct", 20.0),
+        "Entreprises": _pct_val(preset_data, "vol_entreprises_pct", 15.0),
+        "Crypto": _pct_val(preset_data, "vol_crypto_pct", 50.0),
     }
     return PrevisionConfig(
         horizon_years=base_params.get("horizon_years", 20),
@@ -271,6 +272,7 @@ def _build_config_from_preset(preset_data: dict, base_params: dict):
 
 
 # ─── Panel principal ─────────────────────────────────────────────────────
+
 
 class PrevisionAvanceePanel(QWidget):
     """
@@ -287,7 +289,7 @@ class PrevisionAvanceePanel(QWidget):
         self._thread: Optional[QThread] = None
         self._result = None
         self._stress_result = None
-        self._multi_results: dict = {}   # {preset_key: PrevisionResult}
+        self._multi_results: dict = {}  # {preset_key: PrevisionResult}
         self._preset_data: dict = {}
         self._preset_info_labels: dict = {}
         self._preset_cache_ttl_sec = 30.0
@@ -308,9 +310,7 @@ class PrevisionAvanceePanel(QWidget):
         title.setStyleSheet(STYLE_TITLE)
         layout.addWidget(title)
 
-        subtitle = QLabel(
-            "Moteur de projection avancé : déterministe, Monte Carlo, stress tests."
-        )
+        subtitle = QLabel("Moteur de projection avancé : déterministe, Monte Carlo, stress tests.")
         subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
         layout.addWidget(subtitle)
 
@@ -322,7 +322,9 @@ class PrevisionAvanceePanel(QWidget):
         layout.addLayout(self._build_action_buttons())
 
         self._warnings_label = QLabel("")
-        self._warnings_label.setStyleSheet("color: #d97706; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 4px; padding: 10px; font-weight: bold; font-size: 13px;")
+        self._warnings_label.setStyleSheet(
+            "color: #d97706; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 4px; padding: 10px; font-weight: bold; font-size: 13px;"
+        )
         self._warnings_label.setWordWrap(True)
         self._warnings_label.setVisible(False)
         layout.addWidget(self._warnings_label)
@@ -336,9 +338,7 @@ class PrevisionAvanceePanel(QWidget):
 
         self._diagnostics_label = QLabel("")
         self._diagnostics_label.setWordWrap(True)
-        self._diagnostics_label.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 12px; line-height: 1.5;"
-        )
+        self._diagnostics_label.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px; line-height: 1.5;")
         layout.addWidget(self._diagnostics_label)
 
         # ── Graphique trajectoire (simulation courante) ───────────────
@@ -356,9 +356,7 @@ class PrevisionAvanceePanel(QWidget):
         layout.addWidget(self._chart_histogram)
 
         # ── Graphique comparaison 3 scénarios (conditionnel) ─────────
-        self._multi_section_title = QLabel(
-            "Comparaison Pessimiste / Réaliste / Optimiste"
-        )
+        self._multi_section_title = QLabel("Comparaison Pessimiste / Réaliste / Optimiste")
         self._multi_section_title.setStyleSheet(STYLE_SECTION)
         self._multi_section_title.setVisible(False)
         layout.addWidget(self._multi_section_title)
@@ -469,7 +467,7 @@ class PrevisionAvanceePanel(QWidget):
         self._combo_preset = QComboBox()
         for key, label in _PRESET_LABELS.items():
             self._combo_preset.addItem(label, key)
-        self._combo_preset.setCurrentIndex(1)   # Réaliste par défaut
+        self._combo_preset.setCurrentIndex(1)  # Réaliste par défaut
         self._combo_preset.setStyleSheet(self._combo_style())
         self._combo_preset.currentIndexChanged.connect(self._load_preset_display)
         preset_row.addRow("Scénario :", self._combo_preset)
@@ -494,15 +492,15 @@ class PrevisionAvanceePanel(QWidget):
             lbl_ret = _info_label("—")
             lbl_vol = _info_label("—")
             grid.addWidget(lbl_name, row_idx, 0)
-            grid.addWidget(lbl_ret,  row_idx, 1)
-            grid.addWidget(lbl_vol,  row_idx, 2)
+            grid.addWidget(lbl_ret, row_idx, 1)
+            grid.addWidget(lbl_vol, row_idx, 2)
             self._preset_info_labels[name] = (lbl_ret, lbl_vol)
 
         row_infl = len(_RETURN_FIELDS) + 1
         lbl_infl_name = QLabel("Inflation")
         lbl_infl_name.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px;")
         self._lbl_inflation_info = _info_label("—")
-        grid.addWidget(lbl_infl_name,            row_infl, 0)
+        grid.addWidget(lbl_infl_name, row_infl, 0)
         grid.addWidget(self._lbl_inflation_info, row_infl, 1)
 
         v.addLayout(grid)
@@ -544,18 +542,18 @@ class PrevisionAvanceePanel(QWidget):
 
     def _build_kpi_section(self) -> QVBoxLayout:
         row1 = QHBoxLayout()
-        self._kpi_final   = KpiCard(tone="blue")
-        self._kpi_median  = KpiCard(tone="green")
-        self._kpi_p10     = KpiCard(tone="neutral")
-        self._kpi_p90     = KpiCard(tone="purple")
+        self._kpi_final = KpiCard(tone="blue")
+        self._kpi_median = KpiCard(tone="green")
+        self._kpi_p10 = KpiCard(tone="neutral")
+        self._kpi_p90 = KpiCard(tone="purple")
         for card in (self._kpi_final, self._kpi_median, self._kpi_p10, self._kpi_p90):
             row1.addWidget(card)
 
         row2 = QHBoxLayout()
-        self._kpi_proba    = KpiCard(tone="primary")
+        self._kpi_proba = KpiCard(tone="primary")
         self._kpi_drawdown = KpiCard(tone="neutral")
-        self._kpi_var      = KpiCard(tone="neutral")
-        self._kpi_fire     = KpiCard(tone="neutral")
+        self._kpi_var = KpiCard(tone="neutral")
+        self._kpi_fire = KpiCard(tone="neutral")
         for card in (self._kpi_proba, self._kpi_drawdown, self._kpi_var, self._kpi_fire):
             row2.addWidget(card)
 
@@ -567,11 +565,10 @@ class PrevisionAvanceePanel(QWidget):
 
     def _build_stress_kpi_section(self) -> QHBoxLayout:
         row = QHBoxLayout()
-        self._kpi_stress_delta    = KpiCard(tone="neutral")
+        self._kpi_stress_delta = KpiCard(tone="neutral")
         self._kpi_stress_drawdown = KpiCard(tone="neutral")
         self._kpi_stress_recovery = KpiCard(tone="neutral")
-        for card in (self._kpi_stress_delta, self._kpi_stress_drawdown,
-                     self._kpi_stress_recovery):
+        for card in (self._kpi_stress_delta, self._kpi_stress_drawdown, self._kpi_stress_recovery):
             card.setVisible(False)
             row.addWidget(card)
         return row
@@ -595,6 +592,7 @@ class PrevisionAvanceePanel(QWidget):
         self._combo_scope.addItem("Famille", ("family", None))
         try:
             from services.goals_projection_repository import list_people_for_scope
+
             people_df = list_people_for_scope(self._conn)
             if people_df is not None and not people_df.empty:
                 for _, row in people_df.iterrows():
@@ -608,6 +606,7 @@ class PrevisionAvanceePanel(QWidget):
     def _load_stress_scenarios(self):
         try:
             from services.projection_service import ProjectionService
+
             for key, scenario in ProjectionService.list_standard_stress_scenarios().items():
                 self._combo_stress.addItem(scenario.description, key)
         except Exception as exc:
@@ -621,22 +620,20 @@ class PrevisionAvanceePanel(QWidget):
         if not preset_key:
             return
         try:
-            from services.simulation_presets_repository import get_preset, initialize_default_presets
+            from services.simulation_presets_repository import (
+                get_preset,
+                initialize_default_presets,
+            )
+
             cache_key = (self._scope_type, self._scope_id, str(preset_key))
             now = time.monotonic()
             cached = self._preset_cache.get(cache_key)
 
-            if (
-                not force
-                and cached is not None
-                and (now - cached[0]) <= self._preset_cache_ttl_sec
-            ):
+            if not force and cached is not None and (now - cached[0]) <= self._preset_cache_ttl_sec:
                 self._preset_data = cached[1]
             else:
                 initialize_default_presets(self._conn, self._scope_type, self._scope_id)
-                self._preset_data = get_preset(
-                    self._conn, preset_key, self._scope_type, self._scope_id
-                )
+                self._preset_data = get_preset(self._conn, preset_key, self._scope_type, self._scope_id)
                 self._preset_cache[cache_key] = (now, self._preset_data)
         except Exception as exc:
             logger.error("Impossible de charger le preset '%s': %s", preset_key, exc)
@@ -653,9 +650,7 @@ class PrevisionAvanceePanel(QWidget):
                 lbl_ret.setText(f"{_CRYPTO_RETURN_DEFAULT * 100:.1f} %")
             lbl_vol.setText(f"{self._preset_data.get(vol_field, 0.0):.1f} %")
 
-        self._lbl_inflation_info.setText(
-            f"{self._preset_data.get('inflation_pct', 2.0):.1f} %"
-        )
+        self._lbl_inflation_info.setText(f"{self._preset_data.get('inflation_pct', 2.0):.1f} %")
 
     # ── API publique ─────────────────────────────────────────────────────
 
@@ -720,14 +715,12 @@ class PrevisionAvanceePanel(QWidget):
         self._set_buttons_enabled(False)
 
         base_params = {
-            "horizon_years":      self._spin_horizon.value(),
-            "num_simulations":    self._spin_simulations.value(),
+            "horizon_years": self._spin_horizon.value(),
+            "num_simulations": self._spin_simulations.value(),
             "monthly_contribution": self._spin_contribution.value(),
             "target_goal_amount": self._spin_goal.value() or None,
         }
-        self._thread = _MultiScenarioThread(
-            self._scope_type, self._scope_id, base_params
-        )
+        self._thread = _MultiScenarioThread(self._scope_type, self._scope_id, base_params)
         self._thread.finished.connect(self._on_multi_finished)
         self._thread.error.connect(self._on_error)
         self._thread.start()
@@ -755,18 +748,21 @@ class PrevisionAvanceePanel(QWidget):
         return _build_config_from_preset(
             self._preset_data,
             {
-                "horizon_years":        self._spin_horizon.value(),
-                "num_simulations":      self._spin_simulations.value(),
+                "horizon_years": self._spin_horizon.value(),
+                "num_simulations": self._spin_simulations.value(),
                 "monthly_contribution": self._spin_contribution.value(),
-                "target_goal_amount":   self._spin_goal.value() or None,
-            }
+                "target_goal_amount": self._spin_goal.value() or None,
+            },
         )
 
     # ── Lancement des simulations ────────────────────────────────────────
 
     def _run_prevision(self, config, engine: str):
         self._thread = _PrevisionThread(
-            self._scope_type, self._scope_id, config, engine,
+            self._scope_type,
+            self._scope_id,
+            config,
+            engine,
         )
         self._thread.finished.connect(self._on_prevision_finished)
         self._thread.error.connect(self._on_error)
@@ -774,12 +770,16 @@ class PrevisionAvanceePanel(QWidget):
 
     def _run_stress(self, config, stress_key: str):
         from services.projection_service import ProjectionService
+
         scenario = ProjectionService.list_standard_stress_scenarios().get(stress_key)
         if not scenario:
             self._set_error_state(f"Scénario inconnu : {stress_key}")
             return
         self._thread = _StressThread(
-            self._scope_type, self._scope_id, config, scenario,
+            self._scope_type,
+            self._scope_id,
+            config,
+            scenario,
         )
         self._thread.finished.connect(self._on_stress_finished)
         self._thread.error.connect(self._on_error)
@@ -795,11 +795,11 @@ class PrevisionAvanceePanel(QWidget):
         self._update_diagnostics(result)
         self._hide_stress_section()
         self._hide_multi_section()
-        
+
         warnings_texts = getattr(result.base, "warnings", []) if hasattr(result, "base") else []
         self._show_warnings(warnings_texts)
 
-        scope_label  = self._combo_scope.currentText()
+        scope_label = self._combo_scope.currentText()
         preset_label = self._combo_preset.currentText()
         engine_label = self._combo_engine.currentText()
         self._status_label.setStyleSheet(STYLE_STATUS_SUCCESS)
@@ -817,15 +817,17 @@ class PrevisionAvanceePanel(QWidget):
         self._update_diagnostics(stress_result.baseline_result)
         self._show_stress_section(stress_result)
         self._hide_multi_section()
-        
-        warnings_texts = getattr(stress_result.baseline_result.base, "warnings", []) if hasattr(stress_result.baseline_result, "base") else []
+
+        warnings_texts = (
+            getattr(stress_result.baseline_result.base, "warnings", [])
+            if hasattr(stress_result.baseline_result, "base")
+            else []
+        )
         self._show_warnings(warnings_texts)
 
         scope_label = self._combo_scope.currentText()
         self._status_label.setStyleSheet(STYLE_STATUS_SUCCESS)
-        self._status_label.setText(
-            f"✅ Stress test terminé — {scope_label} : {stress_result.scenario.description}"
-        )
+        self._status_label.setText(f"✅ Stress test terminé — {scope_label} : {stress_result.scenario.description}")
         self._set_buttons_enabled(True)
 
     def _on_multi_finished(self, payload):
@@ -884,11 +886,7 @@ class PrevisionAvanceePanel(QWidget):
             tone="blue",
         )
         net_worth = result.base.current_net_worth
-        net_subtitle = (
-            "⚠️ Patrimoine non renseigné — vérifiez les données"
-            if net_worth == 0.0
-            else "Base de départ"
-        )
+        net_subtitle = "⚠️ Patrimoine non renseigné — vérifiez les données" if net_worth == 0.0 else "Base de départ"
         self._kpi_median.set_content(
             "Patrimoine actuel",
             money(net_worth),
@@ -928,10 +926,14 @@ class PrevisionAvanceePanel(QWidget):
 
         if result.risk_metrics:
             self._kpi_drawdown.set_content(
-                "Max drawdown", _pct(result.risk_metrics.max_drawdown), tone="neutral",
+                "Max drawdown",
+                _pct(result.risk_metrics.max_drawdown),
+                tone="neutral",
             )
             self._kpi_var.set_content(
-                "VaR 95%", money(result.risk_metrics.var_95), tone="neutral",
+                "VaR 95%",
+                money(result.risk_metrics.var_95),
+                tone="neutral",
             )
         else:
             self._kpi_drawdown.set_content("Max drawdown", "—", tone="neutral")
@@ -953,7 +955,7 @@ class PrevisionAvanceePanel(QWidget):
             return
 
         fire_years = fire.get("fire_years", 0)
-        fire_year  = fire.get("fire_year_calendar", "—")
+        fire_year = fire.get("fire_year_calendar", "—")
         tone = "success" if fire_years <= 15 else "primary"
         self._kpi_fire.set_content(
             "Date FIRE estimée",
@@ -975,30 +977,51 @@ class PrevisionAvanceePanel(QWidget):
         x_years = [v / 12.0 for v in range(len(median))]
 
         if result.percentile_10_series is not None and result.percentile_90_series is not None:
-            fig.add_trace(go.Scatter(
-                x=x_years, y=result.percentile_90_series.values,
-                mode="lines", line=dict(width=0), showlegend=False, name="P90",
-            ))
-            fig.add_trace(go.Scatter(
-                x=x_years, y=result.percentile_10_series.values,
-                mode="lines", line=dict(width=0),
-                fill="tonexty", fillcolor="rgba(96,165,250,0.15)",
-                showlegend=True, name="Intervalle P10–P90",
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=x_years,
+                    y=result.percentile_90_series.values,
+                    mode="lines",
+                    line=dict(width=0),
+                    showlegend=False,
+                    name="P90",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=x_years,
+                    y=result.percentile_10_series.values,
+                    mode="lines",
+                    line=dict(width=0),
+                    fill="tonexty",
+                    fillcolor="rgba(96,165,250,0.15)",
+                    showlegend=True,
+                    name="Intervalle P10–P90",
+                )
+            )
 
-        fig.add_trace(go.Scatter(
-            x=x_years, y=median.values,
-            mode="lines", line=dict(color="#60a5fa", width=3), name="Médiane",
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=x_years,
+                y=median.values,
+                mode="lines",
+                line=dict(color="#60a5fa", width=3),
+                name="Médiane",
+            )
+        )
 
         # Ligne objectif
         goal = result.config.target_goal_amount
         if goal and goal > 0:
-            fig.add_trace(go.Scatter(
-                x=x_years, y=[goal] * len(x_years),
-                mode="lines", line=dict(color="#f59e0b", width=2, dash="dash"),
-                name=f"Objectif ({money(goal)})",
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=x_years,
+                    y=[goal] * len(x_years),
+                    mode="lines",
+                    line=dict(color="#f59e0b", width=2, dash="dash"),
+                    name=f"Objectif ({money(goal)})",
+                )
+            )
 
         # Ligne FIRE
         fire = result.fire_date
@@ -1007,20 +1030,26 @@ class PrevisionAvanceePanel(QWidget):
             fire_target = result.base.fire_annual_expenses * result.config.fire_multiple
             if fire_target > 0:
                 fig.add_hline(
-                    y=fire_target, line_dash="dot", line_color="#a78bfa",
+                    y=fire_target,
+                    line_dash="dot",
+                    line_color="#a78bfa",
                     annotation_text=f"Cible FIRE ({money(fire_target)})",
                     annotation_position="right",
                 )
                 fig.add_vline(
-                    x=fire_years_val, line_dash="dot", line_color="#a78bfa",
+                    x=fire_years_val,
+                    line_dash="dot",
+                    line_color="#a78bfa",
                     annotation_text=f"FIRE an {fire.get('fire_year_calendar', '')}",
                     annotation_position="top right",
                 )
 
-        fig.update_layout(**plotly_layout(
-            margin=dict(l=10, r=10, t=20, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        ))
+        fig.update_layout(
+            **plotly_layout(
+                margin=dict(l=10, r=10, t=20, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            )
+        )
         fig.update_xaxes(title="Années")
         fig.update_yaxes(title="Patrimoine net (€)")
         return fig
@@ -1031,27 +1060,38 @@ class PrevisionAvanceePanel(QWidget):
         if result.trajectories_df is None or result.trajectories_df.empty:
             fig.add_annotation(
                 text="Histogramme disponible en mode Monte Carlo",
-                xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
                 font=dict(size=14, color=TEXT_MUTED),
             )
             fig.update_layout(**plotly_layout(margin=dict(l=10, r=10, t=20, b=10)))
             return fig
 
         final_values = result.trajectories_df.iloc[-1].values
-        fig.add_trace(go.Histogram(
-            x=final_values, nbinsx=50,
-            marker_color="rgba(96,165,250,0.6)",
-            marker_line=dict(color="#60a5fa", width=1),
-            name="Distribution finale",
-        ))
+        fig.add_trace(
+            go.Histogram(
+                x=final_values,
+                nbinsx=50,
+                marker_color="rgba(96,165,250,0.6)",
+                marker_line=dict(color="#60a5fa", width=1),
+                name="Distribution finale",
+            )
+        )
         fig.add_vline(
-            x=result.final_net_worth_median, line_dash="dash", line_color="#60a5fa",
+            x=result.final_net_worth_median,
+            line_dash="dash",
+            line_color="#60a5fa",
             annotation_text=f"Médiane: {money(result.final_net_worth_median)}",
         )
         goal = result.config.target_goal_amount
         if goal and goal > 0:
             fig.add_vline(
-                x=goal, line_dash="dot", line_color="#f59e0b",
+                x=goal,
+                line_dash="dot",
+                line_color="#f59e0b",
                 annotation_text=f"Objectif: {money(goal)}",
             )
         fig.update_layout(**plotly_layout(margin=dict(l=10, r=10, t=20, b=10)))
@@ -1082,46 +1122,57 @@ class PrevisionAvanceePanel(QWidget):
             result = results.get(preset_key)
             if result is None:
                 continue
-            label = label_raw.split("  ", 1)[-1]   # retirer l'emoji
+            label = label_raw.split("  ", 1)[-1]  # retirer l'emoji
             color = _PRESET_COLORS[preset_key]
             median = result.median_series
             x_years = [v / 12.0 for v in range(len(median))]
 
-            fig.add_trace(go.Scatter(
-                x=x_years, y=median.values,
-                mode="lines", line=dict(color=color, width=2.5),
-                name=label,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=x_years,
+                    y=median.values,
+                    mode="lines",
+                    line=dict(color=color, width=2.5),
+                    name=label,
+                )
+            )
 
             # Marqueur FIRE pour chaque scénario
             fire = result.fire_date
             if fire and fire.get("fire_reached"):
                 fire_yr = fire.get("fire_years", 0)
-                fire_val = float(result.median_series.iloc[
-                    min(int(fire_yr * 12), len(result.median_series) - 1)
-                ])
-                fig.add_trace(go.Scatter(
-                    x=[fire_yr], y=[fire_val],
-                    mode="markers",
-                    marker=dict(symbol="star", size=12, color=color),
-                    name=f"FIRE {label} ({fire.get('fire_year_calendar', '')})",
-                    showlegend=True,
-                ))
+                fire_val = float(result.median_series.iloc[min(int(fire_yr * 12), len(result.median_series) - 1)])
+                fig.add_trace(
+                    go.Scatter(
+                        x=[fire_yr],
+                        y=[fire_val],
+                        mode="markers",
+                        marker=dict(symbol="star", size=12, color=color),
+                        name=f"FIRE {label} ({fire.get('fire_year_calendar', '')})",
+                        showlegend=True,
+                    )
+                )
 
         # Ligne objectif commun
         if goal and goal > 0 and results:
             first_result = next(iter(results.values()))
             x_years_full = [v / 12.0 for v in range(len(first_result.median_series))]
-            fig.add_trace(go.Scatter(
-                x=x_years_full, y=[goal] * len(x_years_full),
-                mode="lines", line=dict(color="#f59e0b", width=2, dash="dash"),
-                name=f"Objectif ({money(goal)})",
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=x_years_full,
+                    y=[goal] * len(x_years_full),
+                    mode="lines",
+                    line=dict(color="#f59e0b", width=2, dash="dash"),
+                    name=f"Objectif ({money(goal)})",
+                )
+            )
 
-        fig.update_layout(**plotly_layout(
-            margin=dict(l=10, r=10, t=20, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        ))
+        fig.update_layout(
+            **plotly_layout(
+                margin=dict(l=10, r=10, t=20, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            )
+        )
         fig.update_xaxes(title="Années")
         fig.update_yaxes(title="Patrimoine net (€)")
         return fig
@@ -1166,19 +1217,30 @@ class PrevisionAvanceePanel(QWidget):
         fig = go.Figure()
         baseline = stress_result.baseline_result.median_series
         stressed = stress_result.stressed_result.median_series
-        fig.add_trace(go.Scatter(
-            x=[i / 12.0 for i in range(len(baseline))], y=baseline.values,
-            mode="lines", line=dict(color="#60a5fa", width=2.5), name="Baseline",
-        ))
-        fig.add_trace(go.Scatter(
-            x=[i / 12.0 for i in range(len(stressed))], y=stressed.values,
-            mode="lines", line=dict(color="#ef4444", width=2.5),
-            name=f"Stress: {stress_result.scenario.name}",
-        ))
-        fig.update_layout(**plotly_layout(
-            margin=dict(l=10, r=10, t=20, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=[i / 12.0 for i in range(len(baseline))],
+                y=baseline.values,
+                mode="lines",
+                line=dict(color="#60a5fa", width=2.5),
+                name="Baseline",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[i / 12.0 for i in range(len(stressed))],
+                y=stressed.values,
+                mode="lines",
+                line=dict(color="#ef4444", width=2.5),
+                name=f"Stress: {stress_result.scenario.name}",
+            )
+        )
+        fig.update_layout(
+            **plotly_layout(
+                margin=dict(l=10, r=10, t=20, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            )
+        )
         fig.update_xaxes(title="Années")
         fig.update_yaxes(title="Patrimoine net (€)")
         return fig
@@ -1196,18 +1258,16 @@ class PrevisionAvanceePanel(QWidget):
 
     def _set_empty_state(self):
         self._status_label.setStyleSheet(STYLE_STATUS)
-        self._status_label.setText(
-            "Configurez vos paramètres puis cliquez sur « Lancer la simulation »."
-        )
+        self._status_label.setText("Configurez vos paramètres puis cliquez sur « Lancer la simulation ».")
         for card, label in [
-            (self._kpi_final,    "Patrimoine final"),
-            (self._kpi_median,   "Patrimoine actuel"),
-            (self._kpi_p10,      "P10"),
-            (self._kpi_p90,      "P90"),
-            (self._kpi_proba,    "Probabilité"),
+            (self._kpi_final, "Patrimoine final"),
+            (self._kpi_median, "Patrimoine actuel"),
+            (self._kpi_p10, "P10"),
+            (self._kpi_p90, "P90"),
+            (self._kpi_proba, "Probabilité"),
             (self._kpi_drawdown, "Max drawdown"),
-            (self._kpi_var,      "VaR 95%"),
-            (self._kpi_fire,     "Date FIRE"),
+            (self._kpi_var, "VaR 95%"),
+            (self._kpi_fire, "Date FIRE"),
         ]:
             card.set_content(label, "—", tone="neutral")
 
@@ -1218,7 +1278,11 @@ class PrevisionAvanceePanel(QWidget):
         empty_fig = go.Figure()
         empty_fig.add_annotation(
             text="Aucune simulation lancée",
-            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
             font=dict(size=14, color=TEXT_MUTED),
         )
         empty_fig.update_layout(**plotly_layout(margin=dict(l=10, r=10, t=20, b=10)))
@@ -1227,12 +1291,10 @@ class PrevisionAvanceePanel(QWidget):
 
     def _set_loading_state(self, message: str):
         self._set_buttons_enabled(False)
-        scope_label  = self._combo_scope.currentText()
+        scope_label = self._combo_scope.currentText()
         preset_label = self._combo_preset.currentText()
         self._status_label.setStyleSheet(STYLE_STATUS_WARNING)
-        self._status_label.setText(
-            f"⏳ {message} ({scope_label}, {preset_label})"
-        )
+        self._status_label.setText(f"⏳ {message} ({scope_label}, {preset_label})")
 
     def _set_error_state(self, message: str):
         self._status_label.setStyleSheet(STYLE_STATUS_ERROR)

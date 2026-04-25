@@ -2,12 +2,19 @@
 Tests de rollback des batches d'import.
 Couvre : TR/BANKIN, DEPENSES, REVENUS, CREDIT, déjà annulé, introuvable.
 """
-import pytest
-from services.import_history import create_batch, close_batch, rollback_batch, _count_alive_rows
-from services.import_history import list_batches
 
+import pytest
+
+from services.import_history import (
+    _count_alive_rows,
+    close_batch,
+    create_batch,
+    list_batches,
+    rollback_batch,
+)
 
 # ─── helpers ────────────────────────────────────────────────────────────────
+
 
 def _insert_person(conn, name: str = "Alice") -> int:
     conn.execute("INSERT INTO people(name) VALUES (?)", (name,))
@@ -22,13 +29,12 @@ def _insert_account(conn, person_id: int, name: str = "Compte", account_type: st
         (person_id, name, account_type),
     )
     conn.commit()
-    row = conn.execute(
-        "SELECT id FROM accounts WHERE person_id = ? AND name = ?", (person_id, name)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM accounts WHERE person_id = ? AND name = ?", (person_id, name)).fetchone()
     return int(row[0])
 
 
 # ─── TR / BANKIN ─────────────────────────────────────────────────────────────
+
 
 def test_rollback_batch_tr_supprime_transactions(conn):
     person_id = _insert_person(conn)
@@ -56,15 +62,11 @@ def test_rollback_batch_tr_supprime_transactions(conn):
     assert result["total_deleted"] == 2
 
     # Vérifier que les transactions ont disparu
-    count = conn.execute(
-        "SELECT COUNT(*) FROM transactions WHERE import_batch_id = ?", (batch_id,)
-    ).fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM transactions WHERE import_batch_id = ?", (batch_id,)).fetchone()[0]
     assert count == 0
 
     # Vérifier que le batch est ROLLED_BACK
-    status = conn.execute(
-        "SELECT status FROM import_batches WHERE id = ?", (batch_id,)
-    ).fetchone()[0]
+    status = conn.execute("SELECT status FROM import_batches WHERE id = ?", (batch_id,)).fetchone()[0]
     assert status == "ROLLED_BACK"
 
 
@@ -79,8 +81,7 @@ def test_rollback_batch_bankin_resync_monthly_tables(conn):
         (person_id, account_id, batch_id),
     )
     conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) "
-        "VALUES (?, '2026-01-01', 'Courses', 100)",
+        "INSERT INTO depenses(person_id, mois, categorie, montant) " "VALUES (?, '2026-01-01', 'Courses', 100)",
         (person_id,),
     )
     conn.commit()
@@ -111,6 +112,7 @@ def test_create_batch_normalizes_import_type_uppercase(conn):
 
 # ─── DEPENSES ────────────────────────────────────────────────────────────────
 
+
 def test_rollback_batch_depenses_supprime_depenses(conn):
     person_id = _insert_person(conn)
     batch_id = create_batch(conn, "DEPENSES", person_id=person_id, person_name="Alice")
@@ -126,18 +128,15 @@ def test_rollback_batch_depenses_supprime_depenses(conn):
     result = rollback_batch(conn, batch_id)
 
     assert result["deleted"]["depenses"] == 1
-    count = conn.execute(
-        "SELECT COUNT(*) FROM depenses WHERE import_batch_id = ?", (batch_id,)
-    ).fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM depenses WHERE import_batch_id = ?", (batch_id,)).fetchone()[0]
     assert count == 0
 
-    status = conn.execute(
-        "SELECT status FROM import_batches WHERE id = ?", (batch_id,)
-    ).fetchone()[0]
+    status = conn.execute("SELECT status FROM import_batches WHERE id = ?", (batch_id,)).fetchone()[0]
     assert status == "ROLLED_BACK"
 
 
 # ─── REVENUS ─────────────────────────────────────────────────────────────────
+
 
 def test_rollback_batch_revenus_supprime_revenus(conn):
     person_id = _insert_person(conn)
@@ -154,18 +153,15 @@ def test_rollback_batch_revenus_supprime_revenus(conn):
     result = rollback_batch(conn, batch_id)
 
     assert result["deleted"]["revenus"] == 1
-    count = conn.execute(
-        "SELECT COUNT(*) FROM revenus WHERE import_batch_id = ?", (batch_id,)
-    ).fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM revenus WHERE import_batch_id = ?", (batch_id,)).fetchone()[0]
     assert count == 0
 
-    status = conn.execute(
-        "SELECT status FROM import_batches WHERE id = ?", (batch_id,)
-    ).fetchone()[0]
+    status = conn.execute("SELECT status FROM import_batches WHERE id = ?", (batch_id,)).fetchone()[0]
     assert status == "ROLLED_BACK"
 
 
 # ─── CREDIT ──────────────────────────────────────────────────────────────────
+
 
 def test_rollback_batch_credit_leve_value_error(conn):
     """Le rollback d'un crédit doit lever ValueError et laisser le batch ACTIVE."""
@@ -178,13 +174,12 @@ def test_rollback_batch_credit_leve_value_error(conn):
         rollback_batch(conn, batch_id)
 
     # Le statut doit rester ACTIVE (non modifié)
-    status = conn.execute(
-        "SELECT status FROM import_batches WHERE id = ?", (batch_id,)
-    ).fetchone()[0]
+    status = conn.execute("SELECT status FROM import_batches WHERE id = ?", (batch_id,)).fetchone()[0]
     assert status == "ACTIVE"
 
 
 # ─── Déjà annulé ─────────────────────────────────────────────────────────────
+
 
 def test_rollback_batch_deja_annule_leve_erreur(conn):
     person_id = _insert_person(conn)
@@ -199,12 +194,14 @@ def test_rollback_batch_deja_annule_leve_erreur(conn):
 
 # ─── Introuvable ─────────────────────────────────────────────────────────────
 
+
 def test_rollback_batch_inexistant_leve_erreur(conn):
     with pytest.raises(ValueError, match="introuvable"):
         rollback_batch(conn, 99999)
 
 
 # ─── _count_alive_rows CREDIT ────────────────────────────────────────────────
+
 
 def test_count_alive_rows_credit_utilise_table_credits(conn):
     person_id = _insert_person(conn)

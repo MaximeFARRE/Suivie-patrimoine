@@ -4,6 +4,7 @@ Panel Backtest portefeuille (PARTIE 2 UI).
 Affiche un backtest theorique portefeuille actuel vs benchmark
 en consommant uniquement ProjectionService.build_current_portfolio_backtest.
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,7 +12,7 @@ from typing import Optional
 
 import pandas as pd
 import plotly.graph_objects as go
-from PyQt6.QtCore import QThread, Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -40,8 +41,7 @@ from qt_ui.theme import (
     TEXT_SECONDARY,
     plotly_time_series_layout,
 )
-from qt_ui.widgets import KpiCard, PlotlyView
-from qt_ui.widgets import DataTableWidget
+from qt_ui.widgets import DataTableWidget, KpiCard, PlotlyView
 
 logger = logging.getLogger(__name__)
 
@@ -142,9 +142,7 @@ class BacktestPortefeuillePanel(QWidget):
         title.setStyleSheet(STYLE_TITLE)
         layout.addWidget(title)
 
-        subtitle = QLabel(
-            "Portefeuille actuel projete dans le passe, compare au benchmark de marche."
-        )
+        subtitle = QLabel("Portefeuille actuel projete dans le passe, compare au benchmark de marche.")
         subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
         layout.addWidget(subtitle)
 
@@ -223,7 +221,12 @@ class BacktestPortefeuillePanel(QWidget):
         self._kpi_perf_bench = KpiCard(tone="blue")
         self._kpi_ret_ptf = KpiCard(tone="neutral")
         self._kpi_vol_ptf = KpiCard(tone="neutral")
-        for card in (self._kpi_perf_ptf, self._kpi_perf_bench, self._kpi_ret_ptf, self._kpi_vol_ptf):
+        for card in (
+            self._kpi_perf_ptf,
+            self._kpi_perf_bench,
+            self._kpi_ret_ptf,
+            self._kpi_vol_ptf,
+        ):
             kpi_row_1.addWidget(card)
         layout.addLayout(kpi_row_1)
 
@@ -600,9 +603,8 @@ class BacktestPortefeuillePanel(QWidget):
         vol_ptf = m_ptf.get("annualized_volatility_pct")
         limiting_assets = history_limits.get("limiting_start_assets") or []
         if not limiting_assets:
-            fallback_limiter = (
-                history_limits.get("limiting_start_asset")
-                or (payload.get("summary") or {}).get("limiting_asset")
+            fallback_limiter = history_limits.get("limiting_start_asset") or (payload.get("summary") or {}).get(
+                "limiting_asset"
             )
             if fallback_limiter:
                 limiting_assets = [str(fallback_limiter)]
@@ -635,9 +637,7 @@ class BacktestPortefeuillePanel(QWidget):
         if isinstance(requested_years, (int, float)) and isinstance(effective_raw, (int, float)):
             if float(effective_raw) + 0.01 < float(requested_years):
                 history_truncated = True
-                history_text += (
-                    f" {int(requested_years)} ans demandés, {effective_raw:.1f} ans disponibles."
-                )
+                history_text += f" {int(requested_years)} ans demandés, {effective_raw:.1f} ans disponibles."
 
         if history_truncated and limiting_assets:
             if len(limiting_assets) == 1:
@@ -647,15 +647,14 @@ class BacktestPortefeuillePanel(QWidget):
 
         if ignore_mode and ignored_limiting_assets:
             history_text += (
-                " Option \"ignorer les actifs limitants\" appliquée: "
+                ' Option "ignorer les actifs limitants" appliquée: '
                 f"{_format_symbols_list(ignored_limiting_assets)} retiré(s) du calcul."
             )
             self._excluded_limiters_label.setText(
-                "Actifs limitants exclus: "
-                f"{_format_symbols_list(ignored_limiting_assets)}."
+                "Actifs limitants exclus: " f"{_format_symbols_list(ignored_limiting_assets)}."
             )
         elif ignore_mode and not ignored_limiting_assets:
-            history_text += " Option \"ignorer les actifs limitants\" activée, sans exclusion possible."
+            history_text += ' Option "ignorer les actifs limitants" activée, sans exclusion possible.'
             self._excluded_limiters_label.setText("Actifs limitants exclus: aucun.")
         else:
             self._excluded_limiters_label.setText("")
@@ -670,9 +669,7 @@ class BacktestPortefeuillePanel(QWidget):
                 reason = _ignored_reason_label(item.get("reason"))
                 symbols.append(f"{symbol} ({reason})" if reason else symbol)
             suffix = "…" if len(ignored_assets) > 6 else ""
-            self._ignored_label.setText(
-                f"Actifs ignorés ({len(ignored_assets)}): {', '.join(symbols)}{suffix}"
-            )
+            self._ignored_label.setText(f"Actifs ignorés ({len(ignored_assets)}): {', '.join(symbols)}{suffix}")
         else:
             self._ignored_label.setText("Actifs ignorés: aucun.")
 
@@ -682,19 +679,45 @@ class BacktestPortefeuillePanel(QWidget):
             self._diag_status_label.setText(
                 "Diagnostic indisponible pour ce calcul (données insuffisantes ou portefeuille vide)."
             )
-            self._diag_assets_table.set_dataframe(pd.DataFrame(columns=[
-                "Actif", "Poids (%)", "Statut", "Contribution perf (%)",
-                "Volatilité actif (%)", "Corr. portefeuille", "Corr. benchmark",
-                "Diversification", "Commentaire",
-            ]))
-            self._diag_perf_table.set_dataframe(pd.DataFrame(columns=[
-                "Actif", "Perf cumulée (%)", "Rendement annualisé (%)",
-                "Volatilité (%)", "Max drawdown (%)", "Sharpe",
-            ]))
-            self._diag_without_table.set_dataframe(pd.DataFrame(columns=[
-                "Actif", "Delta rendement (%/an)", "Delta volatilité (%)",
-                "Delta max drawdown (%)", "Delta Sharpe", "Lecture",
-            ]))
+            self._diag_assets_table.set_dataframe(
+                pd.DataFrame(
+                    columns=[
+                        "Actif",
+                        "Poids (%)",
+                        "Statut",
+                        "Contribution perf (%)",
+                        "Volatilité actif (%)",
+                        "Corr. portefeuille",
+                        "Corr. benchmark",
+                        "Diversification",
+                        "Commentaire",
+                    ]
+                )
+            )
+            self._diag_perf_table.set_dataframe(
+                pd.DataFrame(
+                    columns=[
+                        "Actif",
+                        "Perf cumulée (%)",
+                        "Rendement annualisé (%)",
+                        "Volatilité (%)",
+                        "Max drawdown (%)",
+                        "Sharpe",
+                    ]
+                )
+            )
+            self._diag_without_table.set_dataframe(
+                pd.DataFrame(
+                    columns=[
+                        "Actif",
+                        "Delta rendement (%/an)",
+                        "Delta volatilité (%)",
+                        "Delta max drawdown (%)",
+                        "Delta Sharpe",
+                        "Lecture",
+                    ]
+                )
+            )
             return
 
         self._diag_status_label.setText(
@@ -757,9 +780,19 @@ class BacktestPortefeuillePanel(QWidget):
         improved = payload.get("improved_portfolio") or {}
         if not improved:
             self._improved_summary_label.setText("Simulation indisponible.")
-            self._improved_metrics_table.set_dataframe(pd.DataFrame(columns=["Métrique", "Actuel", "Amélioré", "Delta"]))
+            self._improved_metrics_table.set_dataframe(
+                pd.DataFrame(columns=["Métrique", "Actuel", "Amélioré", "Delta"])
+            )
             self._improved_adjustments_table.set_dataframe(
-                pd.DataFrame(columns=["Actif", "Poids actuel (%)", "Poids amélioré (%)", "Variation (%)", "Action"])
+                pd.DataFrame(
+                    columns=[
+                        "Actif",
+                        "Poids actuel (%)",
+                        "Poids amélioré (%)",
+                        "Variation (%)",
+                        "Action",
+                    ]
+                )
             )
             self._improved_constraints_label.setText("—")
             self._improved_warning_label.setText("")
@@ -768,9 +801,19 @@ class BacktestPortefeuillePanel(QWidget):
         if not improved.get("available"):
             message = str(improved.get("message") or "Aucune simulation améliorée crédible n'a été trouvée.")
             self._improved_summary_label.setText(message)
-            self._improved_metrics_table.set_dataframe(pd.DataFrame(columns=["Métrique", "Actuel", "Amélioré", "Delta"]))
+            self._improved_metrics_table.set_dataframe(
+                pd.DataFrame(columns=["Métrique", "Actuel", "Amélioré", "Delta"])
+            )
             self._improved_adjustments_table.set_dataframe(
-                pd.DataFrame(columns=["Actif", "Poids actuel (%)", "Poids amélioré (%)", "Variation (%)", "Action"])
+                pd.DataFrame(
+                    columns=[
+                        "Actif",
+                        "Poids actuel (%)",
+                        "Poids amélioré (%)",
+                        "Variation (%)",
+                        "Action",
+                    ]
+                )
             )
             constraints = improved.get("constraints") or {}
             self._improved_constraints_label.setText(_format_constraints_text(constraints))
@@ -785,11 +828,31 @@ class BacktestPortefeuillePanel(QWidget):
         m_improved = improved.get("metrics_improved") or {}
         m_diff = improved.get("metrics_differences") or {}
         rows_metrics = [
-            _metric_row("Rendement annualisé (%)", m_current.get("annualized_return_pct"), m_improved.get("annualized_return_pct"), m_diff.get("annualized_return_pct")),
-            _metric_row("Volatilité annualisée (%)", m_current.get("annualized_volatility_pct"), m_improved.get("annualized_volatility_pct"), m_diff.get("annualized_volatility_pct")),
-            _metric_row("Max drawdown (%)", m_current.get("max_drawdown_pct"), m_improved.get("max_drawdown_pct"), m_diff.get("max_drawdown_pct")),
+            _metric_row(
+                "Rendement annualisé (%)",
+                m_current.get("annualized_return_pct"),
+                m_improved.get("annualized_return_pct"),
+                m_diff.get("annualized_return_pct"),
+            ),
+            _metric_row(
+                "Volatilité annualisée (%)",
+                m_current.get("annualized_volatility_pct"),
+                m_improved.get("annualized_volatility_pct"),
+                m_diff.get("annualized_volatility_pct"),
+            ),
+            _metric_row(
+                "Max drawdown (%)",
+                m_current.get("max_drawdown_pct"),
+                m_improved.get("max_drawdown_pct"),
+                m_diff.get("max_drawdown_pct"),
+            ),
             _metric_row("Sharpe", m_current.get("sharpe"), m_improved.get("sharpe"), m_diff.get("sharpe")),
-            _metric_row("Performance cumulée (%)", m_current.get("cumulative_performance_pct"), m_improved.get("cumulative_performance_pct"), m_diff.get("cumulative_performance_pct")),
+            _metric_row(
+                "Performance cumulée (%)",
+                m_current.get("cumulative_performance_pct"),
+                m_improved.get("cumulative_performance_pct"),
+                m_diff.get("cumulative_performance_pct"),
+            ),
         ]
         self._improved_metrics_table.set_dataframe(pd.DataFrame(rows_metrics))
 

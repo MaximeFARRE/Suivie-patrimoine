@@ -3,8 +3,11 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from services.goals_projection_repository import compute_goal_monthly_required_amount
-from services.goals_projection_repository import create_goal, create_scenario
+from services.goals_projection_repository import (
+    compute_goal_monthly_required_amount,
+    create_goal,
+    create_scenario,
+)
 from services.projections import (
     ScenarioParams,
     build_standard_scenarios,
@@ -111,18 +114,10 @@ def test_get_projection_base_for_person(conn):
         ) VALUES (1, '2026-03-30', datetime('now'), 'REBUILD', 100000, 130000, 25000, 20000, 70000, 5000, 2000, 30000)
         """
     )
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2026-01-01', 'Salaire', 3000)"
-    )
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2026-02-01', 'Salaire', 3100)"
-    )
-    conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2026-01-01', 'Vie', 1500)"
-    )
-    conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2026-02-01', 'Vie', 1400)"
-    )
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2026-01-01', 'Salaire', 3000)")
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2026-02-01', 'Salaire', 3100)")
+    conn.execute("INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2026-01-01', 'Vie', 1500)")
+    conn.execute("INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2026-02-01', 'Vie', 1400)")
     conn.commit()
 
     base = get_projection_base_for_scope(conn, "person", 1)

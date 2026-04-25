@@ -34,9 +34,7 @@ def _insert_snapshot(
 
 def test_compute_taux_epargne_mensuel_keeps_calendar_month_gaps(conn_with_person):
     conn = conn_with_person
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Salaire', 1000)"
-    )
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Salaire', 1000)")
     conn.commit()
 
     df = get_person_monthly_savings_series(conn, 1, n_mois=3, end_month="2025-03-01")
@@ -141,18 +139,10 @@ def test_vue_ensemble_panel_subtitle_matches_formula():
 
 def test_compute_savings_metrics_uses_data_months_for_avg_and_recent_streak(conn_with_person):
     conn = conn_with_person
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-01-01', 'Salaire', 1000)"
-    )
-    conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2025-01-01', 'Vie', 800)"
-    )
-    conn.execute(
-        "INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Salaire', 1000)"
-    )
-    conn.execute(
-        "INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Vie', 1200)"
-    )
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-01-01', 'Salaire', 1000)")
+    conn.execute("INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2025-01-01', 'Vie', 800)")
+    conn.execute("INSERT INTO revenus(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Salaire', 1000)")
+    conn.execute("INSERT INTO depenses(person_id, mois, categorie, montant) VALUES (1, '2025-03-01', 'Vie', 1200)")
     conn.commit()
 
     out = compute_savings_metrics(conn, person_id=1, n_mois=3)
@@ -168,9 +158,7 @@ def test_vue_ensemble_metrics_include_passive_income_in_revenus(conn_with_person
     conn = conn_with_person
 
     _insert_snapshot(conn, 1, "2026-01-05", net=1000.0)
-    conn.execute(
-        "INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'CTO', 'CTO', 'EUR')"
-    )
+    conn.execute("INSERT INTO accounts(id, person_id, name, account_type, currency) VALUES (2, 1, 'CTO', 'CTO', 'EUR')")
     conn.execute(
         "INSERT INTO transactions(date, person_id, account_id, type, amount, fees) VALUES ('2025-12-10', 1, 2, 'DIVIDENDE', 120, 0)"
     )
@@ -180,4 +168,3 @@ def test_vue_ensemble_metrics_include_passive_income_in_revenus(conn_with_person
     assert m["epargne_12m"] == pytest.approx(120.0)
     assert m["capacite_epargne_avg"] == pytest.approx(10.0)
     assert m["taux_epargne_avg"] == pytest.approx(100.0)
-

@@ -3,10 +3,11 @@ Widget QWebEngineView encapsulant un graphique Plotly.
 Remplace st.plotly_chart() et st.line_chart() / st.bar_chart() de Streamlit.
 Supporte le lazy loading : le chart n'est chargé que quand le widget est visible.
 """
+
 import logging
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtCore import QUrl
+
 import plotly.graph_objects as go
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from qt_ui.theme import BG_PRIMARY
 

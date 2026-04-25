@@ -1,4 +1,5 @@
 import sqlite3
+
 import pandas as pd
 
 
@@ -109,7 +110,11 @@ def revenus_kpis_mois(conn: sqlite3.Connection, person_id: int, mois: str) -> di
     """
     month = _normalize_month(mois)
     df_manual = revenus_du_mois(conn, person_id, month)
-    manual_total = float(pd.to_numeric(df_manual.get("montant"), errors="coerce").fillna(0.0).sum()) if not df_manual.empty else 0.0
+    manual_total = (
+        float(pd.to_numeric(df_manual.get("montant"), errors="coerce").fillna(0.0).sum())
+        if not df_manual.empty
+        else 0.0
+    )
     entries_count = int(len(df_manual)) if df_manual is not None else 0
 
     passive = revenus_passifs_par_mois(conn, person_id)
@@ -154,11 +159,21 @@ def revenus_du_mois_consolides(conn: sqlite3.Connection, person_id: int, mois: s
     passive_rows = []
     if abs(float(kpi["dividendes"])) > 0:
         passive_rows.append(
-            {"id": pd.NA, "categorie": "Dividendes (Bourse)", "montant": float(kpi["dividendes"]), "source": "Bourse"}
+            {
+                "id": pd.NA,
+                "categorie": "Dividendes (Bourse)",
+                "montant": float(kpi["dividendes"]),
+                "source": "Bourse",
+            }
         )
     if abs(float(kpi["interets"])) > 0:
         passive_rows.append(
-            {"id": pd.NA, "categorie": "Intérêts (Bourse)", "montant": float(kpi["interets"]), "source": "Bourse"}
+            {
+                "id": pd.NA,
+                "categorie": "Intérêts (Bourse)",
+                "montant": float(kpi["interets"]),
+                "source": "Bourse",
+            }
         )
 
     if passive_rows:
@@ -192,7 +207,11 @@ def revenus_par_mois_consolides(conn: sqlite3.Connection, person_id: int) -> pd.
     merged = merged.dropna(subset=["mois"]).copy()
     if merged.empty:
         return pd.DataFrame(columns=["mois", "revenus_saisis", "dividendes", "interets", "revenus_passifs", "total"])
-    return merged[["mois", "revenus_saisis", "dividendes", "interets", "revenus_passifs", "total"]].sort_values("mois").reset_index(drop=True)
+    return (
+        merged[["mois", "revenus_saisis", "dividendes", "interets", "revenus_passifs", "total"]]
+        .sort_values("mois")
+        .reset_index(drop=True)
+    )
 
 
 def compute_taux_epargne_mensuel(
@@ -206,6 +225,7 @@ def compute_taux_epargne_mensuel(
     Ceci est désormais un wrapper vers `services.cashflow.get_person_monthly_savings_series`.
     """
     from services.cashflow import get_person_monthly_savings_series
+
     return get_person_monthly_savings_series(
         conn,
         person_id,

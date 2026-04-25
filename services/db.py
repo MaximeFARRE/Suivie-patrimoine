@@ -1,8 +1,9 @@
+import logging
 import os
 import sqlite3
-import logging
 from pathlib import Path
 from typing import Callable
+
 from services.common_utils import row_get
 
 try:
@@ -34,6 +35,7 @@ MIG_VER_ADD_TX_ANALYSIS_FLAGS = 9009
 # libsql retourne des tuples, sqlite3.Row supporte row["col"].
 # Ce wrapper rend les deux transparents pour tout le codebase.
 # ──────────────────────────────────────────────────────────────
+
 
 class DictRow:
     """Simule sqlite3.Row : accès par clé ET par index."""
@@ -118,6 +120,7 @@ class SyncedLibsqlConn:
     - close()   → safe
     - délègue tout le reste
     """
+
     def __init__(self, conn):
         self._conn = conn
 
@@ -159,11 +162,9 @@ class SyncedLibsqlConn:
                 self.commit()
             except Exception:
                 pass
-        
+
         self.close()
         return False
-
-
 
 
 def get_conn():
@@ -204,6 +205,8 @@ def get_conn():
         pass
 
     return SyncedLibsqlConn(conn)
+
+
 def _ensure_schema_version_table(conn) -> None:
     conn.execute(
         """
@@ -271,10 +274,7 @@ def _split_sql_statements(sql_text: str) -> list[str]:
 
 def _is_benign_migration_error(exc: Exception) -> bool:
     msg = str(exc).lower()
-    return (
-        "duplicate column name" in msg
-        or ("already exists" in msg and "schema_version" not in msg)
-    )
+    return "duplicate column name" in msg or ("already exists" in msg and "schema_version" not in msg)
 
 
 def _apply_sql_file_migration(conn, migration_file: Path, version: int) -> None:
@@ -321,10 +321,7 @@ def _migrate_import_batches(conn) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_import_batches_person "
-        "ON import_batches(person_id, imported_at);"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_import_batches_person " "ON import_batches(person_id, imported_at);")
 
     for table in ("transactions", "depenses", "revenus"):
         if not _column_exists(conn, table, "import_batch_id"):
@@ -352,8 +349,7 @@ def _migrate_add_credits_payer_account(conn) -> None:
 def _migrate_add_tx_person_account_index(conn) -> None:
     if _table_exists(conn, "transactions") and not _index_exists(conn, "idx_tx_person_account_date"):
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_tx_person_account_date "
-            "ON transactions(person_id, account_id, date);"
+            "CREATE INDEX IF NOT EXISTS idx_tx_person_account_date " "ON transactions(person_id, account_id, date);"
         )
 
 
@@ -362,19 +358,16 @@ def _migrate_add_preset_vol_columns(conn) -> None:
     if not _table_exists(conn, "simulation_preset_settings"):
         return
     _VOL_COLUMNS = {
-        "vol_liquidites_pct":   1.0,
-        "vol_bourse_pct":      15.0,
-        "vol_immobilier_pct":   5.0,
-        "vol_pe_pct":          20.0,
+        "vol_liquidites_pct": 1.0,
+        "vol_bourse_pct": 15.0,
+        "vol_immobilier_pct": 5.0,
+        "vol_pe_pct": 20.0,
         "vol_entreprises_pct": 15.0,
-        "vol_crypto_pct":      50.0,
+        "vol_crypto_pct": 50.0,
     }
     for col, default in _VOL_COLUMNS.items():
         if not _column_exists(conn, "simulation_preset_settings", col):
-            conn.execute(
-                f"ALTER TABLE simulation_preset_settings "
-                f"ADD COLUMN {col} REAL DEFAULT {default};"
-            )
+            conn.execute(f"ALTER TABLE simulation_preset_settings " f"ADD COLUMN {col} REAL DEFAULT {default};")
 
 
 def _migrate_add_asset_import_aliases(conn) -> None:
@@ -420,13 +413,9 @@ def _migrate_add_transaction_analysis_flags(conn) -> None:
     if not _table_exists(conn, "transactions"):
         return
     if not _column_exists(conn, "transactions", "is_hidden_from_cashflow"):
-        conn.execute(
-            "ALTER TABLE transactions ADD COLUMN is_hidden_from_cashflow INTEGER NOT NULL DEFAULT 0;"
-        )
+        conn.execute("ALTER TABLE transactions ADD COLUMN is_hidden_from_cashflow INTEGER NOT NULL DEFAULT 0;")
     if not _column_exists(conn, "transactions", "is_internal_transfer"):
-        conn.execute(
-            "ALTER TABLE transactions ADD COLUMN is_internal_transfer INTEGER NOT NULL DEFAULT 0;"
-        )
+        conn.execute("ALTER TABLE transactions ADD COLUMN is_internal_transfer INTEGER NOT NULL DEFAULT 0;")
     if not _column_exists(conn, "transactions", "deleted_at"):
         conn.execute("ALTER TABLE transactions ADD COLUMN deleted_at TEXT;")
 
@@ -434,13 +423,41 @@ def _migrate_add_transaction_analysis_flags(conn) -> None:
 _CODE_MIGRATIONS: list[tuple[int, str, Callable]] = [
     (MIG_VER_ADD_TR_PHONE, "add people.tr_phone", _migrate_add_tr_phone),
     (MIG_VER_IMPORT_BATCHES, "add import_batches + import_batch_id refs", _migrate_import_batches),
-    (MIG_VER_ADD_IMMO_COLUMNS, "add immobilier_value columns on snapshot tables", _migrate_add_immobilier_columns),
-    (MIG_VER_ADD_CREDITS_PAYER_ACCOUNT, "add credits.payer_account_id", _migrate_add_credits_payer_account),
-    (MIG_VER_ADD_TX_PERSON_ACCOUNT_INDEX, "add idx_tx_person_account_date", _migrate_add_tx_person_account_index),
-    (MIG_VER_ADD_PRESET_VOL_COLUMNS, "add vol_* columns on simulation_preset_settings", _migrate_add_preset_vol_columns),
-    (MIG_VER_ADD_ASSET_IMPORT_ALIASES, "add asset_import_aliases table", _migrate_add_asset_import_aliases),
-    (MIG_VER_ADD_ACCOUNT_SUBTYPE, "add accounts.subtype for livret subtypes", _migrate_add_account_subtype),
-    (MIG_VER_ADD_TX_ANALYSIS_FLAGS, "add transaction analysis flags", _migrate_add_transaction_analysis_flags),
+    (
+        MIG_VER_ADD_IMMO_COLUMNS,
+        "add immobilier_value columns on snapshot tables",
+        _migrate_add_immobilier_columns,
+    ),
+    (
+        MIG_VER_ADD_CREDITS_PAYER_ACCOUNT,
+        "add credits.payer_account_id",
+        _migrate_add_credits_payer_account,
+    ),
+    (
+        MIG_VER_ADD_TX_PERSON_ACCOUNT_INDEX,
+        "add idx_tx_person_account_date",
+        _migrate_add_tx_person_account_index,
+    ),
+    (
+        MIG_VER_ADD_PRESET_VOL_COLUMNS,
+        "add vol_* columns on simulation_preset_settings",
+        _migrate_add_preset_vol_columns,
+    ),
+    (
+        MIG_VER_ADD_ASSET_IMPORT_ALIASES,
+        "add asset_import_aliases table",
+        _migrate_add_asset_import_aliases,
+    ),
+    (
+        MIG_VER_ADD_ACCOUNT_SUBTYPE,
+        "add accounts.subtype for livret subtypes",
+        _migrate_add_account_subtype,
+    ),
+    (
+        MIG_VER_ADD_TX_ANALYSIS_FLAGS,
+        "add transaction analysis flags",
+        _migrate_add_transaction_analysis_flags,
+    ),
 ]
 
 
@@ -530,7 +547,8 @@ def init_db() -> None:
 
 
 def ensure_snapshots_table(conn: sqlite3.Connection) -> None:
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS patrimoine_snapshots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         person_id INTEGER NOT NULL,
@@ -557,8 +575,12 @@ def ensure_snapshots_table(conn: sqlite3.Connection) -> None:
         FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE,
         UNIQUE(person_id, snapshot_date)
     );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_person_date ON patrimoine_snapshots(person_id, snapshot_date);")
+    """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_person_date ON patrimoine_snapshots(person_id, snapshot_date);"
+    )
+
 
 def _row_value(row, key: str, idx: int = 0):
     """
@@ -599,6 +621,7 @@ def seed_minimal() -> None:
                 )
             conn.commit()
 
+
 def ensure_people_columns(conn) -> None:
     """Compat API: applique la migration versionnée de people.tr_phone."""
     _apply_single_code_migration(conn, MIG_VER_ADD_TR_PHONE)
@@ -615,7 +638,8 @@ def ensure_asset_import_aliases_table(conn) -> None:
 
 
 def ensure_weekly_tables(conn):
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS asset_prices_weekly (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       symbol TEXT NOT NULL,
@@ -626,10 +650,12 @@ def ensure_weekly_tables(conn):
       created_at TEXT DEFAULT (datetime('now')),
       UNIQUE(symbol, week_date)
     );
-    """)
+    """
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_apw_symbol_week ON asset_prices_weekly(symbol, week_date);")
 
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS fx_rates_weekly (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       base_ccy TEXT NOT NULL,
@@ -640,10 +666,12 @@ def ensure_weekly_tables(conn):
       created_at TEXT DEFAULT (datetime('now')),
       UNIQUE(base_ccy, quote_ccy, week_date)
     );
-    """)
+    """
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fxw_pair_week ON fx_rates_weekly(base_ccy, quote_ccy, week_date);")
 
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS patrimoine_snapshots_weekly (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id INTEGER NOT NULL,
@@ -670,10 +698,12 @@ def ensure_weekly_tables(conn):
       FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE,
       UNIQUE(person_id, week_date)
     );
-    """)
+    """
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_psw_person_week ON patrimoine_snapshots_weekly(person_id, week_date);")
 
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS patrimoine_snapshots_family_weekly (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     family_id INTEGER DEFAULT 1,
@@ -693,8 +723,11 @@ def ensure_weekly_tables(conn):
     notes TEXT,
     UNIQUE(family_id, week_date)
     );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_psfw_family_week ON patrimoine_snapshots_family_weekly(family_id, week_date);")
+    """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_psfw_family_week ON patrimoine_snapshots_family_weekly(family_id, week_date);"
+    )
 
     # enterprise_history est geree par entreprises_repository.ensure_tables()
 

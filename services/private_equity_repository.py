@@ -1,8 +1,19 @@
 # services/private_equity_repository.py
 import pandas as pd
 
+
 def list_pe_projects(conn, person_id: int) -> pd.DataFrame:
-    _COLS = ["id", "person_id", "name", "platform", "project_type", "status", "created_at", "exit_date", "note"]
+    _COLS = [
+        "id",
+        "person_id",
+        "name",
+        "platform",
+        "project_type",
+        "status",
+        "created_at",
+        "exit_date",
+        "note",
+    ]
     rows = conn.execute(
         """
         SELECT id, person_id, name, platform, project_type, status, created_at, exit_date, note
@@ -14,7 +25,15 @@ def list_pe_projects(conn, person_id: int) -> pd.DataFrame:
     ).fetchall()
     return pd.DataFrame(rows, columns=_COLS) if rows else pd.DataFrame(columns=_COLS)
 
-def create_pe_project(conn, person_id: int, name: str, platform: str | None, project_type: str | None, note: str | None):
+
+def create_pe_project(
+    conn,
+    person_id: int,
+    name: str,
+    platform: str | None,
+    project_type: str | None,
+    note: str | None,
+):
     cur = conn.cursor()
     cur.execute(
         """
@@ -25,6 +44,7 @@ def create_pe_project(conn, person_id: int, name: str, platform: str | None, pro
     )
     conn.commit()
 
+
 def set_project_status(conn, project_id: int, status: str, exit_date: str | None = None):
     cur = conn.cursor()
     cur.execute(
@@ -33,8 +53,21 @@ def set_project_status(conn, project_id: int, status: str, exit_date: str | None
     )
     conn.commit()
 
+
 def list_pe_transactions(conn, person_id: int) -> pd.DataFrame:
-    _COLS = ["id", "project_id", "project_name", "platform", "status", "date", "tx_type", "amount", "quantity", "unit_price", "note"]
+    _COLS = [
+        "id",
+        "project_id",
+        "project_name",
+        "platform",
+        "status",
+        "date",
+        "tx_type",
+        "amount",
+        "quantity",
+        "unit_price",
+        "note",
+    ]
     rows = conn.execute(
         """
         SELECT t.id, t.project_id, p.name AS project_name, p.platform, p.status,
@@ -47,6 +80,7 @@ def list_pe_transactions(conn, person_id: int) -> pd.DataFrame:
         (person_id,),
     ).fetchall()
     return pd.DataFrame(rows, columns=_COLS) if rows else pd.DataFrame(columns=_COLS)
+
 
 def list_pe_transactions_by_project(conn, project_id: int) -> pd.DataFrame:
     _COLS = ["id", "project_id", "date", "tx_type", "amount", "quantity", "unit_price", "note"]
@@ -61,8 +95,17 @@ def list_pe_transactions_by_project(conn, project_id: int) -> pd.DataFrame:
     ).fetchall()
     return pd.DataFrame(rows, columns=_COLS) if rows else pd.DataFrame(columns=_COLS)
 
-def add_pe_transaction(conn, project_id: int, date: str, tx_type: str, amount: float,
-                      quantity: float | None = None, unit_price: float | None = None, note: str | None = None):
+
+def add_pe_transaction(
+    conn,
+    project_id: int,
+    date: str,
+    tx_type: str,
+    amount: float,
+    quantity: float | None = None,
+    unit_price: float | None = None,
+    note: str | None = None,
+):
     cur = conn.cursor()
     cur.execute(
         """
@@ -72,6 +115,7 @@ def add_pe_transaction(conn, project_id: int, date: str, tx_type: str, amount: f
         (project_id, date, tx_type, float(amount), quantity, unit_price, (note or None)),
     )
     conn.commit()
+
 
 def delete_pe_transaction(conn, tx_id: int) -> None:
     cur = conn.cursor()

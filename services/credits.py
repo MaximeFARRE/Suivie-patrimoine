@@ -1,8 +1,8 @@
 import logging
-import pandas as pd
-from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -11,22 +11,30 @@ logger = logging.getLogger(__name__)
 # CRUD CREDIT (fiche contrat)
 # ---------------------------
 
+
 def upsert_credit(conn, data: Dict[str, Any]) -> int:
     """
     Crée ou met à jour la fiche 'credits' pour un account_id (sous-compte crédit).
     Retourne credit_id.
     """
     account_id = int(data["account_id"])
-    row = conn.execute(
-        "SELECT id FROM credits WHERE account_id = ?",
-        (account_id,)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM credits WHERE account_id = ?", (account_id,)).fetchone()
 
     fields = [
-        "person_id", "account_id", "payer_account_id", "nom", "banque", "type_credit",
-        "capital_emprunte", "taux_nominal", "taeg", "duree_mois",
-        "mensualite_theorique", "assurance_mensuelle_theorique",
-        "date_debut", "actif",
+        "person_id",
+        "account_id",
+        "payer_account_id",
+        "nom",
+        "banque",
+        "type_credit",
+        "capital_emprunte",
+        "taux_nominal",
+        "taeg",
+        "duree_mois",
+        "mensualite_theorique",
+        "assurance_mensuelle_theorique",
+        "date_debut",
+        "actif",
     ]
 
     values = [data.get(f) for f in fields]
@@ -37,19 +45,13 @@ def upsert_credit(conn, data: Dict[str, Any]) -> int:
         except (TypeError, KeyError):
             credit_id = int(row[0])
         set_clause = ", ".join([f"{f} = ?" for f in fields] + ["updated_at = datetime('now')"])
-        conn.execute(
-            f"UPDATE credits SET {set_clause} WHERE id = ?",
-            (*values, credit_id)
-        )
+        conn.execute(f"UPDATE credits SET {set_clause} WHERE id = ?", (*values, credit_id))
         conn.commit()
         return credit_id
 
     cols = ", ".join(fields)
     placeholders = ", ".join(["?"] * len(fields))
-    cur = conn.execute(
-        f"INSERT INTO credits ({cols}) VALUES ({placeholders})",
-        values
-    )
+    cur = conn.execute(f"INSERT INTO credits ({cols}) VALUES ({placeholders})", values)
     conn.commit()
     return int(cur.lastrowid)
 
@@ -78,6 +80,7 @@ def list_credits_by_person(conn, person_id: int, only_active: bool = True) -> pd
 # ---------------------------
 # AMORTISSEMENT (import CSV)
 # ---------------------------
+
 
 def replace_amortissement(conn, credit_id: int, rows: List[Dict[str, Any]]) -> int:
     """
@@ -122,14 +125,23 @@ def replace_amortissement(conn, credit_id: int, rows: List[Dict[str, Any]]) -> i
                 _safe_int(r.get("mois")),
             )
             for r in rows
-        ]
+        ],
     )
     conn.commit()
     return len(rows)
 
 
 def get_amortissements(conn, credit_id: int) -> pd.DataFrame:
-    _COLS = ["date_echeance", "mensualite", "capital_amorti", "interets", "assurance", "crd", "annee", "mois"]
+    _COLS = [
+        "date_echeance",
+        "mensualite",
+        "capital_amorti",
+        "interets",
+        "assurance",
+        "crd",
+        "annee",
+        "mois",
+    ]
     rows = conn.execute(
         """
         SELECT date_echeance, mensualite, capital_amorti, interets, assurance, crd, annee, mois
@@ -145,6 +157,7 @@ def get_amortissements(conn, credit_id: int) -> pd.DataFrame:
 # ---------------------------
 # KPI (estimés via amortissement)
 # ---------------------------
+
 
 def get_credit_kpis(conn, credit_id: int) -> Dict[str, Any]:
     df = get_amortissements(conn, credit_id)
@@ -186,6 +199,7 @@ def get_credit_kpis(conn, credit_id: int) -> Dict[str, Any]:
 # Coût réel (via transactions Bankin)
 # ---------------------------
 
+
 def get_cout_mensuel_reel(conn, person_id: int, mois: str) -> float:
     """
     Somme des transactions Bankin du mois pour la catégorie "échéance prêt / emprunt".
@@ -216,14 +230,16 @@ def get_cout_mensuel_reel(conn, person_id: int, mois: str) -> float:
     cat = df["category"].fillna("").str.lower()
 
     # Filtre "échéance prêt" / "emprunt" (tolérant)
-    mask = (
-        (cat.str.contains("échéance", regex=False) | cat.str.contains("echeance", regex=False))
-        & (cat.str.contains("prêt", regex=False) | cat.str.contains("pret", regex=False) | cat.str.contains("emprunt", regex=False))
+    mask = (cat.str.contains("échéance", regex=False) | cat.str.contains("echeance", regex=False)) & (
+        cat.str.contains("prêt", regex=False)
+        | cat.str.contains("pret", regex=False)
+        | cat.str.contains("emprunt", regex=False)
     )
 
     # Les montants dans ta table transactions sont "positifs" et le sens est géré par type.
     # Ici, Bankin import est probablement en type DEPENSE ou similaire : on veut le coût réel => somme des amounts filtrés.
     return float(pd.to_numeric(df.loc[mask, "amount"], errors="coerce").fillna(0.0).sum())
+
 
 def cout_reel_mois_via_bankin(conn, person_id: int, mois_yyyy_mm_01: str) -> float:
     # Alias compat si ton code appelait un autre nom avant
@@ -233,9 +249,9 @@ def cout_reel_mois_via_bankin(conn, person_id: int, mois_yyyy_mm_01: str) -> flo
 @dataclass
 class CreditParams:
     capital: float
-    taux_annuel: float           # en %, ex 1.88
+    taux_annuel: float  # en %, ex 1.88
     duree_mois: int
-    date_debut: str              # YYYY-MM-DD
+    date_debut: str  # YYYY-MM-DD
     assurance_mensuelle: float = 0.0
 
     differe_mois: int = 0
@@ -243,7 +259,7 @@ class CreditParams:
     assurance_pendant_differe: bool = True
     interets_pendant_differe: str = "payes"  # "payes" | "capitalises"
 
-    mensualite: Optional[float] = None       # si None, on calcule
+    mensualite: Optional[float] = None  # si None, on calcule
 
 
 def _mensualite_standard(P: float, taux_mensuel: float, n: int) -> float:
@@ -281,14 +297,14 @@ def build_amortissement(params: CreditParams) -> List[Dict[str, Any]]:
     crd = P
 
     for i in range(1, n + 1):
-        date_ech = (start + pd.DateOffset(months=i-1)).strftime("%Y-%m-%d")
+        date_ech = (start + pd.DateOffset(months=i - 1)).strftime("%Y-%m-%d")
         annee = int(pd.to_datetime(date_ech).year)
         mois = int(pd.to_datetime(date_ech).month)
 
         interets = crd * r_m
         capital_amorti = 0.0
 
-        is_differe = (i <= diff_n and params.differe_type != "aucun")
+        is_differe = i <= diff_n and params.differe_type != "aucun"
 
         # assurance ce mois
         assurance_mois = assurance if (not is_differe or params.assurance_pendant_differe) else 0.0
@@ -304,7 +320,7 @@ def build_amortissement(params: CreditParams) -> List[Dict[str, Any]]:
                     # rien payé (ou seulement assurance), intérêts s'ajoutent au CRD
                     mensualite = 0.0 + assurance_mois
                     crd = crd + interets  # capitalisation des intérêts
-                    interets = 0.0        # ici on considère qu'ils ne sont pas "payés", donc on les neutralise en flux
+                    interets = 0.0  # ici on considère qu'ils ne sont pas "payés", donc on les neutralise en flux
                 else:
                     # intérêts payés (mais capital non), CRD stable
                     # FIX: les intérêts sont réellement payés => ils doivent figurer dans la mensualité
@@ -319,19 +335,20 @@ def build_amortissement(params: CreditParams) -> List[Dict[str, Any]]:
             capital_amorti = max(min(principal_part, crd), 0.0)
             crd = max(crd - capital_amorti, 0.0)
 
-        rows.append({
-            "date_echeance": date_ech,
-            "mensualite": float(mensualite),
-            "capital_amorti": float(capital_amorti),
-            "interets": float(interets),
-            "assurance": float(assurance_mois),
-            "crd": float(crd),
-            "annee": annee,
-            "mois": mois
-        })
+        rows.append(
+            {
+                "date_echeance": date_ech,
+                "mensualite": float(mensualite),
+                "capital_amorti": float(capital_amorti),
+                "interets": float(interets),
+                "assurance": float(assurance_mois),
+                "crd": float(crd),
+                "annee": annee,
+                "mois": mois,
+            }
+        )
 
     return rows
-
 
 
 def get_crd_a_date(conn, credit_id: int, date_ref: str) -> float:
@@ -372,10 +389,7 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
     filtrées sur catégorie "échéance prêt / emprunt".
     """
     try:
-        row = conn.execute(
-            "SELECT person_id, payer_account_id FROM credits WHERE id = ?",
-            (int(credit_id),)
-        ).fetchone()
+        row = conn.execute("SELECT person_id, payer_account_id FROM credits WHERE id = ?", (int(credit_id),)).fetchone()
     except Exception:
         return 0.0
     if not row:
@@ -385,7 +399,10 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
     except (TypeError, KeyError):
         payer_val = row[1] if len(row) > 1 else None
     if payer_val is None:
-        logger.warning("cout_reel_mois_credit_via_bankin: credit_id=%s n'a pas de payer_account_id, retour 0.0", credit_id)
+        logger.warning(
+            "cout_reel_mois_credit_via_bankin: credit_id=%s n'a pas de payer_account_id, retour 0.0",
+            credit_id,
+        )
         return 0.0
     try:
         person_id = int(row["person_id"])
@@ -394,7 +411,7 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
     payer_account_id = int(payer_val)
 
     start = pd.to_datetime(mois_yyyy_mm_01)
-    end = (start + pd.offsets.MonthBegin(1))
+    end = start + pd.offsets.MonthBegin(1)
 
     df = pd.read_sql_query(
         """
@@ -413,9 +430,10 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
         return 0.0
 
     cat = df["category"].fillna("").str.lower()
-    mask_cat = (
-        (cat.str.contains("échéance", regex=False) | cat.str.contains("echeance", regex=False))
-        & (cat.str.contains("prêt", regex=False) | cat.str.contains("pret", regex=False) | cat.str.contains("emprunt", regex=False))
+    mask_cat = (cat.str.contains("échéance", regex=False) | cat.str.contains("echeance", regex=False)) & (
+        cat.str.contains("prêt", regex=False)
+        | cat.str.contains("pret", regex=False)
+        | cat.str.contains("emprunt", regex=False)
     )
 
     # ton import Bankin met type="DEPENSE" si Amount < 0
@@ -424,7 +442,6 @@ def cout_reel_mois_credit_via_bankin(conn, credit_id: int, mois_yyyy_mm_01: str)
 
     mask = mask_cat & mask_type
     return float(pd.to_numeric(df.loc[mask, "amount"], errors="coerce").fillna(0.0).sum())
-
 
 
 def get_credit_dates(conn, credit_id: int) -> dict:
@@ -443,7 +460,11 @@ def get_credit_dates(conn, credit_id: int) -> dict:
         """,
         (int(credit_id),),
     ).fetchall()
-    df = pd.DataFrame(rows, columns=["date_echeance", "capital_amorti"]) if rows else pd.DataFrame(columns=["date_echeance", "capital_amorti"])
+    df = (
+        pd.DataFrame(rows, columns=["date_echeance", "capital_amorti"])
+        if rows
+        else pd.DataFrame(columns=["date_echeance", "capital_amorti"])
+    )
 
     if df.empty:
         return {

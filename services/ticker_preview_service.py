@@ -93,12 +93,7 @@ def preview_ticker_live(symbol: str) -> dict:
             search = yf.Search(symbol_u, max_results=1, enable_fuzzy_query=False)
             if getattr(search, "quotes", None):
                 q0 = search.quotes[0] or {}
-                name = (
-                    q0.get("shortname")
-                    or q0.get("longname")
-                    or q0.get("displayName")
-                    or q0.get("symbol")
-                )
+                name = q0.get("shortname") or q0.get("longname") or q0.get("displayName") or q0.get("symbol")
         except Exception:
             name = None
 

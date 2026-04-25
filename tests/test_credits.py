@@ -1,5 +1,6 @@
 import pytest
-from services.credits import build_amortissement, CreditParams, _mensualite_standard
+
+from services.credits import CreditParams, _mensualite_standard, build_amortissement
 
 
 def test_mensualite_standard_taux_zero():
@@ -82,8 +83,16 @@ def test_safe_float_via_replace_amortissement(conn_with_person):
     credit_id = cur.lastrowid
 
     rows = [
-        {"date_echeance": "2025-01-01", "mensualite": 850.0, "capital_amorti": 700.0,
-         "interets": 150.0, "assurance": 30.0, "crd": 99300.0, "annee": 2025, "mois": 1},
+        {
+            "date_echeance": "2025-01-01",
+            "mensualite": 850.0,
+            "capital_amorti": 700.0,
+            "interets": 150.0,
+            "assurance": 30.0,
+            "crd": 99300.0,
+            "annee": 2025,
+            "mois": 1,
+        },
     ]
     n = replace_amortissement(conn_with_person, credit_id, rows)
     assert n == 1

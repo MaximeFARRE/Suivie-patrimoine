@@ -7,14 +7,14 @@ Ce module centralise :
 - optimisation sous contraintes (long-only),
 - métriques de concentration/diversification.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 
 OPT_EPS = 1e-8
 
@@ -221,9 +221,7 @@ def validate_constraints(
     if constraints.min_active_weight < 0:
         errors.append("Le poids minimum d'une ligne active doit être >= 0.")
     if constraints.min_active_weight >= constraints.max_weight_per_asset:
-        errors.append(
-            "Le poids minimum d'une ligne active doit être strictement inférieur au poids maximum par actif."
-        )
+        errors.append("Le poids minimum d'une ligne active doit être strictement inférieur au poids maximum par actif.")
     if constraints.n_points < 8:
         warnings.append("Le nombre de points de frontière est faible (< 8).")
 

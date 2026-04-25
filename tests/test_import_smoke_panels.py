@@ -1,5 +1,4 @@
 import importlib
-import math
 
 
 def test_smoke_import_secondary_panels_modules():
@@ -45,4 +44,3 @@ def test_compte_bourse_panel_exposes_tx_edit_delete_hooks():
     assert TransactionEditDialog is not None
     assert hasattr(CompteBoursePanel, "_on_edit_transaction")
     assert hasattr(CompteBoursePanel, "_on_delete_transaction")
-

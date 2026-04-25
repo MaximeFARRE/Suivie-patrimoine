@@ -6,18 +6,18 @@ Mode implemente:
 - on reconstruit une courbe historique theorique
 - on compare au benchmark sur historique commun strict
 """
+
 from __future__ import annotations
 
 import logging
 import math
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Any, Callable
 
 import pandas as pd
 
-from services import bourse_analytics
-from services import market_history
+from services import bourse_analytics, market_history
 from services.bourse_advanced_analytics import DEFAULT_BENCHMARK, RISK_FREE_RATE
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,10 @@ def build_current_portfolio_backtest(
 
     logger.info(
         "build_current_portfolio_backtest: person_id=%s horizon=%s benchmark=%s ignore_limiting_assets=%s",
-        person_id, horizon_key, benchmark, bool(ignore_limiting_assets),
+        person_id,
+        horizon_key,
+        benchmark,
+        bool(ignore_limiting_assets),
     )
 
     weights_df, ignored_assets = _load_current_weights(conn, person_id)
@@ -638,10 +641,7 @@ def _load_weekly_prices(conn, symbols: list[str]) -> pd.DataFrame:
         return pd.DataFrame()
 
     placeholders = ",".join(["?"] * len(symbols))
-    query = (
-        "SELECT symbol, week_date, adj_close "
-        f"FROM asset_prices_weekly WHERE symbol IN ({placeholders})"
-    )
+    query = "SELECT symbol, week_date, adj_close " f"FROM asset_prices_weekly WHERE symbol IN ({placeholders})"
     raw = pd.read_sql_query(query, conn, params=tuple(symbols))
     if raw.empty:
         return pd.DataFrame()
@@ -654,15 +654,12 @@ def _load_weekly_prices(conn, symbols: list[str]) -> pd.DataFrame:
     if raw.empty:
         return pd.DataFrame()
 
-    prices_df = (
-        raw.pivot_table(
-            index="week_date",
-            columns="symbol",
-            values="adj_close",
-            aggfunc="last",
-        )
-        .sort_index()
-    )
+    prices_df = raw.pivot_table(
+        index="week_date",
+        columns="symbol",
+        values="adj_close",
+        aggfunc="last",
+    ).sort_index()
     return prices_df
 
 
@@ -810,11 +807,7 @@ def _drop_limiting_assets_for_horizon(
             break
 
         common_end = pd.to_datetime(common_frame.index.max(), errors="coerce")
-        target_start = (
-            common_end - pd.DateOffset(years=int(horizon_years))
-            if pd.notna(common_end)
-            else None
-        )
+        target_start = common_end - pd.DateOffset(years=int(horizon_years)) if pd.notna(common_end) else None
 
         removable_candidates: list[str] = []
         for symbol in limiting_assets:
@@ -1005,9 +998,9 @@ def _compute_relative_metrics(
 
     return RelativeMetrics(
         cumulative_excess_performance_pct=round(cum_excess * 100.0, 4),
-        annualized_excess_return_pct=round(ann_excess * 100.0, 4) if ann_excess is not None else None,
+        annualized_excess_return_pct=(round(ann_excess * 100.0, 4) if ann_excess is not None else None),
         tracking_error_pct=round(tracking_error * 100.0, 4) if tracking_error is not None else None,
-        information_ratio=round(float(information_ratio), 4) if information_ratio is not None else None,
+        information_ratio=(round(float(information_ratio), 4) if information_ratio is not None else None),
         beta=round(float(beta), 4) if beta is not None else None,
         alpha_pct=round(alpha * 100.0, 4) if alpha is not None else None,
         correlation=round(float(correlation), 4) if correlation is not None else None,
@@ -1071,10 +1064,7 @@ def _build_asset_diagnostics(
     portfolio_returns = portfolio_level.pct_change().rename("portfolio")
     benchmark_returns = benchmark_level.pct_change().rename("benchmark")
 
-    names_map = {
-        str(row["symbol"]): row.get("name")
-        for _, row in retained_weights.iterrows()
-    }
+    names_map = {str(row["symbol"]): row.get("name") for _, row in retained_weights.iterrows()}
 
     diagnostics: list[dict[str, Any]] = []
     for symbol in asset_symbols:
@@ -1086,9 +1076,7 @@ def _build_asset_diagnostics(
             risk_free_rate=risk_free_rate,
         )
 
-        contribution_cumulative_pct = float(
-            w * (float(asset_level.iloc[-1] / asset_level.iloc[0]) - 1.0) * 100.0
-        )
+        contribution_cumulative_pct = float(w * (float(asset_level.iloc[-1] / asset_level.iloc[0]) - 1.0) * 100.0)
         correlation_to_portfolio = _safe_corr(assets_returns[symbol], portfolio_returns)
         correlation_to_benchmark = _safe_corr(assets_returns[symbol], benchmark_returns)
 
@@ -1125,10 +1113,12 @@ def _build_asset_diagnostics(
                 "asset_metrics": asset_metrics.to_dict(),
                 "asset_annualized_return_pct": asset_metrics.annualized_return_pct,
                 "asset_annualized_volatility_pct": asset_metrics.annualized_volatility_pct,
-                "correlation_to_portfolio": round(correlation_to_portfolio, 4)
-                if correlation_to_portfolio is not None else None,
-                "correlation_to_benchmark": round(correlation_to_benchmark, 4)
-                if correlation_to_benchmark is not None else None,
+                "correlation_to_portfolio": (
+                    round(correlation_to_portfolio, 4) if correlation_to_portfolio is not None else None
+                ),
+                "correlation_to_benchmark": (
+                    round(correlation_to_benchmark, 4) if correlation_to_benchmark is not None else None
+                ),
                 "concentration_level": _concentration_level(w),
                 "diversification_role": _diversification_role(correlation_to_benchmark),
                 "status": status_code,
@@ -1252,7 +1242,11 @@ def _classify_asset_status(
         positive += 1
         reasons.append("Corrélation modérée au benchmark (apport de diversification).")
 
-    if weight >= DIAG_CONCENTRATION_WEIGHT_HIGH and corr_portfolio is not None and corr_portfolio >= DIAG_CORR_CONCENTRATED_MIN:
+    if (
+        weight >= DIAG_CONCENTRATION_WEIGHT_HIGH
+        and corr_portfolio is not None
+        and corr_portfolio >= DIAG_CORR_CONCENTRATED_MIN
+    ):
         negative += 1
         reasons.append("Poids concentré avec corrélation élevée au portefeuille.")
 
@@ -1288,15 +1282,9 @@ def _interpret_without_asset(deltas: dict[str, float | None]) -> str:
         return "Sans cet actif, le ratio de Sharpe aurait été meilleur dans l'historique analysé."
     if delta_sharpe is not None and delta_sharpe <= -DIAG_SHARPE_DELTA_STRONG:
         return "Sans cet actif, le ratio de Sharpe aurait été moins bon dans l'historique analysé."
-    if (
-        delta_return is not None and delta_return > 0
-        and delta_vol is not None and delta_vol > 0
-    ):
+    if delta_return is not None and delta_return > 0 and delta_vol is not None and delta_vol > 0:
         return "Sans cet actif, le rendement aurait été plus élevé mais avec plus de volatilité."
-    if (
-        delta_return is not None and delta_return < 0
-        and delta_vol is not None and delta_vol < 0
-    ):
+    if delta_return is not None and delta_return < 0 and delta_vol is not None and delta_vol < 0:
         return "Sans cet actif, le rendement aurait été plus faible mais avec moins de volatilité."
     return "Impact mixte de cet actif sur le couple rendement/risque dans cette analyse."
 
@@ -1363,15 +1351,9 @@ def _build_improved_portfolio_payload(
     asset_diagnostics: list[dict[str, Any]],
 ) -> dict[str, Any]:
     weights_series = retained_weights.set_index("symbol")["weight"].astype(float)
-    names_map = {
-        str(row["symbol"]): row.get("name")
-        for _, row in retained_weights.iterrows()
-    }
+    names_map = {str(row["symbol"]): row.get("name") for _, row in retained_weights.iterrows()}
 
-    current_weights_all = {
-        str(sym): float(w)
-        for sym, w in weights_series.sort_values(ascending=False).items()
-    }
+    current_weights_all = {str(sym): float(w) for sym, w in weights_series.sort_values(ascending=False).items()}
 
     feasibility = _assess_improved_feasibility(len(current_weights_all))
     if not feasibility["feasible"]:
@@ -1494,10 +1476,7 @@ def _build_improved_portfolio_payload(
         "adjustments": adjustments,
         "metrics_current": base_metrics.to_dict(),
         "metrics_improved": improved_metrics.to_dict(),
-        "metrics_differences": {
-            k: round(v, 4) if v is not None else None
-            for k, v in metrics_diff.items()
-        },
+        "metrics_differences": {k: round(v, 4) if v is not None else None for k, v in metrics_diff.items()},
         "summary": summary,
         "applied_adjustments": applied_adjustments,
         "metadata": {
@@ -1506,9 +1485,7 @@ def _build_improved_portfolio_payload(
             "active_assets_count": int(len(selected_symbols)),
             "dropped_assets_count": int(len(dropped_symbols)),
         },
-        "warning": (
-            "Simulation historique indicative, non prédictive et non assimilable à un conseil financier."
-        ),
+        "warning": ("Simulation historique indicative, non prédictive et non assimilable à un conseil financier."),
     }
 
 
@@ -1700,9 +1677,7 @@ def _build_improved_summary(metrics_diff: dict[str, float | None]) -> str:
             parts.append(f"Sharpe simulé en baisse de {d_sharpe:+.2f}.")
 
     if d_ret is not None and d_vol is not None:
-        parts.append(
-            f"Delta rendement {d_ret:+.2f}%/an et delta volatilité {d_vol:+.2f}%."
-        )
+        parts.append(f"Delta rendement {d_ret:+.2f}%/an et delta volatilité {d_vol:+.2f}%.")
     return " ".join(parts)
 
 
@@ -1761,14 +1736,8 @@ def _detect_history_limiters(history_bounds: dict[str, dict[str, Any]]) -> dict[
             "limiting_end_assets": [],
         }
 
-    starts = {
-        symbol: pd.to_datetime(bounds.get("start"), errors="coerce")
-        for symbol, bounds in history_bounds.items()
-    }
-    ends = {
-        symbol: pd.to_datetime(bounds.get("end"), errors="coerce")
-        for symbol, bounds in history_bounds.items()
-    }
+    starts = {symbol: pd.to_datetime(bounds.get("start"), errors="coerce") for symbol, bounds in history_bounds.items()}
+    ends = {symbol: pd.to_datetime(bounds.get("end"), errors="coerce") for symbol, bounds in history_bounds.items()}
 
     valid_starts = {k: v for k, v in starts.items() if pd.notna(v)}
     valid_ends = {k: v for k, v in ends.items() if pd.notna(v)}

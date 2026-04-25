@@ -1,29 +1,57 @@
 """
 Panel d'un compte Bourse (PEA/CTO/CRYPTO) — remplace ui/compte_bourse.py
 """
+
 import logging
 import time
+
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
+from PyQt6.QtCore import QDate, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFormLayout, QDoubleSpinBox, QComboBox, QDateEdit, QScrollArea,
-    QDialog, QDialogButtonBox, QLineEdit, QMessageBox,
+    QComboBox,
+    QDateEdit,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
-from qt_ui.components.animated_tab import AnimatedTabWidget
-from PyQt6.QtCore import QDate, QThread, pyqtSignal, Qt
 
-from qt_ui.widgets import PlotlyView, DataTableWidget, MetricLabel, LoadingOverlay
+from qt_ui.components.animated_tab import AnimatedTabWidget
 from qt_ui.panels.saisie_panel import (
-    SaisiePanel, ASSET_TYPES, _ASSET_TYPES_NON_COTES, TYPES_PAR_COMPTE,
+    ASSET_TYPES,
+    TYPES_PAR_COMPTE,
+    SaisiePanel,
 )
 from qt_ui.theme import (
-    BG_PRIMARY, BORDER_SUBTLE, STYLE_BTN_PRIMARY, STYLE_BTN_SUCCESS, STYLE_BTN_DANGER, STYLE_INPUT,
-    STYLE_SECTION, STYLE_STATUS,
-    STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_STATUS_WARNING, STYLE_INPUT_FOCUS, STYLE_FORM_LABEL,
-    STYLE_TAB_INNER, STYLE_SCROLLAREA, TEXT_SECONDARY, TEXT_MUTED, plotly_layout,
+    BG_PRIMARY,
+    BORDER_SUBTLE,
+    STYLE_BTN_DANGER,
+    STYLE_BTN_PRIMARY,
+    STYLE_BTN_SUCCESS,
+    STYLE_FORM_LABEL,
+    STYLE_INPUT,
+    STYLE_INPUT_FOCUS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    STYLE_TAB_INNER,
+    TEXT_MUTED,
+    TEXT_SECONDARY,
+    plotly_layout,
 )
+from qt_ui.widgets import DataTableWidget, LoadingOverlay, MetricLabel, PlotlyView
 from utils.libelles import LIBELLES_TYPE_OPERATION, afficher_type_compte
 from utils.validators import operation_requiert_actif, operation_requiert_quantite_prix
 
@@ -44,7 +72,13 @@ def _finite_sum(series: pd.Series) -> float | None:
 
 
 _BOURSE_ACCOUNT_TYPES = {
-    "PEA", "PEA_PME", "CTO", "CRYPTO", "ASSURANCE_VIE", "PER", "PEE",
+    "PEA",
+    "PEA_PME",
+    "CTO",
+    "CRYPTO",
+    "ASSURANCE_VIE",
+    "PER",
+    "PEE",
 }
 
 
@@ -354,10 +388,11 @@ class PriceRefreshThread(QThread):
         self._is_cancelled = True
 
     def run(self):
-        from services import repositories as repo
-        from services import pricing, fx
+        from services import fx, pricing
         from services import panel_data_access as pda
+        from services import repositories as repo
         from services.db import get_conn
+
         n_ok, n_fail = 0, 0
         with get_conn() as local_conn:
             asset_ids = repo.list_account_asset_ids(local_conn, account_id=self._account_id)
@@ -368,7 +403,7 @@ class PriceRefreshThread(QThread):
                 a = pda.get_asset_symbol(local_conn, aid)
                 if not a:
                     continue
-                sym = a[0] if not hasattr(a, '__getitem__') else a["symbol"]
+                sym = a[0] if not hasattr(a, "__getitem__") else a["symbol"]
                 sym_u = str(sym or "").strip().upper()
                 if not sym_u:
                     continue
@@ -376,8 +411,14 @@ class PriceRefreshThread(QThread):
                     sym_cache[sym_u] = pricing.fetch_last_price_auto(sym_u)
                 px_val, ccy = sym_cache[sym_u]
                 if px_val is not None:
-                    repo.upsert_price(local_conn, asset_id=aid, date=pricing.today_str(),
-                                      price=px_val, currency=ccy, source="AUTO")
+                    repo.upsert_price(
+                        local_conn,
+                        asset_id=aid,
+                        date=pricing.today_str(),
+                        price=px_val,
+                        currency=ccy,
+                        source="AUTO",
+                    )
                     if ccy:
                         repo.update_asset_currency(local_conn, aid, str(ccy).upper())
                         if str(ccy).upper() != self._account_ccy:
@@ -507,12 +548,14 @@ class CompteBoursePanel(QWidget):
 
         self._hist_table = DataTableWidget()
         self._hist_table.setMinimumHeight(400)
-        self._hist_table.set_filter_config([
-            {"col": "type",         "kind": "combo",        "label": "Type"},
-            {"col": "asset_symbol", "kind": "combo",        "label": "Actif"},
-            {"col": "date",         "kind": "date_range",   "label": "Date"},
-            {"col": "amount",       "kind": "number_range", "label": "Montant"},
-        ])
+        self._hist_table.set_filter_config(
+            [
+                {"col": "type", "kind": "combo", "label": "Type"},
+                {"col": "asset_symbol", "kind": "combo", "label": "Actif"},
+                {"col": "date", "kind": "date_range", "label": "Date"},
+                {"col": "amount", "kind": "number_range", "label": "Montant"},
+            ]
+        )
         self._hist_table.hide_column("id")
         self._hist_table.row_selected.connect(self._on_history_row_selected)
         self._hist_table.row_double_clicked.connect(self._on_edit_transaction)
@@ -591,6 +634,7 @@ class CompteBoursePanel(QWidget):
         self._refresh_status.setText("⏳ Rafraîchissement...")
         try:
             from services import repositories as repo
+
             acc = repo.get_account(self._conn, self._account_id)
             acc_ccy = (acc["currency"] if acc and acc["currency"] else "EUR").upper()
         except Exception as e:
@@ -629,9 +673,7 @@ class CompteBoursePanel(QWidget):
             confirm.setInformativeText(
                 "Cette action supprimera aussi toutes les transactions associées et est irréversible."
             )
-            confirm.setStandardButtons(
-                QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes
-            )
+            confirm.setStandardButtons(QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes)
             btn_delete = confirm.button(QMessageBox.StandardButton.Yes)
             if btn_delete is not None:
                 btn_delete.setText("Supprimer")
@@ -650,6 +692,7 @@ class CompteBoursePanel(QWidget):
             )
 
             from services import snapshots as wk_snap
+
             wk_snap.rebuild_snapshots_person_from_last(
                 self._conn,
                 person_id=self._person_id,
@@ -661,10 +704,7 @@ class CompteBoursePanel(QWidget):
             QMessageBox.information(
                 self,
                 "Compte supprimé",
-                (
-                    f"Le compte « {account_name} » a été supprimé.\n"
-                    f"Transactions supprimées : {tx_deleted}."
-                ),
+                (f"Le compte « {account_name} » a été supprimé.\n" f"Transactions supprimées : {tx_deleted}."),
             )
             self.account_deleted.emit(int(self._person_id), int(self._account_id))
         except Exception as e:
@@ -716,18 +756,29 @@ class CompteBoursePanel(QWidget):
                 self._refresh_status.setText("")
 
             self._kpi_holdings.set_content("Holdings", _fmt_eur(total_val))
-            pnl_text = "—" if total_pnl is None or pd.isna(total_pnl) else f"{float(total_pnl):+,.2f} €".replace(",", " ")
+            pnl_text = (
+                "—" if total_pnl is None or pd.isna(total_pnl) else f"{float(total_pnl):+,.2f} €".replace(",", " ")
+            )
             self._kpi_pnl.set_content(
                 "PnL latent",
                 pnl_text,
-                delta=None if total_pnl is None or pd.isna(total_pnl) else f"{float(total_pnl):+.2f}",
-                delta_positive=None if total_pnl is None or pd.isna(total_pnl) else float(total_pnl) >= 0,
+                delta=(None if total_pnl is None or pd.isna(total_pnl) else f"{float(total_pnl):+.2f}"),
+                delta_positive=(None if total_pnl is None or pd.isna(total_pnl) else float(total_pnl) >= 0),
             )
             self._kpi_nb.set_content("Positions", str(nb_pos))
 
             display_cols = [
-                "asset_id", "symbol", "name", "asset_type", "quantity", "pru",
-                "last_price", "value", "pnl_latent", "valuation_status", "asset_ccy",
+                "asset_id",
+                "symbol",
+                "name",
+                "asset_type",
+                "quantity",
+                "pru",
+                "last_price",
+                "value",
+                "pnl_latent",
+                "valuation_status",
+                "asset_ccy",
             ]
             display_cols = [c for c in display_cols if c in pos.columns]
             self._table_pos.set_dataframe(pos[display_cols])
@@ -736,9 +787,14 @@ class CompteBoursePanel(QWidget):
             if "value" in pos.columns and "symbol" in pos.columns:
                 df_pie = pos[pos["value"] > 0][["symbol", "value"]].copy()
                 if not df_pie.empty:
-                    fig = px.pie(df_pie, names="symbol", values="value", hole=0.4,
-                                 template="plotly_dark",
-                                 labels={"symbol": "Actif", "value": "Valeur (€)"})
+                    fig = px.pie(
+                        df_pie,
+                        names="symbol",
+                        values="value",
+                        hole=0.4,
+                        template="plotly_dark",
+                        labels={"symbol": "Actif", "value": "Valeur (€)"},
+                    )
                     fig.update_layout(**plotly_layout())
                     self._chart_alloc.set_figure(fig)
                 else:
@@ -768,6 +824,7 @@ class CompteBoursePanel(QWidget):
             try:
                 asset_id = int(df.iloc[row]["asset_id"])
                 from services import repositories as repo
+
                 repo.update_asset_type(self._conn, asset_id, str(new_value))
             except Exception as e:
                 logger.error("Erreur mise à jour asset_type: %s", e, exc_info=True)
@@ -806,6 +863,7 @@ class CompteBoursePanel(QWidget):
                 return match.iloc[0].to_dict()
 
         from services import repositories as repo
+
         return repo.get_transaction(self._conn, tx_id)
 
     def _on_edit_transaction(self, *_args) -> None:
@@ -824,6 +882,7 @@ class CompteBoursePanel(QWidget):
         tx_id = int(tx["id"])
         try:
             from services import repositories as repo
+
             repo.update_transaction(self._conn, tx_id, payload)
             if asset_currency_update is not None:
                 asset_id, ccy = asset_currency_update
@@ -856,7 +915,9 @@ class CompteBoursePanel(QWidget):
         tx_date = str(tx.get("date") or "")
         amount = tx.get("amount")
         try:
-            amount_txt = f"{float(amount):,.2f} €".replace(",", " ") if amount is not None and not pd.isna(amount) else "—"
+            amount_txt = (
+                f"{float(amount):,.2f} €".replace(",", " ") if amount is not None and not pd.isna(amount) else "—"
+            )
         except Exception:
             amount_txt = "—"
 
@@ -879,6 +940,7 @@ class CompteBoursePanel(QWidget):
 
         try:
             from services import repositories as repo
+
             repo.delete_transaction(self._conn, tx_id)
             self._invalidate_local_cache(
                 dashboard=True,
@@ -938,6 +1000,7 @@ class CompteBoursePanel(QWidget):
 
         # Titre + hint
         from PyQt6.QtWidgets import QLabel as _QLabel
+
         hint = _QLabel(
             "Mise à jour manuelle des prix pour les actifs sans cotation automatique\n"
             "(SCPI, fonds euros, private equity, fonds, non cotés…).\n"
@@ -1018,8 +1081,8 @@ class CompteBoursePanel(QWidget):
         if not force and self._is_cache_fresh(self._last_prix_manuels_load_ts, self._prix_manuels_cache_ttl_sec):
             return
         try:
-            from services import repositories as repo
             from services import panel_data_access as pda
+            from services import repositories as repo
 
             asset_ids = repo.list_account_asset_ids(self._conn, account_id=self._account_id)
             if not asset_ids:
@@ -1045,20 +1108,22 @@ class CompteBoursePanel(QWidget):
             # Tableau récap
             if rows:
                 df = pd.DataFrame([dict(r) for r in rows])
-                df = df.rename(columns={
-                    "symbol":         "Ticker",
-                    "name":           "Nom",
-                    "asset_type":     "Type",
-                    "currency":       "Devise",
-                    "last_price":     "Dernier prix",
-                    "last_price_date":"Date du prix",
-                })
+                df = df.rename(
+                    columns={
+                        "symbol": "Ticker",
+                        "name": "Nom",
+                        "asset_type": "Type",
+                        "currency": "Devise",
+                        "last_price": "Dernier prix",
+                        "last_price_date": "Date du prix",
+                    }
+                )
                 df = df.drop(columns=["asset_id"], errors="ignore")
                 self._pm_table.set_dataframe(df)
             else:
-                self._pm_table.set_dataframe(pd.DataFrame([{
-                    "Info": "Aucun actif non coté (SCPI, PE, fonds euros…) dans ce compte."
-                }]))
+                self._pm_table.set_dataframe(
+                    pd.DataFrame([{"Info": "Aucun actif non coté (SCPI, PE, fonds euros…) dans ce compte."}])
+                )
             self._last_prix_manuels_load_ts = time.monotonic()
 
         except Exception as e:
@@ -1077,8 +1142,7 @@ class CompteBoursePanel(QWidget):
             if row and row["price"] is not None:
                 self._pm_prix.setValue(float(row["price"]))
                 self._pm_last_price_lbl.setText(
-                    f"Dernier prix connu : {float(row['price']):.4f} {row['currency'] or 'EUR'}"
-                    f" — au {row['date']}"
+                    f"Dernier prix connu : {float(row['price']):.4f} {row['currency'] or 'EUR'}" f" — au {row['date']}"
                 )
             else:
                 self._pm_prix.setValue(0.0)
@@ -1089,8 +1153,8 @@ class CompteBoursePanel(QWidget):
     def _save_prix_manuel(self) -> None:
         """Enregistre le prix manuel et rafraîchit le tableau récap."""
         try:
-            from services import repositories as repo
             from services import panel_data_access as pda
+            from services import repositories as repo
 
             asset_id = self._pm_combo.currentData()
             if asset_id is None:
@@ -1119,14 +1183,11 @@ class CompteBoursePanel(QWidget):
                 source="MANUEL",
             )
 
-            nom = self._pm_combo.currentText()
             self._pm_status.setStyleSheet(STYLE_STATUS_SUCCESS)
             self._pm_status.setText(f"✅  Prix enregistré : {prix:.4f} {currency} au {date_str}")
 
             # Mettre à jour le hint + rafraîchir le tableau
-            self._pm_last_price_lbl.setText(
-                f"Dernier prix connu : {prix:.4f} {currency} — au {date_str}"
-            )
+            self._pm_last_price_lbl.setText(f"Dernier prix connu : {prix:.4f} {currency} — au {date_str}")
             self._invalidate_local_cache(dashboard=True, prix_manuels=True)
             self._load_prix_manuels(force=True)
 

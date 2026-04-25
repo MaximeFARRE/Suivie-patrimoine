@@ -1,10 +1,12 @@
+import sqlite3
+
 import pandas as pd
 import pytest
-import sqlite3
+
 from utils.validators import sens_flux, sens_flux_safe
 
-
 # ─── sens_flux (utilisé dans snapshots et calculations) ──
+
 
 def test_sens_flux_depot():
     assert sens_flux("DEPOT") == 1
@@ -41,24 +43,31 @@ def test_sens_flux_safe_inconnu_retourne_zero():
 
 # ─── Test simple de cohérence de solde via calculations ──
 
+
 def test_solde_avec_ventes_et_achats():
     """Vérifie que ACHAT diminue et VENTE augmente le solde."""
     from services.calculations import solde_compte
-    tx = pd.DataFrame([
-        {"date": "2025-01-01", "type": "DEPOT", "amount": 1000.0},
-        {"date": "2025-01-10", "type": "ACHAT", "amount": 600.0},
-        {"date": "2025-01-20", "type": "VENTE", "amount": 700.0},
-    ])
+
+    tx = pd.DataFrame(
+        [
+            {"date": "2025-01-01", "type": "DEPOT", "amount": 1000.0},
+            {"date": "2025-01-10", "type": "ACHAT", "amount": 600.0},
+            {"date": "2025-01-20", "type": "VENTE", "amount": 700.0},
+        ]
+    )
     # 1000 - 600 + 700 = 1100
     assert solde_compte(tx) == pytest.approx(1100.0)
 
 
 def test_solde_negatif():
     from services.calculations import solde_compte
-    tx = pd.DataFrame([
-        {"date": "2025-01-01", "type": "DEPOT", "amount": 100.0},
-        {"date": "2025-01-05", "type": "DEPENSE", "amount": 200.0},
-    ])
+
+    tx = pd.DataFrame(
+        [
+            {"date": "2025-01-01", "type": "DEPOT", "amount": 100.0},
+            {"date": "2025-01-05", "type": "DEPENSE", "amount": 200.0},
+        ]
+    )
     # 100 - 200 = -100
     assert solde_compte(tx) == pytest.approx(-100.0)
 
@@ -80,12 +89,14 @@ def _mk_conn_for_watermark_tests():
 
 def test_has_new_transactions_since_person_watermark_false_when_no_tx():
     from services.snapshots_rebuild import has_new_transactions_since_person_watermark
+
     conn = _mk_conn_for_watermark_tests()
     assert has_new_transactions_since_person_watermark(conn, 1) is False
 
 
 def test_has_new_transactions_since_person_watermark_true_without_watermark():
     from services.snapshots_rebuild import has_new_transactions_since_person_watermark
+
     conn = _mk_conn_for_watermark_tests()
     conn.execute("INSERT INTO transactions(id, person_id, created_at) VALUES (1, 1, '2026-01-01T10:00:00+01:00')")
     conn.commit()
@@ -94,9 +105,10 @@ def test_has_new_transactions_since_person_watermark_true_without_watermark():
 
 def test_has_new_transactions_since_person_watermark_with_existing_watermark():
     from services.snapshots_rebuild import (
-        has_new_transactions_since_person_watermark,
         _set_person_watermark,
+        has_new_transactions_since_person_watermark,
     )
+
     conn = _mk_conn_for_watermark_tests()
     conn.execute("INSERT INTO transactions(id, person_id, created_at) VALUES (10, 1, '2026-01-01T10:00:00+01:00')")
     conn.commit()

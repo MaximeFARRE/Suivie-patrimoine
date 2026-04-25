@@ -6,8 +6,7 @@ import pandas as pd
 
 from services import entreprises_repository as ent_repo
 from services import immobilier_repository as immo_repo
-from services import market_history
-from services import positions
+from services import market_history, positions
 from services import private_equity as pe_service
 from services import private_equity_repository as pe_repo
 from services import repositories as repo
@@ -24,10 +23,22 @@ except Exception:
 
 
 _SENS_FLUX_MAP: dict[str, int] = {
-    "DEPOT": 1, "ENTREE": 1, "CREDIT": 1, "VENTE": 1,
-    "DIVIDENDE": 1, "INTERETS": 1, "LOYER": 1, "ABONDEMENT": 1,
-    "RETRAIT": -1, "SORTIE": -1, "DEBIT": -1, "ACHAT": -1,
-    "DEPENSE": -1, "FRAIS": -1, "IMPOT": -1, "REMBOURSEMENT_CREDIT": -1,
+    "DEPOT": 1,
+    "ENTREE": 1,
+    "CREDIT": 1,
+    "VENTE": 1,
+    "DIVIDENDE": 1,
+    "INTERETS": 1,
+    "LOYER": 1,
+    "ABONDEMENT": 1,
+    "RETRAIT": -1,
+    "SORTIE": -1,
+    "DEBIT": -1,
+    "ACHAT": -1,
+    "DEPENSE": -1,
+    "FRAIS": -1,
+    "IMPOT": -1,
+    "REMBOURSEMENT_CREDIT": -1,
 }
 
 
@@ -64,9 +75,7 @@ def _filter_positions_by_panel(conn, pos_df: pd.DataFrame, panel: str) -> pd.Dat
     aid_num = pd.to_numeric(out["asset_id"], errors="coerce")
     asset_ids = aid_num.dropna().astype(int).tolist()
     at_map = _asset_type_by_id(conn, asset_ids)
-    out["asset_type"] = aid_num.apply(
-        lambda aid: at_map.get(int(aid), "autre") if pd.notna(aid) else "autre"
-    )
+    out["asset_type"] = aid_num.apply(lambda aid: at_map.get(int(aid), "autre") if pd.notna(aid) else "autre")
     keep = out["asset_type"].apply(lambda at: is_asset_type_in_panel(at, panel))
     return out[keep].copy()
 
@@ -106,8 +115,11 @@ def _bank_cash_asof_eur(
                 return df[df["date_dt"] <= week_ts]
             return df[df["date"] <= week_date] if "date" in df.columns else df
         return repo.list_transactions(
-            conn, person_id=person_id, account_id=account_id,
-            limit=200000, date_asof=week_date,
+            conn,
+            person_id=person_id,
+            account_id=account_id,
+            limit=200000,
+            date_asof=week_date,
         )
 
     for _, acc in banks.iterrows():
@@ -138,7 +150,9 @@ def _bank_cash_asof_eur(
             _logger.warning(
                 "_bank_cash_asof_eur: taux %s→EUR introuvable pour week=%s "
                 "(compte %s exclu du snapshot — snapshot potentiellement incomplet)",
-                acc_ccy, week_date, acc_id,
+                acc_ccy,
+                week_date,
+                acc_id,
             )
             if _tracker is not None:
                 _tracker["fx_missing"] = _tracker.get("fx_missing", 0) + 1
@@ -214,7 +228,9 @@ def _bourse_cash_and_holdings_eur_asof(
             _logger.warning(
                 "_bourse_cash_and_holdings_eur_asof: taux %s→EUR introuvable pour week=%s "
                 "(cash compte %s exclu du snapshot — snapshot potentiellement incomplet)",
-                acc_ccy, week_date, acc_id,
+                acc_ccy,
+                week_date,
+                acc_id,
             )
             if _tracker is not None:
                 _tracker["fx_missing"] = _tracker.get("fx_missing", 0) + 1
@@ -259,7 +275,9 @@ def _bourse_cash_and_holdings_eur_asof(
                     _logger.warning(
                         "_bourse_cash_and_holdings_eur_asof: taux %s→EUR introuvable pour week=%s "
                         "(actif %s exclu du snapshot — snapshot potentiellement incomplet)",
-                        asset_ccy, week_date, sym,
+                        asset_ccy,
+                        week_date,
+                        sym,
                     )
                     if _tracker is not None:
                         _tracker["fx_missing"] = _tracker.get("fx_missing", 0) + 1
@@ -299,9 +317,7 @@ def _pe_value_asof_eur(conn, person_id: int, week_date: str) -> float:
     projects = pe_repo.list_pe_projects(conn, person_id=person_id)
     tx = pe_repo.list_pe_transactions(conn, person_id=person_id)
     pe_projects_value = 0.0
-    account_assets_value = pe_service.get_account_based_pe_value_asof(
-        conn, person_id=person_id, asof_date=week_date
-    )
+    account_assets_value = pe_service.get_account_based_pe_value_asof(conn, person_id=person_id, asof_date=week_date)
     if projects is None or projects.empty or tx is None or tx.empty:
         return float(round(account_assets_value, 2))
 
@@ -363,7 +379,10 @@ def _enterprise_value_asof_eur(conn, person_id: int, week_date: str) -> float:
     rows = conn.execute(q, params).fetchall()
     hist_map = {}
     for r in rows:
-        hist_map[int(r["enterprise_id"])] = (float(r["valuation_eur"] or 0.0), float(r["debt_eur"] or 0.0))
+        hist_map[int(r["enterprise_id"])] = (
+            float(r["valuation_eur"] or 0.0),
+            float(r["debt_eur"] or 0.0),
+        )
 
     for _, r in pos.iterrows():
         eid = int(r["enterprise_id"])
@@ -463,7 +482,9 @@ def upsert_weekly_snapshot(conn, person_id: int, week_date: str, mode: str, payl
     pn = float(payload.get("patrimoine_net", 0.0))
     if math.isnan(pn):
         logging.getLogger(__name__).warning(
-            "Snapshot for person %s on %s has missing prices (NaN). Skipping insert.", person_id, week_date
+            "Snapshot for person %s on %s has missing prices (NaN). Skipping insert.",
+            person_id,
+            week_date,
         )
         return
 
@@ -524,8 +545,12 @@ def compute_weekly_snapshot_person(
     accounts = accounts_cache if accounts_cache is not None else repo.list_accounts(conn, person_id=person_id)
     _tracker: dict = {"fx_missing": 0, "price_missing": 0}
     bank_cash = _bank_cash_asof_eur(
-        conn, person_id, week_date,
-        tx_cache=tx_cache, accounts_cache=accounts, _tracker=_tracker,
+        conn,
+        person_id,
+        week_date,
+        tx_cache=tx_cache,
+        accounts_cache=accounts,
+        _tracker=_tracker,
     )
     bourse_cash, bourse_holdings = _bourse_cash_and_holdings_eur_asof(
         conn,

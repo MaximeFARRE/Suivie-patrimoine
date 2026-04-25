@@ -1,6 +1,6 @@
 import pandas as pd
-from utils.validators import sens_flux
 
+from utils.validators import sens_flux
 
 
 def solde_compte(tx_df: pd.DataFrame) -> float:
@@ -37,8 +37,5 @@ def interets_12_mois(tx_df: pd.DataFrame) -> float:
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
     cutoff = pd.Timestamp.today() - pd.Timedelta(days=365)
-    mask = (
-        (df["type"].astype(str) == "INTERETS")
-        & (df["date"] >= cutoff)
-    )
+    mask = (df["type"].astype(str) == "INTERETS") & (df["date"] >= cutoff)
     return float(df.loc[mask, "amount"].sum())

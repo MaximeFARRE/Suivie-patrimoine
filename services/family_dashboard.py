@@ -9,11 +9,13 @@ et produit des agrégations, métriques et payloads prêts pour l'UI.
 Frontière : ce module NE lit PAS directement la base de données pour la série famille.
 Toute donnée brute patrimoine famille passe par `family_snapshots.py` (SSOT).
 """
+
 from __future__ import annotations
 
 import logging
+from typing import Dict, List, Optional
+
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
 
 from services import repositories as repo
 
@@ -22,11 +24,11 @@ _logger = logging.getLogger(__name__)
 # Mapping stable catégorie → colonne SSOT (famille weekly).
 # Utilisé par prepare_family_area_chart_data et prepare_family_alloc_pie_data.
 ALLOC_CATEGORY_MAP: Dict[str, str] = {
-    "Liquidités":     "liquidites_total",
-    "Bourse":         "bourse_holdings",
+    "Liquidités": "liquidites_total",
+    "Bourse": "bourse_holdings",
     "Private Equity": "pe_value",
-    "Entreprises":    "ent_value",
-    "Immobilier":     "immobilier_value",
+    "Entreprises": "ent_value",
+    "Immobilier": "immobilier_value",
 }
 
 
@@ -41,7 +43,9 @@ def _pct(a: float, b: float) -> Optional[float]:
     return (b / a - 1.0) * 100.0
 
 
-def _safe_window_perf(df: pd.DataFrame, col: str, end_date: pd.Timestamp, days: int, min_base: float = 200.0) -> Optional[float]:
+def _safe_window_perf(
+    df: pd.DataFrame, col: str, end_date: pd.Timestamp, days: int, min_base: float = 200.0
+) -> Optional[float]:
     """
     Perf sur fenêtre glissante: compare valeur à end_date vs valeur <= end_date - days.
     min_base évite des % absurdes si la base est trop petite.
@@ -107,6 +111,7 @@ def get_family_series_from_people_snapshots(conn, person_ids: List[int]) -> pd.D
     On ne dépend pas de la table famille si tu veux rester flexible.
     """
     from services import family_snapshots as fs
+
     return fs.get_family_weekly_series(conn, family_id=1, fallback_person_ids=person_ids)
 
 
@@ -117,6 +122,7 @@ def get_family_series(conn, person_ids: Optional[List[int]] = None, family_id: i
     - fallback: agrégation des snapshots weekly personnes
     """
     from services import family_snapshots as fs
+
     return fs.get_family_weekly_series(conn, family_id=family_id, fallback_person_ids=person_ids or [])
 
 
@@ -149,6 +155,7 @@ def get_person_snapshot_at_week(conn, person_id: int, week: pd.Timestamp) -> Opt
     Délègue à la source officielle ``snapshots.get_person_snapshot_at_week``.
     """
     from services import snapshots as wk_snap
+
     return wk_snap.get_person_snapshot_at_week(conn, person_id=person_id, week_date=week)
 
 
@@ -213,18 +220,20 @@ def compute_people_table(conn, people: pd.DataFrame, common_week: pd.Timestamp) 
 
         expo_bourse = (bourse / net * 100.0) if net > 0 else 0.0
 
-        rows.append({
-            "Personne": name,
-            "Net (€)": net,
-            "Brut (€)": brut,
-            "Liquidités (€)": liq,
-            "Bourse (€)": bourse,
-            "PE (€)": pe,
-            "Entreprises (€)": ent,
-            "Immobilier (€)": immo,
-            "Crédits (€)": cred,
-            "% Expo Bourse": round(expo_bourse, 1),
-        })
+        rows.append(
+            {
+                "Personne": name,
+                "Net (€)": net,
+                "Brut (€)": brut,
+                "Liquidités (€)": liq,
+                "Bourse (€)": bourse,
+                "PE (€)": pe,
+                "Entreprises (€)": ent,
+                "Immobilier (€)": immo,
+                "Crédits (€)": cred,
+                "% Expo Bourse": round(expo_bourse, 1),
+            }
+        )
 
     df = pd.DataFrame(rows)
     if df.empty:
@@ -300,9 +309,7 @@ def get_people_without_snapshot(people: pd.DataFrame, df_people: pd.DataFrame) -
         return []
     all_names = {str(n) for n in people["name"].tolist()}
     present_names = (
-        {str(n) for n in df_people["Personne"].tolist()}
-        if df_people is not None and not df_people.empty
-        else set()
+        {str(n) for n in df_people["Personne"].tolist()} if df_people is not None and not df_people.empty else set()
     )
     return sorted(all_names - present_names)
 
@@ -327,11 +334,15 @@ def compute_family_debug(conn, people: pd.DataFrame, common_week: Optional[pd.Ti
         if common_week is not None and last_week is not None and pd.notna(last_week):
             delta = (common_week - last_week).days
 
-        rows.append({
-            "Personne": name,
-            "Dernière semaine snapshot": last_week.strftime("%Y-%m-%d") if last_week is not None and pd.notna(last_week) else "—",
-            "Écart vs semaine famille (jours)": int(delta) if delta is not None else "—",
-        })
+        rows.append(
+            {
+                "Personne": name,
+                "Dernière semaine snapshot": (
+                    last_week.strftime("%Y-%m-%d") if last_week is not None and pd.notna(last_week) else "—"
+                ),
+                "Écart vs semaine famille (jours)": int(delta) if delta is not None else "—",
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -339,6 +350,7 @@ def compute_family_debug(conn, people: pd.DataFrame, common_week: Optional[pd.Ti
 # ──────────────────────────────────────────────────────────────────────────────
 # Préparation de données pour les graphiques famille
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def prepare_family_area_chart_data(df_family: pd.DataFrame) -> pd.DataFrame:
     """
@@ -378,9 +390,7 @@ def prepare_family_area_chart_data(df_family: pd.DataFrame) -> pd.DataFrame:
     # Colonnes manquantes → 0.0 (défensif)
     for col in ALLOC_CATEGORY_MAP.values():
         if col not in df.columns:
-            _logger.warning(
-                "prepare_family_area_chart_data: colonne '%s' absente, remplacée par 0", col
-            )
+            _logger.warning("prepare_family_area_chart_data: colonne '%s' absente, remplacée par 0", col)
             df[col] = 0.0
 
     # Pivot wide → long avec renommage catégories
@@ -463,11 +473,11 @@ def prepare_family_alloc_pie_data(
 # Mapping catégorie → colonne dans df_people (sortie de compute_people_table).
 # Distinct de ALLOC_CATEGORY_MAP qui pointe sur les colonnes de la série famille.
 _TREEMAP_CATEGORY_COLS: Dict[str, str] = {
-    "Liquidités":     "Liquidités (€)",
-    "Bourse":         "Bourse (€)",
+    "Liquidités": "Liquidités (€)",
+    "Bourse": "Bourse (€)",
     "Private Equity": "PE (€)",
-    "Entreprises":    "Entreprises (€)",
-    "Immobilier":     "Immobilier (€)",
+    "Entreprises": "Entreprises (€)",
+    "Immobilier": "Immobilier (€)",
 }
 
 
@@ -500,8 +510,13 @@ def prepare_family_treemap_data(
     Retourne un DataFrame vide (avec les colonnes) si l'entrée est vide ou invalide.
     """
     _COLS = [
-        "Portefeuille", "Personne", "Catégorie",
-        "Valeur", "Part personne (%)", "Part famille (%)", "var_pct",
+        "Portefeuille",
+        "Personne",
+        "Catégorie",
+        "Valeur",
+        "Part personne (%)",
+        "Part famille (%)",
+        "var_pct",
     ]
     empty = pd.DataFrame(columns=_COLS)
 
@@ -539,9 +554,7 @@ def prepare_family_treemap_data(
             person_total += value
 
         if person_total <= 0:
-            _logger.debug(
-                "prepare_family_treemap_data: personne '%s' ignorée (total = 0)", person
-            )
+            _logger.debug("prepare_family_treemap_data: personne '%s' ignorée (total = 0)", person)
             continue
 
         for category, value in values.items():
@@ -549,14 +562,16 @@ def prepare_family_treemap_data(
                 continue
             prev_val = prev_map.get((person, category))
             var_pct = _pct(prev_val, value) if prev_val is not None else None
-            rows.append({
-                "Portefeuille":      "Famille",
-                "Personne":          person,
-                "Catégorie":         category,
-                "Valeur":            value,
-                "Part personne (%)": round(value / person_total * 100.0, 2),
-                "var_pct":           var_pct,
-            })
+            rows.append(
+                {
+                    "Portefeuille": "Famille",
+                    "Personne": person,
+                    "Catégorie": category,
+                    "Valeur": value,
+                    "Part personne (%)": round(value / person_total * 100.0, 2),
+                    "var_pct": var_pct,
+                }
+            )
 
     if not rows:
         _logger.info("prepare_family_treemap_data: aucune ligne générée (données vides ?)")
@@ -564,8 +579,6 @@ def prepare_family_treemap_data(
 
     tree_df = pd.DataFrame(rows)
     total = float(tree_df["Valeur"].sum())
-    tree_df["Part famille (%)"] = (
-        tree_df["Valeur"] / total * 100.0
-    ).round(2) if total > 0 else 0.0
+    tree_df["Part famille (%)"] = (tree_df["Valeur"] / total * 100.0).round(2) if total > 0 else 0.0
 
     return tree_df[_COLS].reset_index(drop=True)

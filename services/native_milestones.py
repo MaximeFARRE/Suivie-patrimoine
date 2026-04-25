@@ -1,14 +1,13 @@
 """
 Jalons natifs (gamification) calculés dynamiquement par scope.
 """
+
 from __future__ import annotations
 
 from typing import Optional
 
-import pandas as pd
-
+from services.cashflow import compute_savings_metrics, get_cashflow_for_scope
 from services.projections import compute_fire_target, get_projection_base_for_scope
-from services.cashflow import get_cashflow_for_scope, compute_savings_metrics
 from utils.format_monnaie import money
 
 NATIVE_MILESTONE_DEFINITIONS = [
@@ -18,10 +17,36 @@ NATIVE_MILESTONE_DEFINITIONS = [
         "metric_key": "net_worth",
         "unit": "EUR",
         "thresholds": [
-            1000, 2500, 5000, 7500, 10000, 15000, 20000, 30000, 40000, 50000,
-            60000, 75000, 100000, 125000, 150000, 200000, 250000, 300000,
-            400000, 500000, 600000, 750000, 1000000, 1250000, 1500000, 2000000,
-            3000000, 5000000, 7500000, 10000000,
+            1000,
+            2500,
+            5000,
+            7500,
+            10000,
+            15000,
+            20000,
+            30000,
+            40000,
+            50000,
+            60000,
+            75000,
+            100000,
+            125000,
+            150000,
+            200000,
+            250000,
+            300000,
+            400000,
+            500000,
+            600000,
+            750000,
+            1000000,
+            1250000,
+            1500000,
+            2000000,
+            3000000,
+            5000000,
+            7500000,
+            10000000,
         ],
     },
     {
@@ -37,9 +62,26 @@ NATIVE_MILESTONE_DEFINITIONS = [
         "metric_key": "stocks",
         "unit": "EUR",
         "thresholds": [
-            500, 1000, 2500, 5000, 7500, 10000, 15000, 20000, 30000, 40000,
-            50000, 75000, 100000, 150000, 200000, 300000, 500000, 750000,
-            1000000, 2000000,
+            500,
+            1000,
+            2500,
+            5000,
+            7500,
+            10000,
+            15000,
+            20000,
+            30000,
+            40000,
+            50000,
+            75000,
+            100000,
+            150000,
+            200000,
+            300000,
+            500000,
+            750000,
+            1000000,
+            2000000,
         ],
     },
     {
@@ -68,7 +110,18 @@ NATIVE_MILESTONE_DEFINITIONS = [
         "category_label": "Immobilier",
         "metric_key": "real_estate_value",
         "unit": "EUR",
-        "thresholds": [25000, 50000, 75000, 100000, 150000, 200000, 300000, 500000, 750000, 1000000],
+        "thresholds": [
+            25000,
+            50000,
+            75000,
+            100000,
+            150000,
+            200000,
+            300000,
+            500000,
+            750000,
+            1000000,
+        ],
     },
 ]
 

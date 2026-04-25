@@ -2,6 +2,7 @@
 services/simulation_presets_repository.py
 CRUD pour les presets de simulation (pessimiste / realiste / optimiste) par scope.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -12,61 +13,61 @@ PRESET_KEYS = ("pessimiste", "realiste", "optimiste")
 
 PRESET_DEFAULTS: dict[str, dict] = {
     "pessimiste": {
-        "return_liquidites_pct":  1.5,
-        "return_bourse_pct":      4.0,
-        "return_immobilier_pct":  2.0,
-        "return_pe_pct":          5.0,
+        "return_liquidites_pct": 1.5,
+        "return_bourse_pct": 4.0,
+        "return_immobilier_pct": 2.0,
+        "return_pe_pct": 5.0,
         "return_entreprises_pct": 3.0,
-        "inflation_pct":          3.0,
-        "income_growth_pct":      0.5,
-        "expense_growth_pct":     2.0,
-        "fire_multiple":         27.0,
-        "savings_factor":         0.85,
+        "inflation_pct": 3.0,
+        "income_growth_pct": 0.5,
+        "expense_growth_pct": 2.0,
+        "fire_multiple": 27.0,
+        "savings_factor": 0.85,
         # Volatilités annuelles par classe (scénario pessimiste = incertitude élevée)
-        "vol_liquidites_pct":     2.0,
-        "vol_bourse_pct":        22.0,
-        "vol_immobilier_pct":     8.0,
-        "vol_pe_pct":            28.0,
-        "vol_entreprises_pct":   22.0,
-        "vol_crypto_pct":        70.0,
+        "vol_liquidites_pct": 2.0,
+        "vol_bourse_pct": 22.0,
+        "vol_immobilier_pct": 8.0,
+        "vol_pe_pct": 28.0,
+        "vol_entreprises_pct": 22.0,
+        "vol_crypto_pct": 70.0,
     },
     "realiste": {
-        "return_liquidites_pct":  2.0,
-        "return_bourse_pct":      7.0,
-        "return_immobilier_pct":  3.5,
-        "return_pe_pct":         10.0,
+        "return_liquidites_pct": 2.0,
+        "return_bourse_pct": 7.0,
+        "return_immobilier_pct": 3.5,
+        "return_pe_pct": 10.0,
         "return_entreprises_pct": 5.0,
-        "inflation_pct":          2.0,
-        "income_growth_pct":      1.0,
-        "expense_growth_pct":     1.0,
-        "fire_multiple":         25.0,
-        "savings_factor":         1.0,
+        "inflation_pct": 2.0,
+        "income_growth_pct": 1.0,
+        "expense_growth_pct": 1.0,
+        "fire_multiple": 25.0,
+        "savings_factor": 1.0,
         # Volatilités annuelles par classe (scénario réaliste = volatilité historique)
-        "vol_liquidites_pct":     1.0,
-        "vol_bourse_pct":        15.0,
-        "vol_immobilier_pct":     5.0,
-        "vol_pe_pct":            20.0,
-        "vol_entreprises_pct":   15.0,
-        "vol_crypto_pct":        50.0,
+        "vol_liquidites_pct": 1.0,
+        "vol_bourse_pct": 15.0,
+        "vol_immobilier_pct": 5.0,
+        "vol_pe_pct": 20.0,
+        "vol_entreprises_pct": 15.0,
+        "vol_crypto_pct": 50.0,
     },
     "optimiste": {
-        "return_liquidites_pct":  3.0,
-        "return_bourse_pct":      9.0,
-        "return_immobilier_pct":  5.0,
-        "return_pe_pct":         15.0,
+        "return_liquidites_pct": 3.0,
+        "return_bourse_pct": 9.0,
+        "return_immobilier_pct": 5.0,
+        "return_pe_pct": 15.0,
         "return_entreprises_pct": 8.0,
-        "inflation_pct":          1.5,
-        "income_growth_pct":      2.0,
-        "expense_growth_pct":     0.5,
-        "fire_multiple":         25.0,
-        "savings_factor":         1.15,
+        "inflation_pct": 1.5,
+        "income_growth_pct": 2.0,
+        "expense_growth_pct": 0.5,
+        "fire_multiple": 25.0,
+        "savings_factor": 1.15,
         # Volatilités annuelles par classe (scénario optimiste = marchés plus stables)
-        "vol_liquidites_pct":     1.0,
-        "vol_bourse_pct":        12.0,
-        "vol_immobilier_pct":     4.0,
-        "vol_pe_pct":            16.0,
-        "vol_entreprises_pct":   12.0,
-        "vol_crypto_pct":        40.0,
+        "vol_liquidites_pct": 1.0,
+        "vol_bourse_pct": 12.0,
+        "vol_immobilier_pct": 4.0,
+        "vol_pe_pct": 16.0,
+        "vol_entreprises_pct": 12.0,
+        "vol_crypto_pct": 40.0,
     },
 }
 
@@ -91,6 +92,7 @@ _PRESET_FIELDS = (
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -141,6 +143,7 @@ def _fetch_row(conn, scope_type: str, scope_id: Optional[int], preset: str):
 
 
 # ── API publique ──────────────────────────────────────────────────────────────
+
 
 def get_preset(conn, preset: str, scope_type: str, scope_id: Optional[int] = None) -> dict:
     """
@@ -199,7 +202,9 @@ def initialize_default_presets(conn, scope_type: str, scope_id: Optional[int] = 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    st, sid, preset,
+                    st,
+                    sid,
+                    preset,
                     defaults["return_liquidites_pct"],
                     defaults["return_bourse_pct"],
                     defaults["return_immobilier_pct"],

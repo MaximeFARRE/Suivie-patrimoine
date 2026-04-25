@@ -2,9 +2,12 @@
 Métriques agrégées pour le dashboard Vue d'ensemble.
 Appel unique: get_vue_ensemble_metrics(conn, person_id) → dict
 """
+
 from __future__ import annotations
-import math
+
 import logging
+import math
+
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -54,6 +57,7 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
 
     # ── 1. Snapshots hebdomadaires ────────────────────────────────────────
     from services.snapshots import get_person_weekly_series
+
     try:
         df_snap = get_person_weekly_series(conn, person_id)
     except Exception as exc:
@@ -79,6 +83,7 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
     # ── Qualité du snapshot stocké (DQ-02) ────────────────────────────────
     try:
         from services.snapshots_read import get_latest_snapshot_notes
+
         m["snapshot_notes"] = get_latest_snapshot_notes(conn, person_id)
     except Exception as exc:
         logger.warning("get_vue_ensemble_metrics: snapshot_notes indisponible : %s", exc)
@@ -109,6 +114,7 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
     # ── 3. Cashflow mensuel (12 mois) ─────────────────────────────────────
     try:
         from services.cashflow import get_person_monthly_savings_series
+
         df_cf = get_person_monthly_savings_series(
             conn,
             person_id,
@@ -129,52 +135,44 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
         if not df_kpi.empty:
             last_m = df_kpi["_mois_dt"].max()
             idx = pd.date_range(start=last_m - pd.DateOffset(months=11), end=last_m, freq="MS")
-            last12 = (
-                df_kpi.set_index("_mois_dt")
-                .reindex(idx, fill_value=0.0)
-                .reset_index(drop=True)
-            )
+            last12 = df_kpi.set_index("_mois_dt").reindex(idx, fill_value=0.0).reset_index(drop=True)
             for col in ["revenus", "depenses", "epargne"]:
                 last12[col] = pd.to_numeric(last12[col], errors="coerce").fillna(0.0)
         else:
             last12 = pd.DataFrame(columns=["revenus", "depenses", "epargne"])
 
-        m["epargne_12m"]       = float(last12["epargne"].sum())
-        m["depenses_moy_12m"]  = float(last12["depenses"].mean())
+        m["epargne_12m"] = float(last12["epargne"].sum())
+        m["depenses_moy_12m"] = float(last12["depenses"].mean())
         m["capacite_epargne_avg"] = float(last12["epargne"].mean())
         rev_sum_12m = float(last12["revenus"].sum())
-        m["taux_epargne_avg"] = (
-            (m["epargne_12m"] / rev_sum_12m * 100) if rev_sum_12m > 0 else None
-        )
+        m["taux_epargne_avg"] = (m["epargne_12m"] / rev_sum_12m * 100) if rev_sum_12m > 0 else None
         # Couverture cashflow (DQ-07): nombre de mois avec au moins revenus ou dépenses non nuls
-        m["cashflow_coverage_months_12"] = int((
-            (last12["revenus"] != 0.0) | (last12["depenses"] != 0.0)
-        ).sum())
+        m["cashflow_coverage_months_12"] = int(((last12["revenus"] != 0.0) | (last12["depenses"] != 0.0)).sum())
     else:
-        m["epargne_12m"]                   = None
-        m["depenses_moy_12m"]              = None
-        m["capacite_epargne_avg"]          = None
-        m["taux_epargne_avg"]              = None
-        m["cashflow_coverage_months_12"]   = 0
+        m["epargne_12m"] = None
+        m["depenses_moy_12m"] = None
+        m["capacite_epargne_avg"] = None
+        m["taux_epargne_avg"] = None
+        m["cashflow_coverage_months_12"] = 0
 
     # ── 4. Santé patrimoniale ─────────────────────────────────────────────
     brut = m["brut"]
     if brut > 0:
-        m["taux_endettement"]  = m["credits"] / brut * 100
-        m["part_liquide"]       = m["liq"] / brut * 100
+        m["taux_endettement"] = m["credits"] / brut * 100
+        m["part_liquide"] = m["liq"] / brut * 100
         m["exposition_marches"] = (m["bourse"] + m["pe_value"]) / brut * 100
-        m["actifs_illiquides"]  = (m["ent_value"] + m["pe_value"] + m["immo_value"]) / brut * 100
+        m["actifs_illiquides"] = (m["ent_value"] + m["pe_value"] + m["immo_value"]) / brut * 100
     else:
-        m["taux_endettement"]   = None
-        m["part_liquide"]       = None
+        m["taux_endettement"] = None
+        m["part_liquide"] = None
         m["exposition_marches"] = None
-        m["actifs_illiquides"]  = None
+        m["actifs_illiquides"] = None
 
     # ── 5. Progression réelle ─────────────────────────────────────────────
-    net     = m.get("net")
+    net = m.get("net")
     net_13w = m.get("net_13w")
     net_52w = m.get("net_52w")
-    m["gain_3m"]  = (net - net_13w) if (net is not None and net_13w is not None) else None
+    m["gain_3m"] = (net - net_13w) if (net is not None and net_13w is not None) else None
     m["gain_12m"] = (net - net_52w) if (net is not None and net_52w is not None) else None
     m["perf_3m_pct"] = (
         ((net - net_13w) / abs(net_13w) * 100)
@@ -193,23 +191,14 @@ def get_vue_ensemble_metrics(conn, person_id: int) -> dict:
             val_first = _opt(df_snap.iloc[0]["patrimoine_net"])
             first_dt = pd.Timestamp(df_snap.iloc[0]["_dt"])
             n_years = (anchor_dt - first_dt).days / 365.25
-            if (
-                val_first is not None
-                and abs(val_first) > 1
-                and n_years > 0.1
-                and (net / val_first) > 0
-            ):
+            if val_first is not None and abs(val_first) > 1 and n_years > 0.1 and (net / val_first) > 0:
                 m["cagr_pct"] = ((net / val_first) ** (1 / n_years) - 1) * 100
     except Exception as exc:
         logger.warning("get_vue_ensemble_metrics: cagr échoué : %s", exc)
 
-    gain_12m    = m.get("gain_12m")
+    gain_12m = m.get("gain_12m")
     epargne_12m = m.get("epargne_12m")
-    m["effet_valorisation_12m"] = (
-        gain_12m - epargne_12m
-        if (gain_12m is not None and epargne_12m is not None)
-        else None
-    )
+    m["effet_valorisation_12m"] = gain_12m - epargne_12m if (gain_12m is not None and epargne_12m is not None) else None
 
     # ── 6. Réserve de sécurité ────────────────────────────────────────────
     dep_moy = m.get("depenses_moy_12m")
@@ -249,9 +238,7 @@ def _normalize_cashflow_for_panel(df_cashflow: pd.DataFrame) -> pd.DataFrame:
         if "mois_dt" in df.columns:
             df["mois"] = pd.to_datetime(df["mois_dt"], errors="coerce").dt.strftime("%Y-%m-01")
         else:
-            logger.warning(
-                "_normalize_cashflow_for_panel: colonnes 'mois' et 'mois_dt' absentes"
-            )
+            logger.warning("_normalize_cashflow_for_panel: colonnes 'mois' et 'mois_dt' absentes")
             return _empty_cashflow_df()
 
     for col in ["revenus", "depenses", "epargne"]:
@@ -264,9 +251,7 @@ def _normalize_cashflow_for_panel(df_cashflow: pd.DataFrame) -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
     if "taux_epargne" not in df.columns:
-        logger.warning(
-            "_normalize_cashflow_for_panel: colonne 'taux_epargne' absente, remplacée par NaN"
-        )
+        logger.warning("_normalize_cashflow_for_panel: colonne 'taux_epargne' absente, remplacée par NaN")
         df["taux_epargne"] = pd.NA
     df["taux_epargne"] = pd.to_numeric(df["taux_epargne"], errors="coerce")
 
@@ -331,9 +316,7 @@ def pop_missing_fx_pairs() -> set[tuple[str, str]]:
 
     missing_fx = market_history.get_and_clear_missing_fx()
     if missing_fx:
-        logger.warning(
-            "pop_missing_fx_pairs: %d paire(s) FX manquante(s)", len(missing_fx)
-        )
+        logger.warning("pop_missing_fx_pairs: %d paire(s) FX manquante(s)", len(missing_fx))
     return missing_fx
 
 

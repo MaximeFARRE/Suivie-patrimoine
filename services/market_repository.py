@@ -1,7 +1,16 @@
 import sqlite3
+
 import pandas as pd
 
-def upsert_asset_price_weekly(conn: sqlite3.Connection, symbol: str, week_date: str, adj_close: float, currency: str | None = None, source: str = "YFINANCE") -> None:
+
+def upsert_asset_price_weekly(
+    conn: sqlite3.Connection,
+    symbol: str,
+    week_date: str,
+    adj_close: float,
+    currency: str | None = None,
+    source: str = "YFINANCE",
+) -> None:
     conn.execute(
         """
         INSERT INTO asset_prices_weekly(symbol, week_date, adj_close, currency, source)
@@ -13,6 +22,7 @@ def upsert_asset_price_weekly(conn: sqlite3.Connection, symbol: str, week_date: 
         """,
         (symbol, week_date, float(adj_close), currency, source),
     )
+
 
 def get_asset_price_asof(conn: sqlite3.Connection, symbol: str, week_date: str):
     return conn.execute(
@@ -26,7 +36,15 @@ def get_asset_price_asof(conn: sqlite3.Connection, symbol: str, week_date: str):
         (symbol, week_date),
     ).fetchone()
 
-def upsert_fx_rate_weekly(conn: sqlite3.Connection, base_ccy: str, quote_ccy: str, week_date: str, rate: float, source: str = "YFINANCE") -> None:
+
+def upsert_fx_rate_weekly(
+    conn: sqlite3.Connection,
+    base_ccy: str,
+    quote_ccy: str,
+    week_date: str,
+    rate: float,
+    source: str = "YFINANCE",
+) -> None:
     conn.execute(
         """
         INSERT INTO fx_rates_weekly(base_ccy, quote_ccy, week_date, rate, source)
@@ -37,6 +55,7 @@ def upsert_fx_rate_weekly(conn: sqlite3.Connection, base_ccy: str, quote_ccy: st
         """,
         (base_ccy.upper(), quote_ccy.upper(), week_date, float(rate), source),
     )
+
 
 def get_fx_rate_asof(conn: sqlite3.Connection, base_ccy: str, quote_ccy: str, week_date: str):
     return conn.execute(
@@ -49,6 +68,7 @@ def get_fx_rate_asof(conn: sqlite3.Connection, base_ccy: str, quote_ccy: str, we
         """,
         (base_ccy.upper(), quote_ccy.upper(), week_date),
     ).fetchone()
+
 
 def list_weekly_snapshots(conn: sqlite3.Connection, person_id: int) -> pd.DataFrame:
     return pd.read_sql_query(

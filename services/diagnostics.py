@@ -1,8 +1,7 @@
 from __future__ import annotations
-import pandas as pd
+
+from services import market_history, positions
 from services import repositories as repo
-from services import market_history
-from services import positions
 from services.asset_panel_mapping import INVESTMENT_ACCOUNT_TYPES
 
 
@@ -17,9 +16,7 @@ def diagnose_bourse_asof(conn, person_id: int, asof_week_date: str) -> dict:
     if accounts is None or accounts.empty:
         return {"ok": False, "reason": "no_accounts"}
 
-    bourse_acc = accounts[
-        accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)
-    ].copy()
+    bourse_acc = accounts[accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)].copy()
     if bourse_acc.empty:
         return {"ok": False, "reason": "no_bourse_accounts"}
 
@@ -59,6 +56,7 @@ def last_market_dates(conn) -> dict:
     """
     Dernières dates en base pour prix et fx (utile debug)
     """
+
     def _get_d(row):
         if not row:
             return None

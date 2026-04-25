@@ -91,7 +91,13 @@ def rebuild_snapshots_person(conn, person_id: int, lookback_days: int = 90) -> d
         n_ok += 1
 
     conn.commit()
-    return {"did_run": True, "n_weeks": len(weeks), "start": weeks[0], "end": weeks[-1], "n_ok": n_ok}
+    return {
+        "did_run": True,
+        "n_weeks": len(weeks),
+        "start": weeks[0],
+        "end": weeks[-1],
+        "n_ok": n_ok,
+    }
 
 
 def rebuild_snapshots_person_missing_only(
@@ -176,7 +182,7 @@ def rebuild_snapshots_person_from_last(
         start = market_history.week_start(start)
         mode = "FROM_LAST_FALLBACK"
     else:
-        start = (last_week.date() - dt.timedelta(days=int(safety_weeks) * 7))
+        start = last_week.date() - dt.timedelta(days=int(safety_weeks) * 7)
         start = market_history.week_start(start)
         mode = "FROM_LAST"
 
@@ -341,12 +347,22 @@ def rebuild_snapshots_person_backdated_aware(
         )
 
     if df_new is None or df_new.empty:
-        return {"did_run": False, "mode": "BACKDATED_AWARE", "reason": "no_new_transactions", "person_id": int(person_id)}
+        return {
+            "did_run": False,
+            "mode": "BACKDATED_AWARE",
+            "reason": "no_new_transactions",
+            "person_id": int(person_id),
+        }
 
     df_new["date"] = pd.to_datetime(df_new["date"], errors="coerce")
     df_new = df_new.dropna(subset=["date"])
     if df_new.empty:
-        return {"did_run": False, "mode": "BACKDATED_AWARE", "reason": "new_transactions_no_valid_date", "person_id": int(person_id)}
+        return {
+            "did_run": False,
+            "mode": "BACKDATED_AWARE",
+            "reason": "new_transactions_no_valid_date",
+            "person_id": int(person_id),
+        }
 
     min_date = df_new["date"].min().date()
     start = market_history.week_start(min_date - dt.timedelta(days=int(safety_weeks) * 7))
@@ -360,7 +376,12 @@ def rebuild_snapshots_person_backdated_aware(
 
     weeks = _list_weeks(start, end)
     if not weeks:
-        return {"did_run": False, "mode": "BACKDATED_AWARE", "reason": "no_weeks", "person_id": int(person_id)}
+        return {
+            "did_run": False,
+            "mode": "BACKDATED_AWARE",
+            "reason": "no_weeks",
+            "person_id": int(person_id),
+        }
 
     _sync_person_market_data_for_weeks(conn, person_id, weeks[0], weeks[-1])
     accounts = repo.list_accounts(conn, person_id=person_id)
@@ -418,6 +439,7 @@ def get_first_transaction_date(conn, person_id: int):
     if raw is None:
         return None
     import datetime as _dt
+
     try:
         return _dt.date.fromisoformat(str(raw)[:10])
     except ValueError:
@@ -446,9 +468,7 @@ def rebuild_snapshots_person_full_history(
     total_weeks = len(weeks)
     for week_index, wd in enumerate(weeks):
         if cancel_check and cancel_check():
-            logging.getLogger(__name__).info(
-                "Full-history rebuild cancelled. %d/%d weeks.", n_ok, total_weeks
-            )
+            logging.getLogger(__name__).info("Full-history rebuild cancelled. %d/%d weeks.", n_ok, total_weeks)
             break
         if progress_callback is not None:
             current_year = int(str(wd)[:4])
@@ -459,7 +479,11 @@ def rebuild_snapshots_person_full_history(
                 total_weeks=total_weeks,
             )
         payload = compute_weekly_snapshot_person(
-            conn, person_id, wd, tx_cache=tx_cache, accounts_cache=accounts,
+            conn,
+            person_id,
+            wd,
+            tx_cache=tx_cache,
+            accounts_cache=accounts,
         )
         upsert_weekly_snapshot(conn, person_id, wd, mode="REBUILD", payload=payload)
         n_ok += 1
@@ -471,7 +495,8 @@ def rebuild_snapshots_person_full_history(
             (int(person_id),),
         ).fetchone()
         _set_person_watermark(
-            conn, person_id,
+            conn,
+            person_id,
             (int(max_row[0]) if max_row and max_row[0] is not None else None),
             (str(max_row[1]) if max_row and max_row[1] is not None else None),
         )

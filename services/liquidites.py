@@ -1,8 +1,10 @@
 ﻿import logging
+
 import pandas as pd
-from services import repositories as repo
-from services import pe_cash_repository as pe_cash_repo
+
 from services import fx
+from services import pe_cash_repository as pe_cash_repo
+from services import repositories as repo
 from services.asset_panel_mapping import INVESTMENT_ACCOUNT_TYPES
 from utils.validators import sens_flux
 
@@ -35,8 +37,8 @@ def _livret_balance_from_tx(tx_df: pd.DataFrame) -> float:
     df = tx_df.copy()
     df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
     type_upper = df.get("type", "").astype(str).str.strip().str.upper()
-    depot    = float(df.loc[type_upper == "DEPOT",    "amount"].sum())
-    retrait  = float(df.loc[type_upper == "RETRAIT",  "amount"].sum())
+    depot = float(df.loc[type_upper == "DEPOT", "amount"].sum())
+    retrait = float(df.loc[type_upper == "RETRAIT", "amount"].sum())
     interets = float(df.loc[type_upper == "INTERETS", "amount"].sum())
     return round(depot - retrait + interets, 2)
 
@@ -52,6 +54,7 @@ def _bank_balance_from_tx(tx_df: pd.DataFrame) -> float:
         # Fallback strict sur la logique existante si un type non standard apparait.
         signs = type_norm.apply(sens_flux).astype(float)
     return float(round(float((df["amount"] * signs).sum()), 2))
+
 
 def _compute_liquidites_like_overview(conn, person_id: int):
     accounts = repo.list_accounts(conn, person_id=person_id)
@@ -99,14 +102,17 @@ def _compute_liquidites_like_overview(conn, person_id: int):
         if eur is None:
             logger.warning(
                 "_compute_liquidites: FX %s→EUR indisponible pour compte %s, ignoré du total.",
-                acc_ccy, acc_id,
+                acc_ccy,
+                acc_id,
             )
-            missing_fx.append({
-                "component": "bank",
-                "account_id": acc_id,
-                "currency": acc_ccy,
-                "amount_native": round(float(total_native), 2),
-            })
+            missing_fx.append(
+                {
+                    "component": "bank",
+                    "account_id": acc_id,
+                    "currency": acc_ccy,
+                    "amount_native": round(float(total_native), 2),
+                }
+            )
             continue
         bank_total_eur += eur
 
@@ -124,22 +130,23 @@ def _compute_liquidites_like_overview(conn, person_id: int):
         if eur is None:
             logger.warning(
                 "_compute_liquidites: FX %s→EUR indisponible pour livret %s, ignoré du total.",
-                acc_ccy, acc_id,
+                acc_ccy,
+                acc_id,
             )
-            missing_fx.append({
-                "component": "livret",
-                "account_id": acc_id,
-                "currency": acc_ccy,
-                "amount_native": round(float(total_native), 2),
-            })
+            missing_fx.append(
+                {
+                    "component": "livret",
+                    "account_id": acc_id,
+                    "currency": acc_ccy,
+                    "amount_native": round(float(total_native), 2),
+                }
+            )
             continue
         livret_total_eur += eur
     livret_total_eur = round(float(livret_total_eur), 2)
 
     bourse_total_eur = 0.0
-    df_bourse = accounts[
-        accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)
-    ].copy()
+    df_bourse = accounts[accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)].copy()
     for _, acc in df_bourse.iterrows():
         acc_id = int(acc["id"])
         acc_ccy = str(acc.get("currency", "EUR") or "EUR").upper()
@@ -165,14 +172,17 @@ def _compute_liquidites_like_overview(conn, person_id: int):
         if eur is None:
             logger.warning(
                 "_compute_liquidites: FX %s→EUR indisponible pour compte bourse %s, ignoré du total.",
-                acc_ccy, acc_id,
+                acc_ccy,
+                acc_id,
             )
-            missing_fx.append({
-                "component": "bourse",
-                "account_id": acc_id,
-                "currency": acc_ccy,
-                "amount_native": round(float(cash_native), 2),
-            })
+            missing_fx.append(
+                {
+                    "component": "bourse",
+                    "account_id": acc_id,
+                    "currency": acc_ccy,
+                    "amount_native": round(float(cash_native), 2),
+                }
+            )
             continue
         bourse_total_eur += eur
 
@@ -184,7 +194,12 @@ def _compute_liquidites_like_overview(conn, person_id: int):
         df = pe_cash_tx.copy()
         df["tx_type"] = df["tx_type"].astype(str).str.upper()
         df["amount"] = pd.to_numeric(df.get("amount", 0.0), errors="coerce").fillna(0.0)
-        pe_total_eur = float(df.apply(lambda r: float(r["amount"]) if r["tx_type"] == "DEPOSIT" else -float(r["amount"]), axis=1).sum())
+        pe_total_eur = float(
+            df.apply(
+                lambda r: float(r["amount"]) if r["tx_type"] == "DEPOSIT" else -float(r["amount"]),
+                axis=1,
+            ).sum()
+        )
     pe_total_eur = round(float(pe_total_eur), 2)
 
     total = round(float(bank_total_eur + livret_total_eur + bourse_total_eur + pe_total_eur), 2)
@@ -208,12 +223,14 @@ def get_liquidites_summary(conn, person_id: int) -> dict:
 
     if total == 0.0 and not missing_fx:
         logger.info(
-            "get_liquidites_summary: aucune liquidité pour person_id=%s", person_id,
+            "get_liquidites_summary: aucune liquidité pour person_id=%s",
+            person_id,
         )
     elif missing_fx:
         logger.warning(
             "get_liquidites_summary: synthèse partielle pour person_id=%s, FX manquants=%s",
-            person_id, missing_fx,
+            person_id,
+            missing_fx,
         )
 
     return {
@@ -225,4 +242,3 @@ def get_liquidites_summary(conn, person_id: int) -> dict:
         "quality_status": "partial" if missing_fx else "ok",
         "missing_fx": missing_fx,
     }
-

@@ -14,6 +14,7 @@ Usage :
     mapping = isin_resolver.batch_resolve_isins(conn, ["IE00B4L5Y983", "US0378331005"])
     # → {"IE00B4L5Y983": "EUNL.DE", "US0378331005": "AAPL"}
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,15 +32,18 @@ _OPENFIGI_HEADERS = {"Content-Type": "application/json"}
 # Cache DB
 # ---------------------------------------------------------------------------
 
+
 def _ensure_cache(conn) -> None:
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS isin_ticker_cache (
             isin        TEXT PRIMARY KEY,
             ticker      TEXT,
             source      TEXT,
             resolved_at TEXT DEFAULT (datetime('now'))
         )
-    """)
+    """
+    )
     conn.commit()
 
 
@@ -51,9 +55,7 @@ def _get_cached(conn, isin: str) -> str | None:
       - None          → pas encore en cache (première fois)
     """
     _ensure_cache(conn)
-    row = conn.execute(
-        "SELECT ticker FROM isin_ticker_cache WHERE isin = ?", (isin.upper(),)
-    ).fetchone()
+    row = conn.execute("SELECT ticker FROM isin_ticker_cache WHERE isin = ?", (isin.upper(),)).fetchone()
     if row is None:
         return None
     val = row[0] if not hasattr(row, "keys") else row["ticker"]
@@ -80,6 +82,7 @@ def _set_cached(conn, isin: str, ticker: str, source: str) -> None:
 # Sources de résolution
 # ---------------------------------------------------------------------------
 
+
 def _via_yfinance(isin: str) -> str | None:
     """
     Résout ISIN via yfinance.Search.
@@ -88,6 +91,7 @@ def _via_yfinance(isin: str) -> str | None:
     """
     try:
         import yfinance as yf
+
         search = yf.Search(isin, max_results=5, enable_fuzzy_query=False)
         quotes = search.quotes
         if not quotes:
@@ -114,9 +118,7 @@ def _via_openfigi_single(isin: str) -> str | None:
     """
     body = [{"idType": "ID_ISIN", "idValue": isin}]
     try:
-        resp = requests.post(
-            _OPENFIGI_URL, json=body, headers=_OPENFIGI_HEADERS, timeout=10
-        )
+        resp = requests.post(_OPENFIGI_URL, json=body, headers=_OPENFIGI_HEADERS, timeout=10)
         time.sleep(0.3)  # rate limit : 25 req/min sans clé API
         if resp.status_code != 200:
             logger.debug("OpenFIGI HTTP %d pour %s", resp.status_code, isin)
@@ -141,6 +143,7 @@ def _via_openfigi_single(isin: str) -> str | None:
 # ---------------------------------------------------------------------------
 # API publique
 # ---------------------------------------------------------------------------
+
 
 def resolve_isin(conn, isin: str) -> str | None:
     """
@@ -233,9 +236,7 @@ def batch_resolve_isins(conn, isins: list[str]) -> dict[str, str]:
         chunk = openfigi_fallback[i : i + BATCH]
         body = [{"idType": "ID_ISIN", "idValue": isin} for isin in chunk]
         try:
-            resp = requests.post(
-                _OPENFIGI_URL, json=body, headers=_OPENFIGI_HEADERS, timeout=15
-            )
+            resp = requests.post(_OPENFIGI_URL, json=body, headers=_OPENFIGI_HEADERS, timeout=15)
             time.sleep(0.5)
 
             if resp.status_code == 200:
@@ -260,7 +261,8 @@ def batch_resolve_isins(conn, isins: list[str]) -> dict[str, str]:
             elif resp.status_code == 429:
                 logger.warning(
                     "OpenFIGI rate limit (429) — %d ISIN(s) non résolus : %s",
-                    len(chunk), chunk,
+                    len(chunk),
+                    chunk,
                 )
                 for isin in chunk:
                     _set_cached(conn, isin, "", "rate_limited")
@@ -268,7 +270,8 @@ def batch_resolve_isins(conn, isins: list[str]) -> dict[str, str]:
             else:
                 logger.warning(
                     "OpenFIGI HTTP %d pour batch — %d ISIN(s) non résolus",
-                    resp.status_code, len(chunk),
+                    resp.status_code,
+                    len(chunk),
                 )
                 for isin in chunk:
                     _set_cached(conn, isin, "", "error")
@@ -290,9 +293,7 @@ def clear_cache(conn, isin: str | None = None) -> int:
     """
     _ensure_cache(conn)
     if isin:
-        cur = conn.execute(
-            "DELETE FROM isin_ticker_cache WHERE isin = ?", (isin.strip().upper(),)
-        )
+        cur = conn.execute("DELETE FROM isin_ticker_cache WHERE isin = ?", (isin.strip().upper(),))
     else:
         cur = conn.execute("DELETE FROM isin_ticker_cache")
     conn.commit()

@@ -3,30 +3,57 @@ Panel Immobilier — Vue d'ensemble + Créer / Modifier.
 Gère l'immobilier direct (RP, locatif, parking, SCI…)
 et remonte automatiquement les SCPI détenues dans les comptes existants.
 """
-import logging
-import pandas as pd
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFormLayout, QLineEdit, QDoubleSpinBox, QComboBox, QPushButton,
-    QDateEdit, QScrollArea,
-)
-from qt_ui.components.animated_tab import AnimatedTabWidget
-from PyQt6.QtCore import QDate, Qt
 
-from qt_ui.widgets import DataTableWidget, MetricLabel
-from qt_ui.theme import (
-    BG_PRIMARY, STYLE_BTN_PRIMARY_BORDERED, STYLE_BTN_SUCCESS,
-    STYLE_INPUT_FOCUS, STYLE_FORM_LABEL, STYLE_TITLE, STYLE_SECTION,
-    STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_ERROR, STYLE_TAB_INNER,
-    STYLE_SCROLLAREA, BORDER_SUBTLE, TEXT_SECONDARY,
+import logging
+
+import pandas as pd
+from PyQt6.QtCore import QDate, Qt
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
+
+from qt_ui.components.animated_tab import AnimatedTabWidget
+from qt_ui.theme import (
+    BG_PRIMARY,
+    BORDER_SUBTLE,
+    STYLE_BTN_PRIMARY_BORDERED,
+    STYLE_BTN_SUCCESS,
+    STYLE_FORM_LABEL,
+    STYLE_INPUT_FOCUS,
+    STYLE_SCROLLAREA,
+    STYLE_SECTION,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_TAB_INNER,
+    STYLE_TITLE,
+    TEXT_SECONDARY,
+)
+from qt_ui.widgets import DataTableWidget, MetricLabel
 
 logger = logging.getLogger(__name__)
 
 _PROPERTY_TYPES = ["RP", "LOCATIF", "SCPI", "PARKING", "TERRAIN", "IMMEUBLE", "SCI_IMMO", "AUTRE"]
 
-_FMT = lambda v: f"{v:,.0f} €".replace(",", " ")
-_FMT2 = lambda v: f"{v:,.2f} €".replace(",", " ")
+
+def _FMT(v: float) -> str:
+    return f"{v:,.0f} €".replace(",", " ")
+
+
+def _FMT2(v: float) -> str:
+    return f"{v:,.2f} €".replace(",", " ")
+
+
 _DASH = "—"
 
 
@@ -50,7 +77,7 @@ class ImmobilierPanel(QWidget):
         tabs = AnimatedTabWidget()
         tabs.setStyleSheet(STYLE_TAB_INNER)
         tabs.addTab(self._build_overview_tab(), "🏠  Vue d'ensemble")
-        tabs.addTab(self._build_edit_tab(),     "🏗️  Créer / Modifier")
+        tabs.addTab(self._build_edit_tab(), "🏗️  Créer / Modifier")
         tabs.currentChanged.connect(self._on_tab_changed)
 
         layout.addWidget(tabs)
@@ -71,10 +98,10 @@ class ImmobilierPanel(QWidget):
 
         # KPI ligne 1 — patrimoine
         kpi1 = QHBoxLayout()
-        self._kpi_nb         = MetricLabel("Nb biens / projets",     _DASH)
-        self._kpi_brut        = MetricLabel("Valeur brute détenue",   _DASH)
-        self._kpi_dette       = MetricLabel("Dette imputable",        _DASH)
-        self._kpi_net         = MetricLabel("Valeur nette immo",      _DASH)
+        self._kpi_nb = MetricLabel("Nb biens / projets", _DASH)
+        self._kpi_brut = MetricLabel("Valeur brute détenue", _DASH)
+        self._kpi_dette = MetricLabel("Dette imputable", _DASH)
+        self._kpi_net = MetricLabel("Valeur nette immo", _DASH)
         for w2 in (self._kpi_nb, self._kpi_brut, self._kpi_dette, self._kpi_net):
             kpi1.addWidget(w2)
         kpi1.addStretch()
@@ -82,9 +109,9 @@ class ImmobilierPanel(QWidget):
 
         # KPI ligne 2 — rendement
         kpi2 = QHBoxLayout()
-        self._kpi_loyers      = MetricLabel("Loyers annuels bruts",   _DASH)
-        self._kpi_rendement   = MetricLabel("Rendement brut moyen",   _DASH)
-        self._kpi_ltv         = MetricLabel("LTV moyen",              _DASH)
+        self._kpi_loyers = MetricLabel("Loyers annuels bruts", _DASH)
+        self._kpi_rendement = MetricLabel("Rendement brut moyen", _DASH)
+        self._kpi_ltv = MetricLabel("LTV moyen", _DASH)
         for w2 in (self._kpi_loyers, self._kpi_rendement, self._kpi_ltv):
             kpi2.addWidget(w2)
         kpi2.addStretch()
@@ -192,9 +219,7 @@ class ImmobilierPanel(QWidget):
 
         # Quote-part de la personne courante
         lbl_share = QLabel("Quote-part de cette personne")
-        lbl_share.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 13px; font-weight: bold; margin-top: 6px;"
-        )
+        lbl_share.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px; font-weight: bold; margin-top: 6px;")
         v.addWidget(lbl_share)
 
         form_share = QFormLayout()
@@ -238,9 +263,7 @@ class ImmobilierPanel(QWidget):
 
         # Séparateur
         sep = QLabel()
-        sep.setStyleSheet(
-            f"background: {BORDER_SUBTLE}; min-height: 1px; max-height: 1px;"
-        )
+        sep.setStyleSheet(f"background: {BORDER_SUBTLE}; min-height: 1px; max-height: 1px;")
         v.addWidget(sep)
 
         # ── Section : Mettre à jour un bien existant ───────────────────────
@@ -350,9 +373,9 @@ class ImmobilierPanel(QWidget):
             df = immo_repo.aggregate_positions(self._conn, self._person_id)
 
             if df is None or df.empty:
-                self._table.set_dataframe(pd.DataFrame([{
-                    "Info": "Aucun bien immobilier. Créez-en un dans l'onglet 🏗️ Créer / Modifier."
-                }]))
+                self._table.set_dataframe(
+                    pd.DataFrame([{"Info": "Aucun bien immobilier. Créez-en un dans l'onglet 🏗️ Créer / Modifier."}])
+                )
                 self._reset_kpis()
                 self._hist_table.set_dataframe(pd.DataFrame())
                 return
@@ -382,9 +405,7 @@ class ImmobilierPanel(QWidget):
                         h["bien"] = name[0] if len(name) > 0 else str(int(pid))
                         hist_frames.append(h)
                 if hist_frames:
-                    self._hist_table.set_dataframe(
-                        pd.concat(hist_frames, ignore_index=True)
-                    )
+                    self._hist_table.set_dataframe(pd.concat(hist_frames, ignore_index=True))
                 else:
                     self._hist_table.set_dataframe(pd.DataFrame())
             except Exception as e:
@@ -397,61 +418,65 @@ class ImmobilierPanel(QWidget):
     def _compute_kpis(self, df: pd.DataFrame) -> None:
         nb = len(df)
 
-        brut_total   = df["valeur_detenue"].sum()
-        dette_total  = df["dette_imputable"].sum()
-        net_total    = df["valeur_nette"].sum()
+        brut_total = df["valeur_detenue"].sum()
+        dette_total = df["dette_imputable"].sum()
+        net_total = df["valeur_nette"].sum()
         loyers_total = df["loyers_annuels"].sum()
 
         # Rendement moyen pondéré par la valeur totale
         df_rdt = df[df["valeur_totale"] > 0].copy()
         if not df_rdt.empty and brut_total > 0:
             rdt_moyen = (
-                (df_rdt["loyers_annuels"] / df_rdt["valeur_totale"] * 100)
-                * df_rdt["valeur_detenue"]
+                (df_rdt["loyers_annuels"] / df_rdt["valeur_totale"] * 100) * df_rdt["valeur_detenue"]
             ).sum() / brut_total
             rdt_str = f"{rdt_moyen:.2f} %"
         else:
             rdt_str = _DASH
 
         # LTV moyen
-        ltv_str = (
-            f"{dette_total / brut_total * 100:.1f} %"
-            if brut_total > 0 else _DASH
-        )
+        ltv_str = f"{dette_total / brut_total * 100:.1f} %" if brut_total > 0 else _DASH
 
-        self._kpi_nb.set_content("Nb biens / projets",    str(nb))
+        self._kpi_nb.set_content("Nb biens / projets", str(nb))
         self._kpi_brut.set_content("Valeur brute détenue", _FMT(brut_total))
-        self._kpi_dette.set_content("Dette imputable",     _FMT(dette_total))
-        self._kpi_net.set_content("Valeur nette immo",     _FMT(net_total))
+        self._kpi_dette.set_content("Dette imputable", _FMT(dette_total))
+        self._kpi_net.set_content("Valeur nette immo", _FMT(net_total))
         self._kpi_loyers.set_content("Loyers annuels bruts", _FMT(loyers_total))
         self._kpi_rendement.set_content("Rendement brut moyen", rdt_str)
         self._kpi_ltv.set_content("LTV moyen", ltv_str)
 
     def _reset_kpis(self) -> None:
         for kpi in (
-            self._kpi_nb, self._kpi_brut, self._kpi_dette, self._kpi_net,
-            self._kpi_loyers, self._kpi_rendement, self._kpi_ltv,
+            self._kpi_nb,
+            self._kpi_brut,
+            self._kpi_dette,
+            self._kpi_net,
+            self._kpi_loyers,
+            self._kpi_rendement,
+            self._kpi_ltv,
         ):
             kpi.set_content(kpi._label_lbl.text(), _DASH)
 
     @staticmethod
     def _format_display_df(df: pd.DataFrame) -> pd.DataFrame:
         """Prépare un DataFrame propre pour l'affichage dans DataTableWidget."""
-        cols_eur = ["valeur_totale", "valeur_detenue", "dette_totale",
-                    "dette_imputable", "valeur_nette", "loyer_mensuel", "loyers_annuels"]
+        cols_eur = [
+            "valeur_totale",
+            "valeur_detenue",
+            "dette_totale",
+            "dette_imputable",
+            "valeur_nette",
+            "loyer_mensuel",
+            "loyers_annuels",
+        ]
         for c in cols_eur:
             if c in df.columns:
-                df[c] = df[c].apply(
-                    lambda v: _FMT(v) if pd.notna(v) else _DASH
-                )
+                df[c] = df[c].apply(lambda v: _FMT(v) if pd.notna(v) else _DASH)
         if "rendement_brut" in df.columns:
             df["rendement_brut"] = df["rendement_brut"].apply(
                 lambda v: f"{v:.2f} %" if pd.notna(v) and v is not None else _DASH
             )
         if "pct" in df.columns:
-            df["pct"] = df["pct"].apply(
-                lambda v: f"{v:.1f} %" if pd.notna(v) else _DASH
-            )
+            df["pct"] = df["pct"].apply(lambda v: f"{v:.1f} %" if pd.notna(v) else _DASH)
         # Supprimer les colonnes techniques pas utiles dans le tableau
         return df.drop(columns=["property_id"], errors="ignore")
 
@@ -460,6 +485,7 @@ class ImmobilierPanel(QWidget):
     def _refresh_property_combo(self) -> None:
         try:
             from services import immobilier_repository as immo_repo
+
             df = immo_repo.list_properties(self._conn)
             self._upd_combo.blockSignals(True)
             self._upd_combo.clear()
@@ -476,6 +502,7 @@ class ImmobilierPanel(QWidget):
         """Pré-remplit les champs de mise à jour avec les valeurs actuelles."""
         try:
             from services import immobilier_repository as immo_repo
+
             pid = self._upd_combo.currentData()
             if pid is None:
                 return
@@ -591,9 +618,7 @@ class ImmobilierPanel(QWidget):
 
             name = self._upd_combo.currentText()
             self._update_status.setStyleSheet(STYLE_STATUS_SUCCESS)
-            self._update_status.setText(
-                f"✅  « {name} » mis à jour → {_FMT2(self._upd_valo.value())}."
-            )
+            self._update_status.setText(f"✅  « {name} » mis à jour → {_FMT2(self._upd_valo.value())}.")
 
         except Exception as e:
             logger.error("Erreur mise à jour bien immo : %s", e, exc_info=True)

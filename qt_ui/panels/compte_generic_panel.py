@@ -1,11 +1,18 @@
 """
 Panel générique de compte (types non couverts par un panel dédié).
 """
+
 import logging
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox,
-)
+
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from qt_ui.panels.saisie_panel import SaisiePanel
 from qt_ui.theme import BG_PRIMARY, STYLE_BTN_DANGER, TEXT_SECONDARY
@@ -73,9 +80,7 @@ class CompteGenericPanel(QWidget):
             confirm.setInformativeText(
                 "Cette action supprimera aussi toutes les transactions associées et est irréversible."
             )
-            confirm.setStandardButtons(
-                QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes
-            )
+            confirm.setStandardButtons(QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes)
             btn_delete = confirm.button(QMessageBox.StandardButton.Yes)
             if btn_delete is not None:
                 btn_delete.setText("Supprimer")
@@ -94,6 +99,7 @@ class CompteGenericPanel(QWidget):
             )
 
             from services import snapshots as wk_snap
+
             wk_snap.rebuild_snapshots_person_from_last(
                 self._conn,
                 person_id=self._person_id,
@@ -105,10 +111,7 @@ class CompteGenericPanel(QWidget):
             QMessageBox.information(
                 self,
                 "Compte supprimé",
-                (
-                    f"Le compte « {account_name} » a été supprimé.\n"
-                    f"Transactions supprimées : {tx_deleted}."
-                ),
+                (f"Le compte « {account_name} » a été supprimé.\n" f"Transactions supprimées : {tx_deleted}."),
             )
             self.account_deleted.emit(int(self._person_id), int(self._account_id))
         except Exception as e:

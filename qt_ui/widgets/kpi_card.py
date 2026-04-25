@@ -1,12 +1,13 @@
 """
 Widget KpiCard — remplace la fonction _kpi_card() dupliquée dans 5 fichiers ui/*.py.
 """
-from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from qt_ui.theme import KPI_TONES, TEXT_SECONDARY, BG_CARD
 from qt_ui.components.skeleton_handler import SkeletonHandler
+from qt_ui.theme import KPI_TONES
 
 # Nombre maximum de lignes de détail supportées par la carte
 _MAX_DETAILS = 4
@@ -28,8 +29,15 @@ class KpiCard(QFrame):
         )
     """
 
-    def __init__(self, title: str = "", value: str = "", subtitle: str = "",
-                 emoji: str = "", tone: str = "neutral", parent=None):
+    def __init__(
+        self,
+        title: str = "",
+        value: str = "",
+        subtitle: str = "",
+        emoji: str = "",
+        tone: str = "neutral",
+        parent=None,
+    ):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setMinimumWidth(140)
@@ -105,8 +113,9 @@ class KpiCard(QFrame):
         if not self._loading:
             return
 
-        from PyQt6.QtGui import QPainter, QColor, QBrush
         from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QBrush, QColor, QPainter
+
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -117,7 +126,7 @@ class KpiCard(QFrame):
 
         # On cache les labels en mettant leur couleur à transparent
         # (Alternative: masquer les widgets, mais dessiner par-dessus est plus "skeleton-like")
-        
+
         # Rect pour le titre
         rect_title = QRectF(14, 12, self.width() * 0.6, 14)
         p.setPen(Qt.PenStyle.NoPen)
@@ -135,9 +144,15 @@ class KpiCard(QFrame):
 
         p.end()
 
-    def set_content(self, title: str, value: str, subtitle: str = "",
-                    emoji: str = "", tone: str = "neutral",
-                    details: list[tuple[str, str]] | None = None) -> None:
+    def set_content(
+        self,
+        title: str,
+        value: str,
+        subtitle: str = "",
+        emoji: str = "",
+        tone: str = "neutral",
+        details: list[tuple[str, str]] | None = None,
+    ) -> None:
         """
         Met à jour le contenu de la carte.
 
@@ -176,7 +191,8 @@ class KpiCard(QFrame):
             else:
                 container.setVisible(False)
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            f"""
             KpiCard {{
                 background-color: {bg};
                 border-radius: 8px;
@@ -186,7 +202,8 @@ class KpiCard(QFrame):
                 background: transparent;
                 color: {fg};
             }}
-        """)
+        """
+        )
         self._title_label.setStyleSheet(f"color: {fg_muted}; font-size: 11px;")
         self._value_label.setStyleSheet(f"color: {fg}; font-size: 15px; font-weight: bold;")
         self._subtitle_label.setStyleSheet(f"color: {fg_muted}; font-size: 11px;")

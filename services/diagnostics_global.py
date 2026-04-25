@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 import logging
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
 import pytz
+
 from services import snapshots
 
 _logger = logging.getLogger(__name__)
@@ -80,9 +83,9 @@ def last_snapshot_week_by_person(conn) -> pd.DataFrame:
                 week_ts = pd.to_datetime(week_date, errors="coerce")
                 if pd.isna(week_ts):
                     _logger.warning(
-                        "last_snapshot_week_by_person: date incohérente pour "
-                        "person_id=%s week_date=%r",
-                        person_id, week_date,
+                        "last_snapshot_week_by_person: date incohérente pour " "person_id=%s week_date=%r",
+                        person_id,
+                        week_date,
                     )
                 else:
                     last_week = week_ts.strftime("%Y-%m-%d")
@@ -123,8 +126,7 @@ def missing_snapshot_weeks(conn, person_id: int, lookback_days: int = 90) -> pd.
             have = set()
         elif "week_date" not in df.columns:
             _logger.warning(
-                "missing_snapshot_weeks: colonne week_date absente, diagnostic ignoré "
-                "pour person_id=%s",
+                "missing_snapshot_weeks: colonne week_date absente, diagnostic ignoré " "pour person_id=%s",
                 person_id,
             )
             have = set()
@@ -133,8 +135,7 @@ def missing_snapshot_weeks(conn, person_id: int, lookback_days: int = 90) -> pd.
             invalid_count = int(week_dates.isna().sum())
             if invalid_count > 0:
                 _logger.warning(
-                    "missing_snapshot_weeks: %s date(s) incohérente(s) ignorée(s) "
-                    "pour person_id=%s",
+                    "missing_snapshot_weeks: %s date(s) incohérente(s) ignorée(s) " "pour person_id=%s",
                     invalid_count,
                     person_id,
                 )
@@ -243,8 +244,7 @@ def person_weekly_status(conn, person_id: int, safety_weeks: int = 4) -> dict:
             last = pd.to_datetime(d_val, errors="coerce")
             if pd.isna(last):
                 _logger.warning(
-                    "person_weekly_status: date incohérente pour person_id=%s "
-                    "week_date=%r (diagnostic ignoré)",
+                    "person_weekly_status: date incohérente pour person_id=%s " "week_date=%r (diagnostic ignoré)",
                     person_id,
                     d_val,
                 )
@@ -297,9 +297,7 @@ def get_family_health_summary(conn, safety_weeks: int = 4) -> dict:
         person_ids  list[int]
                     — liste des person_id détectés (utile pour les rebuilds)
     """
-    _EMPTY_STATUS_DF = pd.DataFrame(
-        columns=["Personne", "Dernière semaine", "Cible", "Statut"]
-    )
+    _EMPTY_STATUS_DF = pd.DataFrame(columns=["Personne", "Dernière semaine", "Cible", "Statut"])
 
     people = list_people(conn)
     if people is None or people.empty:
@@ -319,22 +317,24 @@ def get_family_health_summary(conn, safety_weeks: int = 4) -> dict:
         name = str(name_series.iloc[0])
         stt = person_weekly_status(conn, person_id=pid, safety_weeks=safety_weeks)
         statut = "✅ À jour" if stt.get("suggested") == "UP_TO_DATE" else "⚠️ À rebuild"
-        rows.append({
-            "Personne":          name,
-            "Dernière semaine":  stt.get("last_week") or "—",
-            "Cible":             stt.get("target_week") or "—",
-            "Statut":            statut,
-        })
+        rows.append(
+            {
+                "Personne": name,
+                "Dernière semaine": stt.get("last_week") or "—",
+                "Cible": stt.get("target_week") or "—",
+                "Statut": statut,
+            }
+        )
 
     if not rows:
         _logger.info(
-            "get_family_health_summary: aucune ligne de diagnostic disponible "
-            "(safety_weeks=%s)", safety_weeks,
+            "get_family_health_summary: aucune ligne de diagnostic disponible " "(safety_weeks=%s)",
+            safety_weeks,
         )
         return {"status_df": _EMPTY_STATUS_DF, "person_ids": person_ids}
 
     return {
-        "status_df":  pd.DataFrame(rows),
+        "status_df": pd.DataFrame(rows),
         "person_ids": person_ids,
     }
 

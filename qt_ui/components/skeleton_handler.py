@@ -2,6 +2,7 @@
 SkeletonHandler — Gère l'animation de pulsation pour les squelettes de chargement.
 Fournit une valeur d'opacité oscillante (0.3 <-> 0.7) utilisable par les widgets.
 """
+
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 
@@ -10,6 +11,7 @@ class SkeletonHandler(QObject):
     Gère un timer global ou local pour synchroniser les animations de pulsation.
     Émet un signal à chaque mise à jour de l'opacité.
     """
+
     updated = pyqtSignal(float)
 
     def __init__(self, parent=None, interval: int = 30):

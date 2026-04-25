@@ -1,9 +1,11 @@
 # services/sankey.py
 from __future__ import annotations
+
 import sqlite3
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
+
 import pandas as pd
-from typing import List
+
 
 def months_range(end_mois: str, n: int) -> List[str]:
     """
@@ -13,9 +15,10 @@ def months_range(end_mois: str, n: int) -> List[str]:
     end = pd.to_datetime(end_mois)
     months = []
     for i in range(n):
-        d = (end - pd.DateOffset(months=i))
+        d = end - pd.DateOffset(months=i)
         months.append(f"{d.year:04d}-{d.month:02d}-01")
     return sorted(months)
+
 
 def year_to_date_months(mois: str) -> List[str]:
     """De janvier de l'année de `mois` jusqu'à `mois` inclus."""
@@ -25,6 +28,7 @@ def year_to_date_months(mois: str) -> List[str]:
         months.append(f"{end.year:04d}-{m:02d}-01")
     return months
 
+
 # ---------------------------
 # Catégories finales (N3) -> Bloc (N2)
 # ---------------------------
@@ -33,37 +37,29 @@ N3_TO_N2_DEPENSES: Dict[str, str] = {
     "Loyer": "Logement",
     "Charges logement": "Logement",
     "Assurance & entretien logement": "Logement",
-
     # Vie quotidienne
     "Courses": "Vie quotidienne",
     "Restaurants": "Vie quotidienne",
     "Achats personnels": "Vie quotidienne",
     "Dépenses courantes": "Vie quotidienne",
-
     # Abonnements
     "Télécoms & Internet": "Abonnements",
     "Loisirs numériques": "Abonnements",
-
     # Transport
     "Transport quotidien": "Transport",
     "Véhicule": "Transport",
     "Voyages (transport)": "Transport",
-
     # Loisirs
     "Loisirs & sorties": "Loisirs",
     "Voyages & vacances": "Loisirs",
-
     # Santé
     "Soins": "Santé",
     "Complémentaire santé": "Santé",
-
     # Scolarité / Enfants
     "Scolarité": "Scolarité / Enfants",
     "Enfants": "Scolarité / Enfants",
-
     # Impôts & charges
     "Impôts & charges": "Impôts & charges",
-
     # Investissements / Épargne
     "Investissements": "Investissements / Épargne",
     "Épargne": "Investissements / Épargne",
@@ -91,6 +87,7 @@ DEPENSES_N2_ORDER = [
     "Investissements / Épargne",
 ]
 
+
 def _sum_by_categorie(conn: sqlite3.Connection, table: str, person_id: int, mois_list: List[str]) -> Dict[str, float]:
     if not mois_list:
         return {}
@@ -103,7 +100,7 @@ def _sum_by_categorie(conn: sqlite3.Connection, table: str, person_id: int, mois
         WHERE person_id = ? AND mois IN ({placeholders})
         GROUP BY categorie
         """,
-        (person_id, *mois_list)
+        (person_id, *mois_list),
     ).fetchall()
 
     out: Dict[str, float] = {}
@@ -156,8 +153,6 @@ def build_cashflow_sankey(conn: sqlite3.Connection, *, person_id: int, mois_list
     # 2) Construire les nœuds
     x = []
 
-
-
     # Colonnes:
     # [Revenus N3] -> [Cash disponible] -> [Dépenses N2] -> [Dépenses N3]
     labels: List[str] = []
@@ -174,8 +169,7 @@ def build_cashflow_sankey(conn: sqlite3.Connection, *, person_id: int, mois_list
         else:
             # Excédent / Financement
             x.append(0.95)
-            
-            
+
     def add_node(name: str) -> int:
         if name in idx:
             return idx[name]
@@ -187,7 +181,7 @@ def build_cashflow_sankey(conn: sqlite3.Connection, *, person_id: int, mois_list
     for k in REVENUS_N3:
         add_node(k)
 
-    cash_node = add_node("Cash disponible")
+    add_node("Cash disponible")
 
     # Dépenses N2
     for n2 in DEPENSES_N2_ORDER:
@@ -245,12 +239,11 @@ def build_cashflow_sankey(conn: sqlite3.Connection, *, person_id: int, mois_list
         link(n2, n3, amt)
 
     return {
-    "labels": labels,
-    "sources": sources,
-    "targets": targets,
-    "values": values,
-    "x": x,
-    "total_rev": total_rev,
-    "total_dep": total_dep,
-}
-
+        "labels": labels,
+        "sources": sources,
+        "targets": targets,
+        "values": values,
+        "x": x,
+        "total_rev": total_rev,
+        "total_dep": total_dep,
+    }

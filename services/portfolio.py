@@ -12,7 +12,17 @@ def compute_positions_v1(tx_df: pd.DataFrame, latest_prices: pd.DataFrame) -> pd
     - applique le dernier prix connu (table prices)
     - calcule Valeur et PnL latent (sans FX)
     """
-    empty_cols = ["asset_id", "symbol", "name", "quantity", "pru", "last_price", "value", "pnl_latent", "valuation_status"]
+    empty_cols = [
+        "asset_id",
+        "symbol",
+        "name",
+        "quantity",
+        "pru",
+        "last_price",
+        "value",
+        "pnl_latent",
+        "valuation_status",
+    ]
     if tx_df is None or tx_df.empty:
         return pd.DataFrame(columns=empty_cols)
 
@@ -38,7 +48,13 @@ def compute_positions_v1(tx_df: pd.DataFrame, latest_prices: pd.DataFrame) -> pd
         name = r.get("asset_name", "")
 
         if aid not in positions:
-            positions[aid] = {"asset_id": aid, "symbol": sym, "name": name, "quantity": 0.0, "pru": 0.0}
+            positions[aid] = {
+                "asset_id": aid,
+                "symbol": sym,
+                "name": name,
+                "quantity": 0.0,
+                "pru": 0.0,
+            }
 
         q = float(r["quantity"])
         px = round(float(r["price"]), 2)
@@ -80,8 +96,21 @@ def compute_positions_v1(tx_df: pd.DataFrame, latest_prices: pd.DataFrame) -> pd
     out["pnl_latent"] = (out["last_price"] - out["pru"]) * out["quantity"]
 
     # Colonnes dans l’ordre
-    out = out[["asset_id", "symbol", "name", "quantity", "pru", "last_price", "value", "pnl_latent", "valuation_status"]]
+    out = out[
+        [
+            "asset_id",
+            "symbol",
+            "name",
+            "quantity",
+            "pru",
+            "last_price",
+            "value",
+            "pnl_latent",
+            "valuation_status",
+        ]
+    ]
     return out
+
 
 def _to_float_or_none(value) -> float | None:
     try:
@@ -275,7 +304,11 @@ def compute_positions_v2_fx(conn, tx_df: pd.DataFrame, latest_prices: pd.DataFra
             f"SELECT id as asset_id, currency, asset_type FROM assets WHERE id IN ({qmarks});",
             tuple(asset_ids),
         ).fetchall()
-        cur_df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame(columns=["asset_id", "currency", "asset_type"])
+        cur_df = (
+            pd.DataFrame([dict(r) for r in rows])
+            if rows
+            else pd.DataFrame(columns=["asset_id", "currency", "asset_type"])
+        )
 
         out = out.merge(cur_df, on="asset_id", how="left", suffixes=("", "_asset"))
     else:
@@ -283,7 +316,11 @@ def compute_positions_v2_fx(conn, tx_df: pd.DataFrame, latest_prices: pd.DataFra
         out["asset_type"] = None
 
     # devise actif: priorité assets.currency, sinon latest_prices.currency, sinon account_ccy
-    lp2 = lp[["asset_id", "currency"]].drop_duplicates() if not lp.empty else pd.DataFrame(columns=["asset_id","currency"])
+    lp2 = (
+        lp[["asset_id", "currency"]].drop_duplicates()
+        if not lp.empty
+        else pd.DataFrame(columns=["asset_id", "currency"])
+    )
     out = out.merge(lp2, on="asset_id", how="left", suffixes=("", "_price"))
 
     def pick_ccy(r):
@@ -304,10 +341,7 @@ def compute_positions_v2_fx(conn, tx_df: pd.DataFrame, latest_prices: pd.DataFra
         return res
 
     # Cost basis en EUR (source de vérité pour séparer marché vs change).
-    asset_ccy_map = {
-        int(r["asset_id"]): str(r.get("asset_ccy") or account_ccy).upper()
-        for _, r in out.iterrows()
-    }
+    asset_ccy_map = {int(r["asset_id"]): str(r.get("asset_ccy") or account_ccy).upper() for _, r in out.iterrows()}
     cost_basis_eur = _build_open_cost_basis_in_target(
         conn,
         tx_df,
@@ -439,10 +473,24 @@ def compute_positions_v2_fx(conn, tx_df: pd.DataFrame, latest_prices: pd.DataFra
     if "asset_type" not in out.columns:
         out["asset_type"] = "autre"
     out["asset_type"] = out["asset_type"].fillna("autre")
-    out = out[[
-        "asset_id", "symbol", "name", "asset_type",
-        "quantity", "pru", "last_price", "value",
-        "pnl_latent", "total_gain_eur", "market_gain_eur", "fx_gain_eur", "pnl_fx",
-        "asset_ccy", "valuation_status", "fx_breakdown_status",
-    ]]
+    out = out[
+        [
+            "asset_id",
+            "symbol",
+            "name",
+            "asset_type",
+            "quantity",
+            "pru",
+            "last_price",
+            "value",
+            "pnl_latent",
+            "total_gain_eur",
+            "market_gain_eur",
+            "fx_gain_eur",
+            "pnl_fx",
+            "asset_ccy",
+            "valuation_status",
+            "fx_breakdown_status",
+        ]
+    ]
     return out

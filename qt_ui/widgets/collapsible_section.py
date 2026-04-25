@@ -7,12 +7,16 @@ Usage :
     content.addWidget(QLabel("Contenu"))
     section.set_content_layout(content)
 """
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFrame, QPushButton
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, pyqtSignal
+
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, pyqtSignal
+from PyQt6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QWidget
 
 from qt_ui.theme import (
-    BG_CARD, BORDER_SUBTLE, TEXT_PRIMARY, TEXT_SECONDARY,
-    BG_HOVER, ACCENT_BLUE,
+    ACCENT_BLUE,
+    BG_CARD,
+    BG_HOVER,
+    BORDER_SUBTLE,
+    TEXT_PRIMARY,
 )
 
 
@@ -32,13 +36,15 @@ class CollapsibleSection(QFrame):
         self._animation: QPropertyAnimation | None = None
 
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            f"""
             CollapsibleSection {{
                 background: {BG_CARD};
                 border: 1px solid {BORDER_SUBTLE};
                 border-radius: 8px;
             }}
-        """)
+        """
+        )
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -48,7 +54,8 @@ class CollapsibleSection(QFrame):
         self._toggle_btn = QPushButton(f"  ▶  {title}")
         self._toggle_btn.setCheckable(True)
         self._toggle_btn.setChecked(False)
-        self._toggle_btn.setStyleSheet(f"""
+        self._toggle_btn.setStyleSheet(
+            f"""
             QPushButton {{
                 background: transparent;
                 color: {TEXT_PRIMARY};
@@ -66,7 +73,8 @@ class CollapsibleSection(QFrame):
             QPushButton:checked {{
                 color: {ACCENT_BLUE};
             }}
-        """)
+        """
+        )
         self._toggle_btn.clicked.connect(self._on_toggle)
         self._title_text = title
         root_layout.addWidget(self._toggle_btn)

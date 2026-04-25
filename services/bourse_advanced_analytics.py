@@ -13,6 +13,7 @@ Architecture : ce module est consommé par bourse_global_panel.py.
 Il s'appuie sur bourse_analytics.py et market_history.py pour les données brutes.
 Aucune logique de ce fichier ne doit être dupliquée dans l'UI.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,25 +23,24 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from services import bourse_analytics
-from services import efficient_frontier
-from services import market_history
+from services import bourse_analytics, efficient_frontier, market_history
 from services import repositories as repo
 from services.asset_panel_mapping import INVESTMENT_ACCOUNT_TYPES
 
 logger = logging.getLogger(__name__)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
-RISK_FREE_RATE = 0.03       # Taux sans risque annuel (3% EUR)
-MIN_WEEKS_FOR_RISK = 12     # Minimum de semaines de données pour les calculs de risque
+RISK_FREE_RATE = 0.03  # Taux sans risque annuel (3% EUR)
+MIN_WEEKS_FOR_RISK = 12  # Minimum de semaines de données pour les calculs de risque
 WEEKS_PER_YEAR = 52
 DEFAULT_BENCHMARK = "URTH"  # MSCI World ETF
-MAX_ASSETS_CORRELATION = 15 # Nombre max d'actifs dans la matrice de corrélation
+MAX_ASSETS_CORRELATION = 15  # Nombre max d'actifs dans la matrice de corrélation
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # FONCTIONS INTERNES (données brutes)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def _portfolio_weekly_net_flows_eur(
     conn,
@@ -59,9 +59,7 @@ def _portfolio_weekly_net_flows_eur(
     if accounts is None or accounts.empty:
         return pd.DataFrame(columns=["date", "net_flow"])
 
-    bourse_acc = accounts[
-        accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)
-    ].copy()
+    bourse_acc = accounts[accounts["account_type"].astype(str).str.upper().isin(INVESTMENT_ACCOUNT_TYPES)].copy()
     if bourse_acc.empty:
         return pd.DataFrame(columns=["date", "net_flow"])
 
@@ -115,7 +113,9 @@ def _portfolio_weekly_net_flows_eur(
             if flow_eur is None:
                 logger.warning(
                     "_portfolio_weekly_net_flows_eur: FX %s→EUR manquant pour tx compte=%s date=%s",
-                    acc_ccy, acc_id, date_str,
+                    acc_ccy,
+                    acc_id,
+                    date_str,
                 )
                 continue
             week_date = pd.Timestamp(tr["date"]).to_period("W-MON").end_time.normalize()
@@ -181,9 +181,7 @@ def _portfolio_weekly_returns(conn, person_id: int) -> pd.DataFrame:
     return df[["date", "value", "net_flow", "simple_return", "log_return"]].reset_index(drop=True)
 
 
-def _get_asset_weekly_returns(
-    conn, tickers: list[str], start_date: str, end_date: str
-) -> pd.DataFrame:
+def _get_asset_weekly_returns(conn, tickers: list[str], start_date: str, end_date: str) -> pd.DataFrame:
     """
     Récupère les rendements log-hebdomadaires de chaque ticker.
 
@@ -201,9 +199,10 @@ def _get_asset_weekly_returns(
 
         if not rows or len(rows) < MIN_WEEKS_FOR_RISK:
             logger.warning(
-                "_get_asset_weekly_returns: ticker '%s' — seulement %d points "
-                "(min %d requis), exclu des calculs",
-                ticker, len(rows) if rows else 0, MIN_WEEKS_FOR_RISK,
+                "_get_asset_weekly_returns: ticker '%s' — seulement %d points " "(min %d requis), exclu des calculs",
+                ticker,
+                len(rows) if rows else 0,
+                MIN_WEEKS_FOR_RISK,
             )
             continue
 
@@ -268,6 +267,7 @@ def _error_payload(message: str) -> dict[str, Any]:
 # 1. RENDEMENT & RISQUE
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def get_risk_return_payload(conn, person_id: int) -> dict[str, Any]:
     """
     Calcule les métriques rendement/risque du portefeuille.
@@ -286,13 +286,12 @@ def get_risk_return_payload(conn, person_id: int) -> dict[str, Any]:
     if returns_df.empty or len(returns_df) < MIN_WEEKS_FOR_RISK:
         n_points = len(returns_df) if not returns_df.empty else 0
         logger.warning(
-            "get_risk_return_payload: seulement %d points (min %d requis) "
-            "pour person_id=%s",
-            n_points, MIN_WEEKS_FOR_RISK, person_id,
+            "get_risk_return_payload: seulement %d points (min %d requis) " "pour person_id=%s",
+            n_points,
+            MIN_WEEKS_FOR_RISK,
+            person_id,
         )
-        return _error_payload(
-            f"Historique insuffisant ({n_points} semaines, minimum {MIN_WEEKS_FOR_RISK})"
-        )
+        return _error_payload(f"Historique insuffisant ({n_points} semaines, minimum {MIN_WEEKS_FOR_RISK})")
 
     log_returns = returns_df["log_return"].astype(float).values
     dates = returns_df["date"].values
@@ -378,7 +377,7 @@ def _compute_max_drawdown(values: np.ndarray, dates: np.ndarray) -> dict:
         return result
 
     # Date du pic avant le drawdown
-    peak_idx = int(np.argmax(values[:max_dd_idx + 1]))
+    peak_idx = int(np.argmax(values[: max_dd_idx + 1]))
     result["dd_start"] = str(pd.Timestamp(dates[peak_idx]).date())
     result["dd_end"] = str(pd.Timestamp(dates[max_dd_idx]).date())
 
@@ -423,9 +422,7 @@ def _compute_beta(conn, portfolio_returns_df: pd.DataFrame) -> float | None:
     start_date = str(df["date"].min().date())
     end_date = str(df["date"].max().date())
 
-    benchmark_returns = _get_asset_weekly_returns(
-        conn, [DEFAULT_BENCHMARK], start_date, end_date
-    )
+    benchmark_returns = _get_asset_weekly_returns(conn, [DEFAULT_BENCHMARK], start_date, end_date)
     if benchmark_returns.empty or DEFAULT_BENCHMARK not in benchmark_returns.columns:
         logger.info(
             "_compute_beta: benchmark '%s' non disponible, beta non calculé",
@@ -433,10 +430,12 @@ def _compute_beta(conn, portfolio_returns_df: pd.DataFrame) -> float | None:
         )
         return None
 
-    aligned = pd.DataFrame({
-        "portfolio": df.set_index("date")["log_return"],
-        "benchmark": benchmark_returns[DEFAULT_BENCHMARK],
-    }).dropna()
+    aligned = pd.DataFrame(
+        {
+            "portfolio": df.set_index("date")["log_return"],
+            "benchmark": benchmark_returns[DEFAULT_BENCHMARK],
+        }
+    ).dropna()
     if len(aligned) < MIN_WEEKS_FOR_RISK:
         return None
 
@@ -454,6 +453,7 @@ def _compute_beta(conn, portfolio_returns_df: pd.DataFrame) -> float | None:
 # ═════════════════════════════════════════════════════════════════════════════
 # 2. CORRÉLATIONS & DIVERSIFICATION
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def get_correlation_payload(conn, person_id: int) -> dict[str, Any]:
     """
@@ -505,9 +505,7 @@ def get_correlation_payload(conn, person_id: int) -> dict[str, Any]:
     }
 
 
-def _extract_top_correlated_pairs(
-    corr_matrix: pd.DataFrame, n: int = 5
-) -> list[tuple[str, str, float]]:
+def _extract_top_correlated_pairs(corr_matrix: pd.DataFrame, n: int = 5) -> list[tuple[str, str, float]]:
     """Extrait les N paires les plus corrélées (hors diagonale)."""
     pairs = []
     cols = corr_matrix.columns.tolist()
@@ -520,9 +518,7 @@ def _extract_top_correlated_pairs(
     return pairs[:n]
 
 
-def _compute_diversification_ratio(
-    conn, returns_df: pd.DataFrame, weights_df: pd.DataFrame
-) -> float | None:
+def _compute_diversification_ratio(conn, returns_df: pd.DataFrame, weights_df: pd.DataFrame) -> float | None:
     """
     Ratio de diversification = σ_pondéré / σ_portefeuille.
 
@@ -555,6 +551,7 @@ def _compute_diversification_ratio(
 # ═════════════════════════════════════════════════════════════════════════════
 # 3. CONTRIBUTION AU RISQUE
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def get_risk_contribution_payload(conn, person_id: int) -> dict[str, Any]:
     """
@@ -609,12 +606,14 @@ def get_risk_contribution_payload(conn, person_id: int) -> dict[str, Any]:
 
     rows = []
     for i, ticker in enumerate(common):
-        rows.append({
-            "ticker": ticker,
-            "weight_pct": round(float(weights[i]) * 100, 2),
-            "risk_contrib_pct": round(float(risk_contrib[i]) * 100, 2),
-            "mctr": round(float(mctr[i]) * 100, 4),
-        })
+        rows.append(
+            {
+                "ticker": ticker,
+                "weight_pct": round(float(weights[i]) * 100, 2),
+                "risk_contrib_pct": round(float(risk_contrib[i]) * 100, 2),
+                "mctr": round(float(mctr[i]) * 100, 4),
+            }
+        )
 
     contrib_df = pd.DataFrame(rows).sort_values("risk_contrib_pct", ascending=False)
     contrib_df["rank"] = range(1, len(contrib_df) + 1)
@@ -630,6 +629,7 @@ def get_risk_contribution_payload(conn, person_id: int) -> dict[str, Any]:
 # 4. VaR & EXPECTED SHORTFALL
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def get_var_es_payload(conn, person_id: int) -> dict[str, Any]:
     """
     Value at Risk et Expected Shortfall du portefeuille.
@@ -642,9 +642,7 @@ def get_var_es_payload(conn, person_id: int) -> dict[str, Any]:
     returns_df = _portfolio_weekly_returns(conn, person_id)
     if returns_df.empty or len(returns_df) < MIN_WEEKS_FOR_RISK:
         n_pts = len(returns_df) if not returns_df.empty else 0
-        return _error_payload(
-            f"Historique insuffisant ({n_pts} semaines, minimum {MIN_WEEKS_FOR_RISK})"
-        )
+        return _error_payload(f"Historique insuffisant ({n_pts} semaines, minimum {MIN_WEEKS_FOR_RISK})")
 
     log_returns = returns_df["log_return"].values
     current_value = float(returns_df["value"].iloc[-1])
@@ -663,6 +661,7 @@ def get_var_es_payload(conn, person_id: int) -> dict[str, Any]:
     sigma = float(np.std(log_returns, ddof=1))
 
     from scipy import stats
+
     var_95_param = mu + stats.norm.ppf(0.05) * sigma
     var_99_param = mu + stats.norm.ppf(0.01) * sigma
 
@@ -690,6 +689,7 @@ def get_var_es_payload(conn, person_id: int) -> dict[str, Any]:
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. FRONTIÈRE EFFICIENTE
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def get_efficient_frontier_presets_payload() -> dict[str, Any]:
     """Expose les presets de diversification pour l'UI."""
@@ -800,9 +800,8 @@ def get_efficient_frontier_payload(
 # 6. COMPARAISON BENCHMARK
 # ═════════════════════════════════════════════════════════════════════════════
 
-def get_benchmark_comparison_payload(
-    conn, person_id: int, benchmark_symbol: str = DEFAULT_BENCHMARK
-) -> dict[str, Any]:
+
+def get_benchmark_comparison_payload(conn, person_id: int, benchmark_symbol: str = DEFAULT_BENCHMARK) -> dict[str, Any]:
     """
     Compare le rendement et la volatilité du portefeuille vs un benchmark.
 
@@ -824,18 +823,19 @@ def get_benchmark_comparison_payload(
             benchmark_symbol,
         )
         return _error_payload(
-            f"Benchmark '{benchmark_symbol}' non disponible. "
-            f"Vérifier la synchronisation des prix hebdomadaires."
+            f"Benchmark '{benchmark_symbol}' non disponible. " f"Vérifier la synchronisation des prix hebdomadaires."
         )
 
     # Aligner les deux séries
     ptf_series = returns_ptf.set_index("date")["log_return"]
     bench_series = bench_returns[benchmark_symbol]
 
-    aligned = pd.DataFrame({
-        "portfolio": ptf_series,
-        "benchmark": bench_series,
-    }).dropna()
+    aligned = pd.DataFrame(
+        {
+            "portfolio": ptf_series,
+            "benchmark": bench_series,
+        }
+    ).dropna()
 
     if len(aligned) < MIN_WEEKS_FOR_RISK:
         return _error_payload("Période commune insuffisante entre portefeuille et benchmark")
@@ -857,11 +857,13 @@ def get_benchmark_comparison_payload(
     ptf_cumul = np.exp(aligned["portfolio"].cumsum())
     bench_cumul = np.exp(aligned["benchmark"].cumsum())
 
-    norm_series = pd.DataFrame({
-        "date": aligned.index,
-        "portfolio_norm": (ptf_cumul / ptf_cumul.iloc[0] * 100).round(2).values,
-        "benchmark_norm": (bench_cumul / bench_cumul.iloc[0] * 100).round(2).values,
-    })
+    norm_series = pd.DataFrame(
+        {
+            "date": aligned.index,
+            "portfolio_norm": (ptf_cumul / ptf_cumul.iloc[0] * 100).round(2).values,
+            "benchmark_norm": (bench_cumul / bench_cumul.iloc[0] * 100).round(2).values,
+        }
+    )
 
     return {
         "portfolio_return_ann_pct": round(ptf_ret_ann, 2),

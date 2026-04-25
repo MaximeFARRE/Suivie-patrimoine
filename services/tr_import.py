@@ -21,13 +21,13 @@ import os
 import queue
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import threading
 from pathlib import Path
 
 import pandas as pd
+
 from services import import_aliases_service
 
 _logger = logging.getLogger(__name__)
@@ -36,12 +36,12 @@ _logger = logging.getLogger(__name__)
 # Utilitaires bas-niveau
 # ---------------------------------------------------------------------------
 
-_ANSI_RE = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+_ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
 def strip_ansi(text: str) -> str:
     """Supprime tous les codes ANSI/VT100 (couleurs, gras, etc.) d'une chaîne."""
-    return _ANSI_RE.sub('', text)
+    return _ANSI_RE.sub("", text)
 
 
 def _find_pytr_cmd() -> list[str]:
@@ -60,7 +60,9 @@ def _find_pytr_cmd() -> list[str]:
     try:
         r = subprocess.run(
             [sys.executable, "-m", "pytr", "--version"],
-            capture_output=True, text=True, timeout=6,
+            capture_output=True,
+            text=True,
+            timeout=6,
         )
         if r.returncode == 0:
             return [sys.executable, "-m", "pytr"]
@@ -74,7 +76,9 @@ def _find_pytr_cmd() -> list[str]:
             try:
                 r = subprocess.run(
                     [py, "-m", "pytr", "--version"],
-                    capture_output=True, text=True, timeout=6,
+                    capture_output=True,
+                    text=True,
+                    timeout=6,
                 )
                 if r.returncode == 0:
                     return [py, "-m", "pytr"]
@@ -93,6 +97,7 @@ def _find_pytr_cmd() -> list[str]:
 # ---------------------------------------------------------------------------
 # Gestion des credentials pytr
 # ---------------------------------------------------------------------------
+
 
 def get_pytr_credentials_path() -> Path:
     """Retourne le chemin du fichier de credentials pytr (~/.pytr/credentials)."""
@@ -170,12 +175,11 @@ def _map_tr_type(tr_type: str, amount: float) -> str:
 # Lecture / écriture du numéro TR par personne
 # ---------------------------------------------------------------------------
 
+
 def get_tr_phone(conn, person_id: int) -> str:
     """Retourne le numéro TR stocké pour cette personne (ou chaîne vide)."""
     try:
-        row = conn.execute(
-            "SELECT tr_phone FROM people WHERE id = ?", (person_id,)
-        ).fetchone()
+        row = conn.execute("SELECT tr_phone FROM people WHERE id = ?", (person_id,)).fetchone()
         if row:
             val = row[0] if not hasattr(row, "keys") else row["tr_phone"]
             return val or ""
@@ -197,12 +201,15 @@ def save_tr_phone(conn, person_id: int, phone: str) -> None:
 # Vérification installation
 # ---------------------------------------------------------------------------
 
+
 def check_pytr_installed() -> tuple[bool, str]:
     cmd = _find_pytr_cmd()
     try:
         result = subprocess.run(
             cmd + ["--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             ver = strip_ansi((result.stdout or result.stderr or "").strip())
@@ -215,6 +222,7 @@ def check_pytr_installed() -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Processus interactif (lecture ligne par ligne)
 # ---------------------------------------------------------------------------
+
 
 class PytrProcess:
     """
@@ -260,14 +268,14 @@ class PytrProcess:
         buf = ""
         while True:
             ch = self._proc.stdout.read(1)
-            if not ch:          # EOF → processus terminé
+            if not ch:  # EOF → processus terminé
                 break
             if ch == "\n":
                 self._line_queue.put(buf.rstrip("\r"))
                 buf = ""
             else:
                 buf += ch
-        if buf:                 # Ligne partielle restante (prompt sans newline)
+        if buf:  # Ligne partielle restante (prompt sans newline)
             self._line_queue.put(buf)
         self._proc.wait()
         self.returncode = self._proc.returncode
@@ -304,6 +312,7 @@ class PytrProcess:
 # Lancement pytr en mode non-interactif (export uniquement)
 # ---------------------------------------------------------------------------
 
+
 def run_pytr_export(
     output_dir: str,
     phone: str = "",
@@ -316,8 +325,7 @@ def run_pytr_export(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    args = _find_pytr_cmd() + ["export_transactions",
-            "--outputdir", output_dir, "--sort"]
+    args = _find_pytr_cmd() + ["export_transactions", "--outputdir", output_dir, "--sort"]
 
     if phone:
         args += ["-n", phone]
@@ -352,6 +360,7 @@ def run_pytr_export(
 # Détection du CSV exporté
 # ---------------------------------------------------------------------------
 
+
 def find_tr_csv(output_dir: str) -> str | None:
     candidates = ["account_transactions.csv", "transactions.csv"]
     for name in candidates:
@@ -367,6 +376,7 @@ def find_tr_csv(output_dir: str) -> str | None:
 # Parser CSV
 # ---------------------------------------------------------------------------
 
+
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     Normalise les noms de colonnes du CSV pytr.
@@ -374,12 +384,7 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     # 1. Nettoyage brut : minuscules + séparateurs → _
     cols_clean = [
-        c.strip().lower()
-         .replace(" ", "_")
-         .replace("/", "_")
-         .replace("-", "_")
-         .replace(".", "_")
-        for c in df.columns
+        c.strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_").replace(".", "_") for c in df.columns
     ]
     df.columns = cols_clean
 
@@ -388,21 +393,37 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     #    elles ne remplacent la cible que si la cible n'est pas déjà présente.
     MAPPING: dict[str, str] = {
         # date
-        "date": "date", "datetime": "date", "timestamp": "date",
-        "time": "date", "datum": "date",
+        "date": "date",
+        "datetime": "date",
+        "timestamp": "date",
+        "time": "date",
+        "datum": "date",
         # title / description
-        "title": "title", "name": "title", "description": "title",
-        "asset": "title", "instrument": "title",
-        "note": "title", "notes": "title",
-        "bezeichnung": "title", "libellé": "title", "libelle": "title",
+        "title": "title",
+        "name": "title",
+        "description": "title",
+        "asset": "title",
+        "instrument": "title",
+        "note": "title",
+        "notes": "title",
+        "bezeichnung": "title",
+        "libellé": "title",
+        "libelle": "title",
         # amount
-        "amount": "amount", "montant": "amount", "value": "amount",
-        "total": "amount", "valeur": "amount",   # pytr FR
-        "betrag": "amount", "wert": "amount",    # pytr DE
+        "amount": "amount",
+        "montant": "amount",
+        "value": "amount",
+        "total": "amount",
+        "valeur": "amount",  # pytr FR
+        "betrag": "amount",
+        "wert": "amount",  # pytr DE
         # shares (quantité de titres)
-        "shares": "shares", "quantity": "shares", "qty": "shares",
-        "units": "shares", "anzahl": "shares",
-        "parts": "shares",                       # pytr FR
+        "shares": "shares",
+        "quantity": "shares",
+        "qty": "shares",
+        "units": "shares",
+        "anzahl": "shares",
+        "parts": "shares",  # pytr FR
         "stück": "shares",
         # isin
         "isin": "isin",
@@ -410,15 +431,23 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         "ticker": "symbol",
         "symbol": "symbol",
         # type
-        "type": "type", "transaction_type": "type", "event_type": "type",
-        "status": "type", "typ": "type",
+        "type": "type",
+        "transaction_type": "type",
+        "event_type": "type",
+        "status": "type",
+        "typ": "type",
         # price
-        "price": "price", "unit_price": "price", "kurs": "price",
-        "prix": "price", "cours": "price",
+        "price": "price",
+        "unit_price": "price",
+        "kurs": "price",
+        "prix": "price",
+        "cours": "price",
         # fees (frais + taxes fusionnés dans une seule colonne)
-        "fees": "fees", "frais": "fees",
-        "gebühren": "fees", "commission": "fees",
-        "impôts___taxes": "fees",   # pytr FR après nettoyage
+        "fees": "fees",
+        "frais": "fees",
+        "gebühren": "fees",
+        "commission": "fees",
+        "impôts___taxes": "fees",  # pytr FR après nettoyage
         "impots___taxes": "fees",
         "impôts_taxes": "fees",
         "taxes": "fees",
@@ -471,13 +500,9 @@ def parse_tr_csv(filepath: str) -> pd.DataFrame:
     df = _normalize_columns(df)
 
     if "date" not in df.columns:
-        raise ValueError(
-            f"Colonne 'date' introuvable. Colonnes disponibles : {list(df.columns)}"
-        )
+        raise ValueError(f"Colonne 'date' introuvable. Colonnes disponibles : {list(df.columns)}")
     if "amount" not in df.columns:
-        raise ValueError(
-            f"Colonne 'amount' introuvable. Colonnes disponibles : {list(df.columns)}"
-        )
+        raise ValueError(f"Colonne 'amount' introuvable. Colonnes disponibles : {list(df.columns)}")
     return df
 
 
@@ -555,9 +580,8 @@ def _get_or_create_asset_by_symbol(
 # Asset : get or create
 # ---------------------------------------------------------------------------
 
-def _get_or_create_asset(
-    conn, isin: str, title: str, ticker: str | None = None
-) -> int | None:
+
+def _get_or_create_asset(conn, isin: str, title: str, ticker: str | None = None) -> int | None:
     """
     Retourne l'asset_id correspondant à cet ISIN (crée l'asset si besoin).
 
@@ -608,6 +632,7 @@ def _get_or_create_asset(
 # Extraction et prédiction Multi-Comptes
 # ---------------------------------------------------------------------------
 
+
 def extract_tr_tickers_with_predictions(conn, filepath: str, person_id: int) -> list[dict]:
     df = parse_tr_csv(filepath)
     unique_assets = {}
@@ -621,6 +646,7 @@ def extract_tr_tickers_with_predictions(conn, filepath: str, person_id: int) -> 
                 unique_assets[isin] = str(r.get("title", "")).strip()
 
     from services import isin_resolver
+
     isins_list = list(unique_assets.keys())
     isin_ticker_map = isin_resolver.batch_resolve_isins(conn, isins_list) if isins_list else {}
 
@@ -654,25 +680,29 @@ def extract_tr_tickers_with_predictions(conn, filepath: str, person_id: int) -> 
         if canonical_asset_id:
             tx_row = conn.execute(
                 "SELECT account_id FROM transactions WHERE asset_id = ? AND person_id = ? ORDER BY date DESC LIMIT 1",
-                (canonical_asset_id, person_id)
+                (canonical_asset_id, person_id),
             ).fetchone()
             if tx_row:
                 predicted_account_id = int(tx_row[0] if not hasattr(tx_row, "keys") else tx_row["account_id"])
 
-        results.append({
-            "isin": isin,
-            "raw_symbol": raw_symbol,
-            "symbol": canonical_symbol,
-            "canonical_symbol": canonical_symbol,
-            "title": title,
-            "predicted_account_id": predicted_account_id,
-            "match_source": match_source,
-        })
+        results.append(
+            {
+                "isin": isin,
+                "raw_symbol": raw_symbol,
+                "symbol": canonical_symbol,
+                "canonical_symbol": canonical_symbol,
+                "title": title,
+                "predicted_account_id": predicted_account_id,
+                "match_source": match_source,
+            }
+        )
     return results
+
 
 # ---------------------------------------------------------------------------
 # Import principal
 # ---------------------------------------------------------------------------
+
 
 def import_tr_transactions(
     conn,
@@ -715,9 +745,8 @@ def import_tr_transactions(
                 unique_isins.append(s)
 
     from services import isin_resolver
-    isin_ticker_map: dict[str, str] = (
-        isin_resolver.batch_resolve_isins(conn, unique_isins) if unique_isins else {}
-    )
+
+    isin_ticker_map: dict[str, str] = isin_resolver.batch_resolve_isins(conn, unique_isins) if unique_isins else {}
 
     preview: list[dict] = []
     rows_to_insert: list[tuple] = []
@@ -870,9 +899,7 @@ def import_tr_transactions(
 
         if not dry_run and asset_id is None:
             if canonical_override_symbol:
-                asset_id = _get_or_create_asset_by_symbol(
-                    conn, canonical_override_symbol, title, isin=isin
-                )
+                asset_id = _get_or_create_asset_by_symbol(conn, canonical_override_symbol, title, isin=isin)
                 symbol = canonical_override_symbol
                 if asset_id:
                     match_source = "user_override_new"
@@ -880,38 +907,51 @@ def import_tr_transactions(
                 asset_id = _get_or_create_asset(conn, isin, title, ticker=ticker)
                 symbol = ticker or isin
 
-        preview.append({
-            "date": date_str,
-            "type": tx_type,
-            "raw_symbol": raw_symbol,
-            "symbol": symbol,
-            "title": title,
-            "isin": isin,
-            "shares": shares,
-            "price": round(unit_price, 4) if unit_price else None,
-            "amount": round(tx_amount, 2),
-            "fees": round(fees_val, 2),
-            "tr_type": tr_type,
-            "duplicate": is_duplicate,
-            "match_source": match_source,
-            "effective_account_id": effective_account_id,
-        })
+        preview.append(
+            {
+                "date": date_str,
+                "type": tx_type,
+                "raw_symbol": raw_symbol,
+                "symbol": symbol,
+                "title": title,
+                "isin": isin,
+                "shares": shares,
+                "price": round(unit_price, 4) if unit_price else None,
+                "amount": round(tx_amount, 2),
+                "fees": round(fees_val, 2),
+                "tr_type": tr_type,
+                "duplicate": is_duplicate,
+                "match_source": match_source,
+                "effective_account_id": effective_account_id,
+            }
+        )
 
         if not is_duplicate:
-            rows_to_insert.append((
-                date_str, person_id, effective_account_id, tx_type,
-                asset_id, shares, unit_price, fees_val, tx_amount,
-                None,
-                f"TR: {tr_type} | {title}" if title else f"TR: {tr_type}",
-            ))
-            rows_meta.append({
-                "raw_symbol": raw_symbol,
-                "isin": isin,
-                "title": title,
-                "ticker": ticker,
-                "symbol": symbol,
-                "asset_id": asset_id,
-            })
+            rows_to_insert.append(
+                (
+                    date_str,
+                    person_id,
+                    effective_account_id,
+                    tx_type,
+                    asset_id,
+                    shares,
+                    unit_price,
+                    fees_val,
+                    tx_amount,
+                    None,
+                    f"TR: {tr_type} | {title}" if title else f"TR: {tr_type}",
+                )
+            )
+            rows_meta.append(
+                {
+                    "raw_symbol": raw_symbol,
+                    "isin": isin,
+                    "title": title,
+                    "ticker": ticker,
+                    "symbol": symbol,
+                    "asset_id": asset_id,
+                }
+            )
 
     if not dry_run:
         for i, rd in enumerate(rows_to_insert):
@@ -935,14 +975,10 @@ def import_tr_transactions(
                                 ticker=resolved_ticker or None,
                             )
                     else:
-                        aid = _get_or_create_asset_by_symbol(
-                            conn, meta["symbol"], meta.get("title", "")
-                        )
+                        aid = _get_or_create_asset_by_symbol(conn, meta["symbol"], meta.get("title", ""))
                 elif meta.get("isin"):
                     resolved_ticker = isin_ticker_map.get(str(meta["isin"]).upper())
-                    aid = _get_or_create_asset(
-                        conn, str(meta["isin"]), meta.get("title", ""), ticker=resolved_ticker
-                    )
+                    aid = _get_or_create_asset(conn, str(meta["isin"]), meta.get("title", ""), ticker=resolved_ticker)
                 rows_to_insert[i] = rd[:4] + (aid,) + rd[5:]
 
             rows_meta[i]["asset_id"] = aid
@@ -978,6 +1014,7 @@ def import_tr_transactions(
 # Correction des transactions mal classifiées lors d'anciens imports
 # ---------------------------------------------------------------------------
 
+
 def fix_misclassified_tr_transactions(conn, person_id: int) -> dict:
     """
     Corrige les transactions TR enregistrées avec le mauvais type suite à
@@ -988,8 +1025,8 @@ def fix_misclassified_tr_transactions(conn, person_id: int) -> dict:
 
     Retourne le nombre de corrections par type.
     """
+
     import pandas as pd
-    import re
 
     df = pd.read_sql_query(
         """SELECT id, type, asset_id, note
@@ -1005,15 +1042,15 @@ def fix_misclassified_tr_transactions(conn, person_id: int) -> dict:
     note_lower = df["note"].fillna("").str.lower()
 
     # Détection par mots-clés (accents normalisés + variantes TR multilingues)
-    mask_depot    = note_lower.str.contains(r"d[eé]p[oô]t|depot|deposit|einzahlung", regex=True)
+    mask_depot = note_lower.str.contains(r"d[eé]p[oô]t|depot|deposit|einzahlung", regex=True)
     mask_interets = note_lower.str.contains(r"int[eé]r[eê]ts?|zinsen|interest", regex=True)
     mask_dividende = note_lower.str.contains(r"dividendes?|dividend|dividende", regex=True)
 
     results = {"fixed_depot": 0, "fixed_interets": 0, "fixed_dividende": 0}
 
     for new_type, mask, key in [
-        ("DEPOT",     mask_depot,     "fixed_depot"),
-        ("INTERETS",  mask_interets,  "fixed_interets"),
+        ("DEPOT", mask_depot, "fixed_depot"),
+        ("INTERETS", mask_interets, "fixed_interets"),
         ("DIVIDENDE", mask_dividende, "fixed_dividende"),
     ]:
         ids = df[mask]["id"].tolist()

@@ -3,22 +3,26 @@ Panel Taux d'Épargne — AM-26
 Affiche le taux d'épargne mensuel (Revenus - Dépenses) / Revenus × 100
 comme KPI principal + graphique historique sur 24 mois.
 """
-import logging
+
 import datetime
+import logging
+
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox
-)
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from qt_ui.theme import (
-    BG_PRIMARY, STYLE_TITLE, STYLE_SECTION, STYLE_STATUS, STYLE_GROUP,
-    COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, CHART_GREEN, CHART_RED,
-    TEXT_MUTED, plotly_layout, plotly_time_series_layout,
+    BG_PRIMARY,
+    COLOR_ERROR,
+    COLOR_SUCCESS,
+    COLOR_WARNING,
+    STYLE_GROUP,
+    STYLE_SECTION,
+    STYLE_TITLE,
+    TEXT_MUTED,
+    plotly_time_series_layout,
 )
-from qt_ui.widgets import KpiCard, PlotlyView, DataTableWidget, LoadingOverlay
+from qt_ui.widgets import DataTableWidget, KpiCard, LoadingOverlay, PlotlyView
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,7 @@ def _color_for_rate(rate: float | None) -> str:
     if rate >= 20:
         return COLOR_SUCCESS
     if rate >= 10:
-        return "#86efac"   # vert clair
+        return "#86efac"  # vert clair
     if rate >= 0:
         return COLOR_WARNING
     return COLOR_ERROR
@@ -74,9 +78,7 @@ class TauxEpargnePanel(QWidget):
         title.setStyleSheet(STYLE_TITLE)
         layout.addWidget(title)
 
-        subtitle = QLabel(
-            "Taux = (Revenus − Dépenses) / Revenus × 100  •  Objectif FIRE : ≥ 20 %"
-        )
+        subtitle = QLabel("Taux = (Revenus − Dépenses) / Revenus × 100  •  Objectif FIRE : ≥ 20 %")
         subtitle.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
         layout.addWidget(subtitle)
 
@@ -84,14 +86,19 @@ class TauxEpargnePanel(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
 
-        self._kpi_current  = KpiCard("Mois courant",        "—", tone="neutral")
-        self._kpi_m1       = KpiCard("Mois M-1",            "—", tone="neutral")
-        self._kpi_m2       = KpiCard("Mois M-2",            "—", tone="neutral")
-        self._kpi_avg12    = KpiCard("Moyenne 12 mois",     "—", tone="neutral")
-        self._kpi_avg12_ep = KpiCard("Épargne moy. 12 mois","—", tone="neutral")
+        self._kpi_current = KpiCard("Mois courant", "—", tone="neutral")
+        self._kpi_m1 = KpiCard("Mois M-1", "—", tone="neutral")
+        self._kpi_m2 = KpiCard("Mois M-2", "—", tone="neutral")
+        self._kpi_avg12 = KpiCard("Moyenne 12 mois", "—", tone="neutral")
+        self._kpi_avg12_ep = KpiCard("Épargne moy. 12 mois", "—", tone="neutral")
 
-        for k in [self._kpi_current, self._kpi_m1, self._kpi_m2,
-                  self._kpi_avg12, self._kpi_avg12_ep]:
+        for k in [
+            self._kpi_current,
+            self._kpi_m1,
+            self._kpi_m2,
+            self._kpi_avg12,
+            self._kpi_avg12_ep,
+        ]:
             kpi_row.addWidget(k, stretch=1)
 
         layout.addLayout(kpi_row)
@@ -163,24 +170,26 @@ class TauxEpargnePanel(QWidget):
                     card.set_content(label, "Aucune donnée", tone="neutral")
                     return
                 rate = row.get("taux_epargne")
-                ep  = row.get("epargne", 0.0)
+                ep = row.get("epargne", 0.0)
                 tone = _tone_for_rate(rate)
-                val  = f"{rate:.1f} %" if rate is not None else "—"
-                sub  = f"Épargnés : {ep:+,.0f} €".replace(",", " ")
+                val = f"{rate:.1f} %" if rate is not None else "—"
+                sub = f"Épargnés : {ep:+,.0f} €".replace(",", " ")
                 if is_partial:
                     sub += "  ·  mois en cours"
                 card.set_content(label, val, subtitle=sub, tone=tone)
 
             _apply_kpi(self._kpi_current, _row_for_offset(0), "Mois courant", is_partial=(today.day < 25))
-            _apply_kpi(self._kpi_m1,       _row_for_offset(1), "Mois M-1")
-            _apply_kpi(self._kpi_m2,       _row_for_offset(2), "Mois M-2")
+            _apply_kpi(self._kpi_m1, _row_for_offset(1), "Mois M-1")
+            _apply_kpi(self._kpi_m2, _row_for_offset(2), "Mois M-2")
 
             # ── KPI : moyenne 12 mois (depuis le service) ────────────────────
             last12 = df.tail(12)
-            n_covered = int((
-                (pd.to_numeric(last12["revenus"], errors="coerce").fillna(0.0) != 0.0)
-                | (pd.to_numeric(last12["depenses"], errors="coerce").fillna(0.0) != 0.0)
-            ).sum())
+            n_covered = int(
+                (
+                    (pd.to_numeric(last12["revenus"], errors="coerce").fillna(0.0) != 0.0)
+                    | (pd.to_numeric(last12["depenses"], errors="coerce").fillna(0.0) != 0.0)
+                ).sum()
+            )
             coverage_suffix = f" ({n_covered}/12 mois couverts)"
 
             avg_rate = result.get("avg_rate_12m", 0.0)
@@ -189,13 +198,17 @@ class TauxEpargnePanel(QWidget):
                 if n_covered < 8:
                     tone_avg = "neutral"
                 self._kpi_avg12.set_content(
-                    "Moyenne 12 mois", f"{avg_rate} %",
-                    subtitle=f"Taux moyen d'épargne{coverage_suffix}", tone=tone_avg,
+                    "Moyenne 12 mois",
+                    f"{avg_rate} %",
+                    subtitle=f"Taux moyen d'épargne{coverage_suffix}",
+                    tone=tone_avg,
                 )
             else:
                 self._kpi_avg12.set_content(
-                    "Moyenne 12 mois", "—",
-                    subtitle=f"Aucune donnée{coverage_suffix}", tone="neutral",
+                    "Moyenne 12 mois",
+                    "—",
+                    subtitle=f"Aucune donnée{coverage_suffix}",
+                    tone="neutral",
                 )
 
             avg_ep = result.get("avg_savings_12m", 0.0)
@@ -203,7 +216,8 @@ class TauxEpargnePanel(QWidget):
             self._kpi_avg12_ep.set_content(
                 "Épargne moy. 12 mois",
                 f"{avg_ep:+,.0f} €".replace(",", " "),
-                subtitle="Revenus − Dépenses / mois", tone=tone_ep,
+                subtitle="Revenus − Dépenses / mois",
+                tone=tone_ep,
             )
 
             # ── Graphique historique ─────────────────────────────────────────
@@ -215,12 +229,8 @@ class TauxEpargnePanel(QWidget):
             df_display.columns = ["Mois", "Revenus (€)", "Dépenses (€)", "Épargne (€)", "Taux (%)"]
 
             for col in ["Revenus (€)", "Dépenses (€)", "Épargne (€)"]:
-                df_display[col] = df_display[col].map(
-                    lambda v: f"{v:,.2f}".replace(",", " ") if pd.notna(v) else "—"
-                )
-            df_display["Taux (%)"] = df_display["Taux (%)"].map(
-                lambda v: f"{v:.1f} %" if pd.notna(v) else "—"
-            )
+                df_display[col] = df_display[col].map(lambda v: f"{v:,.2f}".replace(",", " ") if pd.notna(v) else "—")
+            df_display["Taux (%)"] = df_display["Taux (%)"].map(lambda v: f"{v:.1f} %" if pd.notna(v) else "—")
 
             self._table.set_dataframe(df_display)
 
@@ -248,35 +258,48 @@ class TauxEpargnePanel(QWidget):
             fig = go.Figure()
 
             # Barres revenus (fond semi-transparent)
-            fig.add_trace(go.Bar(
-                x=df["_dt"], y=df["revenus"],
-                name="Revenus", marker_color="rgba(96,165,250,0.25)",
-                hovertemplate="<b>%{x|%b %Y}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
-            ))
+            fig.add_trace(
+                go.Bar(
+                    x=df["_dt"],
+                    y=df["revenus"],
+                    name="Revenus",
+                    marker_color="rgba(96,165,250,0.25)",
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
+                )
+            )
 
             # Barres dépenses
-            fig.add_trace(go.Bar(
-                x=df["_dt"], y=df["depenses"],
-                name="Dépenses", marker_color="rgba(239,68,68,0.35)",
-                hovertemplate="<b>%{x|%b %Y}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
-            ))
+            fig.add_trace(
+                go.Bar(
+                    x=df["_dt"],
+                    y=df["depenses"],
+                    name="Dépenses",
+                    marker_color="rgba(239,68,68,0.35)",
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
+                )
+            )
 
             # Ligne taux d'épargne (axe secondaire Y2)
             df_valid = df.dropna(subset=["taux_epargne"])
             if not df_valid.empty:
-                fig.add_trace(go.Scatter(
-                    x=df_valid["_dt"], y=df_valid["taux_epargne"],
-                    name="Taux d'épargne", yaxis="y2",
-                    mode="lines+markers",
-                    line=dict(color=COLOR_SUCCESS, width=2.5),
-                    marker=dict(size=7, color=df_valid["taux_epargne"].apply(_color_for_rate)),
-                    hovertemplate="<b>%{x|%b %Y}</b><br>Taux : %{y:.1f} %<extra></extra>",
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_valid["_dt"],
+                        y=df_valid["taux_epargne"],
+                        name="Taux d'épargne",
+                        yaxis="y2",
+                        mode="lines+markers",
+                        line=dict(color=COLOR_SUCCESS, width=2.5),
+                        marker=dict(size=7, color=df_valid["taux_epargne"].apply(_color_for_rate)),
+                        hovertemplate="<b>%{x|%b %Y}</b><br>Taux : %{y:.1f} %<extra></extra>",
+                    )
+                )
 
             # Ligne objectif 20% (en pointillés)
             if len(df) > 0:
                 fig.add_hline(
-                    y=20, yref="y2",
+                    y=20,
+                    yref="y2",
                     line=dict(color="#4ade80", width=1.5, dash="dot"),
                     annotation_text="Objectif 20 %",
                     annotation_font_color="#4ade80",
@@ -285,7 +308,8 @@ class TauxEpargnePanel(QWidget):
 
             # Ligne 0% (taux neutre)
             fig.add_hline(
-                y=0, yref="y2",
+                y=0,
+                yref="y2",
                 line=dict(color="#64748b", width=1, dash="solid"),
             )
 
@@ -293,18 +317,30 @@ class TauxEpargnePanel(QWidget):
                 **plotly_time_series_layout(barmode="group", margin=dict(l=10, r=10, t=40, b=10)),
                 xaxis=dict(title="", showgrid=False, tickformat="%b %Y"),
                 yaxis=dict(
-                    title="Montant (€)", showgrid=True, gridcolor="#1e2538",
-                    tickformat=",.0f", ticksuffix=" €",
+                    title="Montant (€)",
+                    showgrid=True,
+                    gridcolor="#1e2538",
+                    tickformat=",.0f",
+                    ticksuffix=" €",
                 ),
                 yaxis2=dict(
-                    title="Taux (%)", overlaying="y", side="right",
-                    showgrid=False, ticksuffix=" %",
-                    zeroline=True, zerolinecolor="#334155", zerolinewidth=1,
-                    range=[-10, 100]
+                    title="Taux (%)",
+                    overlaying="y",
+                    side="right",
+                    showgrid=False,
+                    ticksuffix=" %",
+                    zeroline=True,
+                    zerolinecolor="#334155",
+                    zerolinewidth=1,
+                    range=[-10, 100],
                 ),
                 legend=dict(
-                    orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="right", x=1, font=dict(size=11),
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    font=dict(size=11),
                 ),
                 hovermode="x unified",
             )
@@ -313,8 +349,13 @@ class TauxEpargnePanel(QWidget):
             logger.warning("TauxEpargnePanel._build_chart error: %s", e)
 
     def _clear_all(self) -> None:
-        for k in [self._kpi_current, self._kpi_m1, self._kpi_m2,
-                  self._kpi_avg12, self._kpi_avg12_ep]:
+        for k in [
+            self._kpi_current,
+            self._kpi_m1,
+            self._kpi_m2,
+            self._kpi_avg12,
+            self._kpi_avg12_ep,
+        ]:
             k.set_content(k._title_label.text() or "—", "Aucune donnée", tone="neutral")
         self._chart_hist.clear_figure()
         self._table.set_dataframe(pd.DataFrame())

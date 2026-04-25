@@ -354,26 +354,56 @@ def list_scenarios(
     except sqlite3.OperationalError:
         return pd.DataFrame(
             columns=[
-                "id", "name", "scope_type", "scope_id", "is_default",
-                "horizon_years", "expected_return_pct", "inflation_pct",
-                "income_growth_pct", "expense_growth_pct", "monthly_savings_override",
-                "fire_multiple", "use_real_snapshot_base", "initial_net_worth_override",
-                "return_liquidites_pct", "return_bourse_pct", "return_immobilier_pct",
-                "return_pe_pct", "return_entreprises_pct", "exclude_primary_residence",
-                "created_at", "updated_at",
+                "id",
+                "name",
+                "scope_type",
+                "scope_id",
+                "is_default",
+                "horizon_years",
+                "expected_return_pct",
+                "inflation_pct",
+                "income_growth_pct",
+                "expense_growth_pct",
+                "monthly_savings_override",
+                "fire_multiple",
+                "use_real_snapshot_base",
+                "initial_net_worth_override",
+                "return_liquidites_pct",
+                "return_bourse_pct",
+                "return_immobilier_pct",
+                "return_pe_pct",
+                "return_entreprises_pct",
+                "exclude_primary_residence",
+                "created_at",
+                "updated_at",
             ]
         )
 
     return df_from_rows(
         rows,
         [
-            "id", "name", "scope_type", "scope_id", "is_default",
-            "horizon_years", "expected_return_pct", "inflation_pct",
-            "income_growth_pct", "expense_growth_pct", "monthly_savings_override",
-            "fire_multiple", "use_real_snapshot_base", "initial_net_worth_override",
-            "return_liquidites_pct", "return_bourse_pct", "return_immobilier_pct",
-            "return_pe_pct", "return_entreprises_pct", "exclude_primary_residence",
-            "created_at", "updated_at",
+            "id",
+            "name",
+            "scope_type",
+            "scope_id",
+            "is_default",
+            "horizon_years",
+            "expected_return_pct",
+            "inflation_pct",
+            "income_growth_pct",
+            "expense_growth_pct",
+            "monthly_savings_override",
+            "fire_multiple",
+            "use_real_snapshot_base",
+            "initial_net_worth_override",
+            "return_liquidites_pct",
+            "return_bourse_pct",
+            "return_immobilier_pct",
+            "return_pe_pct",
+            "return_entreprises_pct",
+            "exclude_primary_residence",
+            "created_at",
+            "updated_at",
         ],
     )
 
@@ -387,25 +417,29 @@ def create_scenario(conn: sqlite3.Connection, data: dict) -> int:
         "expected_return_pct": _validate_float_range(
             data.get("expected_return_pct", 6.0), "Le rendement attendu", -50.0, 50.0, 6.0
         ),
-        "inflation_pct": _validate_float_range(
-            data.get("inflation_pct", 2.0), "L'inflation", -20.0, 30.0, 2.0
-        ),
+        "inflation_pct": _validate_float_range(data.get("inflation_pct", 2.0), "L'inflation", -20.0, 30.0, 2.0),
         "income_growth_pct": _validate_float_range(
             data.get("income_growth_pct", 0.0), "La croissance des revenus", -50.0, 50.0, 0.0
         ),
         "expense_growth_pct": _validate_float_range(
             data.get("expense_growth_pct", 0.0), "La croissance des dépenses", -50.0, 50.0, 0.0
         ),
-        "fire_multiple": _validate_float_range(
-            data.get("fire_multiple", 25.0), "Le multiple FIRE", 1.0, 200.0, 25.0
-        ),
+        "fire_multiple": _validate_float_range(data.get("fire_multiple", 25.0), "Le multiple FIRE", 1.0, 200.0, 25.0),
         "use_real_snapshot_base": 1 if _to_int(data.get("use_real_snapshot_base", 1)) else 0,
         # Rendements par classe
-        "return_liquidites_pct":  _validate_float_range(data.get("return_liquidites_pct",  2.0), "Rendement liquidités",  -20.0, 50.0, 2.0),
-        "return_bourse_pct":      _validate_float_range(data.get("return_bourse_pct",      7.0), "Rendement bourse",      -20.0, 50.0, 7.0),
-        "return_immobilier_pct":  _validate_float_range(data.get("return_immobilier_pct",  3.5), "Rendement immobilier",  -20.0, 50.0, 3.5),
-        "return_pe_pct":          _validate_float_range(data.get("return_pe_pct",         10.0), "Rendement PE",          -20.0, 50.0, 10.0),
-        "return_entreprises_pct": _validate_float_range(data.get("return_entreprises_pct", 5.0), "Rendement entreprises", -20.0, 50.0, 5.0),
+        "return_liquidites_pct": _validate_float_range(
+            data.get("return_liquidites_pct", 2.0), "Rendement liquidités", -20.0, 50.0, 2.0
+        ),
+        "return_bourse_pct": _validate_float_range(
+            data.get("return_bourse_pct", 7.0), "Rendement bourse", -20.0, 50.0, 7.0
+        ),
+        "return_immobilier_pct": _validate_float_range(
+            data.get("return_immobilier_pct", 3.5), "Rendement immobilier", -20.0, 50.0, 3.5
+        ),
+        "return_pe_pct": _validate_float_range(data.get("return_pe_pct", 10.0), "Rendement PE", -20.0, 50.0, 10.0),
+        "return_entreprises_pct": _validate_float_range(
+            data.get("return_entreprises_pct", 5.0), "Rendement entreprises", -20.0, 50.0, 5.0
+        ),
         "exclude_primary_residence": 1 if data.get("exclude_primary_residence") else 0,
     }
     if payload["horizon_years"] < 1:
@@ -413,14 +447,22 @@ def create_scenario(conn: sqlite3.Connection, data: dict) -> int:
 
     savings_override = data.get("monthly_savings_override")
     payload["monthly_savings_override"] = (
-        None if savings_override is None else _validate_float_range(
+        None
+        if savings_override is None
+        else _validate_float_range(
             savings_override, "L'épargne mensuelle personnalisée", -10_000_000.0, 10_000_000.0, 0.0
         )
     )
     net_override = data.get("initial_net_worth_override")
     payload["initial_net_worth_override"] = (
-        None if net_override is None else _validate_float_range(
-            net_override, "Le patrimoine initial personnalisé", -1_000_000_000_000.0, 1_000_000_000_000.0, 0.0
+        None
+        if net_override is None
+        else _validate_float_range(
+            net_override,
+            "Le patrimoine initial personnalisé",
+            -1_000_000_000_000.0,
+            1_000_000_000_000.0,
+            0.0,
         )
     )
 
@@ -493,9 +535,7 @@ def update_scenario(conn: sqlite3.Connection, scenario_id: int, data: dict) -> N
             payload.get("expected_return_pct"), "Le rendement attendu", -50.0, 50.0, 6.0
         )
     if "inflation_pct" in payload:
-        payload["inflation_pct"] = _validate_float_range(
-            payload.get("inflation_pct"), "L'inflation", -20.0, 30.0, 2.0
-        )
+        payload["inflation_pct"] = _validate_float_range(payload.get("inflation_pct"), "L'inflation", -20.0, 30.0, 2.0)
     if "income_growth_pct" in payload:
         payload["income_growth_pct"] = _validate_float_range(
             payload.get("income_growth_pct"), "La croissance des revenus", -50.0, 50.0, 0.0
@@ -528,10 +568,10 @@ def update_scenario(conn: sqlite3.Connection, scenario_id: int, data: dict) -> N
         )
     # Rendements par classe
     for field, label, default in [
-        ("return_liquidites_pct",  "Rendement liquidités",  2.0),
-        ("return_bourse_pct",      "Rendement bourse",      7.0),
-        ("return_immobilier_pct",  "Rendement immobilier",  3.5),
-        ("return_pe_pct",          "Rendement PE",         10.0),
+        ("return_liquidites_pct", "Rendement liquidités", 2.0),
+        ("return_bourse_pct", "Rendement bourse", 7.0),
+        ("return_immobilier_pct", "Rendement immobilier", 3.5),
+        ("return_pe_pct", "Rendement PE", 10.0),
         ("return_entreprises_pct", "Rendement entreprises", 5.0),
     ]:
         if field in payload:

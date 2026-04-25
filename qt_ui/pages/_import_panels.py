@@ -2,10 +2,18 @@
 Panels d'import dépenses, revenus et Bankin + styles/helpers partagés.
 Extrait de import_page.py pour réduire la taille du fichier principal.
 """
+
 import os
+
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QCheckBox, QGroupBox, QFileDialog,
+    QCheckBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 # ── Styles partagés ──────────────────────────────────────────────────────────
@@ -16,7 +24,9 @@ BTN_STYLE = """
     QPushButton:hover { background: #1e4a7f; }
     QPushButton:disabled { background: #1a1f2e; color: #475569; }
 """
-INPUT_STYLE = "background: #1a1f2e; color: #e2e8f0; border: 1px solid #2a3040; border-radius: 4px; padding: 4px; font-size: 13px;"
+INPUT_STYLE = (
+    "background: #1a1f2e; color: #e2e8f0; border: 1px solid #2a3040; border-radius: 4px; padding: 4px; font-size: 13px;"
+)
 LABEL_STYLE = "color: #94a3b8; font-size: 12px; margin-bottom: 2px;"
 GROUP_STYLE = (
     "QGroupBox { color: #94a3b8; border: 1px solid #1e2538; border-radius: 6px; "
@@ -101,9 +111,10 @@ def build_depenses_panel(conn, get_person_name, refresh_history, table_type: str
             return
         person = get_person_name()
         try:
-            from services.imports import import_wide_csv_to_monthly_table
-            from services.import_history import create_batch, close_batch
             from services import import_lookup_service as lookup
+            from services.import_history import close_batch, create_batch
+            from services.imports import import_wide_csv_to_monthly_table
+
             pid = lookup.get_person_id_by_name(conn, person)
             itype = "DEPENSES" if table_type == "depenses" else "REVENUS"
             batch_id = create_batch(
@@ -115,8 +126,11 @@ def build_depenses_panel(conn, get_person_name, refresh_history, table_type: str
             )
             with open(w._file_path, "rb") as f:
                 res = import_wide_csv_to_monthly_table(
-                    conn, table=table_type, person_name=person,
-                    file=f, delete_existing=w._chk_delete.isChecked(),
+                    conn,
+                    table=table_type,
+                    person_name=person,
+                    file=f,
+                    delete_existing=w._chk_delete.isChecked(),
                     import_batch_id=batch_id,
                 )
             close_batch(conn, batch_id, res["nb_lignes"])
@@ -199,9 +213,10 @@ def build_bankin_panel(conn, get_person_name, refresh_history) -> QWidget:
             return
         person = get_person_name()
         try:
-            from services.imports import import_bankin_csv
-            from services.import_history import create_batch, close_batch
             from services import import_lookup_service as lookup
+            from services.import_history import close_batch, create_batch
+            from services.imports import import_bankin_csv
+
             pid = lookup.get_person_id_by_name(conn, person)
             batch_id = create_batch(
                 conn,
@@ -212,7 +227,9 @@ def build_bankin_panel(conn, get_person_name, refresh_history) -> QWidget:
             )
             with open(w._file_path, "rb") as f:
                 res = import_bankin_csv(
-                    conn, person_name=person, file=f,
+                    conn,
+                    person_name=person,
+                    file=f,
                     also_fill_monthly_tables=chk_fill.isChecked(),
                     purge_existing_transactions=chk_purge.isChecked(),
                     import_batch_id=batch_id,

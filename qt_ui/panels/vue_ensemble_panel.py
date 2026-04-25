@@ -2,31 +2,51 @@
 Panel Vue d'ensemble — dashboard patrimonial complet.
 4 lignes de KPI + 4 graphiques.
 """
+
 import logging
 import math
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from qt_ui.theme import (
-    BG_PRIMARY, BG_CARD, BORDER_DEFAULT, STYLE_BTN_PRIMARY, STYLE_GROUP, STYLE_SECTION,
-    STYLE_SECTION_MARGIN, STYLE_STATUS, STYLE_STATUS_SUCCESS, STYLE_STATUS_WARNING,
-    STYLE_STATUS_ERROR, CHART_GREEN, CHART_RED,
-    plotly_layout, plotly_time_series_layout,
-    COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, TEXT_MUTED, TEXT_SECONDARY,
+    BG_CARD,
+    BG_PRIMARY,
+    BORDER_DEFAULT,
+    CHART_GREEN,
+    CHART_RED,
+    COLOR_ERROR,
+    COLOR_SUCCESS,
+    COLOR_WARNING,
+    STYLE_BTN_PRIMARY,
+    STYLE_GROUP,
+    STYLE_SECTION_MARGIN,
+    STYLE_STATUS,
+    STYLE_STATUS_ERROR,
+    STYLE_STATUS_SUCCESS,
+    STYLE_STATUS_WARNING,
+    TEXT_SECONDARY,
+    plotly_layout,
+    plotly_time_series_layout,
 )
-from qt_ui.widgets import PlotlyView, KpiCard, MetricLabel, LoadingOverlay
+from qt_ui.widgets import KpiCard, LoadingOverlay, MetricLabel, PlotlyView
 from utils.format_monnaie import money
 
 logger = logging.getLogger(__name__)
 
 
 # ─── Helpers de formatage ──────────────────────────────────────────────────
+
 
 def _pct(v) -> str:
     """Retourne 'XX.X %' ou '—'."""
@@ -119,12 +139,19 @@ def _empty_figure(msg: str = "Aucune donnée disponible") -> go.Figure:
     """Figure Plotly vide avec un message centré — remplace un widget blank."""
     fig = go.Figure()
     fig.add_annotation(
-        text=msg, x=0.5, y=0.5, xref="paper", yref="paper",
-        showarrow=False, font=dict(size=13, color="#64748b"),
+        text=msg,
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font=dict(size=13, color="#64748b"),
     )
     fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
         margin=dict(l=0, r=0, t=0, b=0),
     )
     return fig
@@ -132,9 +159,10 @@ def _empty_figure(msg: str = "Aucune donnée disponible") -> go.Figure:
 
 # ─── Thread rebuild ────────────────────────────────────────────────────────
 
+
 class SnapshotRebuildThread(QThread):
     finished = pyqtSignal(str)
-    error    = pyqtSignal(str)
+    error = pyqtSignal(str)
 
     def __init__(self, person_id: int):
         super().__init__()
@@ -144,10 +172,13 @@ class SnapshotRebuildThread(QThread):
         try:
             from services import snapshots as wk_snap
             from services.db import get_conn
+
             with get_conn() as local_conn:
                 res = wk_snap.rebuild_snapshots_person_from_last(
-                    local_conn, person_id=self._person_id,
-                    safety_weeks=4, fallback_lookback_days=90,
+                    local_conn,
+                    person_id=self._person_id,
+                    safety_weeks=4,
+                    fallback_lookback_days=90,
                 )
             self.finished.emit(str(res))
         except Exception as exc:
@@ -156,9 +187,10 @@ class SnapshotRebuildThread(QThread):
 
 class FullHistoryRebuildThread(QThread):
     """Thread qui reconstruit tous les snapshots depuis la premiere transaction."""
-    progress = pyqtSignal(int, int, int)   # current_year, week_index, total_weeks
+
+    progress = pyqtSignal(int, int, int)  # current_year, week_index, total_weeks
     finished = pyqtSignal(str)
-    error    = pyqtSignal(str)
+    error = pyqtSignal(str)
 
     def __init__(self, person_id: int):
         super().__init__()
@@ -173,13 +205,15 @@ class FullHistoryRebuildThread(QThread):
         try:
             from services import snapshots as wk_snap
             from services.db import get_conn
+
             with get_conn() as local_conn:
                 res = wk_snap.rebuild_snapshots_person_full_history(
                     local_conn,
                     person_id=self._person_id,
                     cancel_check=lambda: self._cancelled,
-                    progress_callback=lambda current_week, current_year, week_index, total_weeks:
-                        self.progress.emit(current_year, week_index, total_weeks),
+                    progress_callback=lambda current_week, current_year, week_index, total_weeks: self.progress.emit(
+                        current_year, week_index, total_weeks
+                    ),
                 )
             self.finished.emit(str(res))
         except Exception as exc:
@@ -188,12 +222,13 @@ class FullHistoryRebuildThread(QThread):
 
 # ─── Panel principal ───────────────────────────────────────────────────────
 
+
 class VueEnsemblePanel(QWidget):
     def __init__(self, conn, person_id: int, parent=None):
         super().__init__(parent)
-        self._conn      = conn
+        self._conn = conn
         self._person_id = person_id
-        self._thread    = None
+        self._thread = None
 
         self.setStyleSheet(f"background: {BG_PRIMARY};")
         layout = QVBoxLayout(self)
@@ -228,23 +263,29 @@ class VueEnsemblePanel(QWidget):
 
         # ── Ligne 1 — KPI patrimoine ──────────────────────────────────────
         kpi_row1 = QHBoxLayout()
-        self._kpi_net    = KpiCard("Patrimoine net",    "—", tone="blue")
-        self._kpi_brut   = KpiCard("Patrimoine brut",   "—", tone="green")
-        self._kpi_liq    = KpiCard("Liquidités",        "—", tone="primary")
-        self._kpi_bourse   = KpiCard("Holdings bourse",   "—", tone="broker")
-        self._kpi_immo     = KpiCard("Immobilier",        "—", tone="neutral")
-        self._kpi_credits  = KpiCard("Crédits restants", "—", tone="red")
-        self._kpis = [self._kpi_net, self._kpi_brut, self._kpi_liq,
-                      self._kpi_bourse, self._kpi_immo, self._kpi_credits]
+        self._kpi_net = KpiCard("Patrimoine net", "—", tone="blue")
+        self._kpi_brut = KpiCard("Patrimoine brut", "—", tone="green")
+        self._kpi_liq = KpiCard("Liquidités", "—", tone="primary")
+        self._kpi_bourse = KpiCard("Holdings bourse", "—", tone="broker")
+        self._kpi_immo = KpiCard("Immobilier", "—", tone="neutral")
+        self._kpi_credits = KpiCard("Crédits restants", "—", tone="red")
+        self._kpis = [
+            self._kpi_net,
+            self._kpi_brut,
+            self._kpi_liq,
+            self._kpi_bourse,
+            self._kpi_immo,
+            self._kpi_credits,
+        ]
         for k in self._kpis:
             kpi_row1.addWidget(k)
         layout.addLayout(kpi_row1)
 
         # Métriques de perf (sous la ligne 1)
         kpi_perf = QHBoxLayout()
-        self._kpi_3m   = MetricLabel("Évolution 3 mois",     "—")
-        self._kpi_12m  = MetricLabel("Évolution 12 mois",    "—")
-        self._kpi_cagr = MetricLabel("Rendement annualisé",  "—")
+        self._kpi_3m = MetricLabel("Évolution 3 mois", "—")
+        self._kpi_12m = MetricLabel("Évolution 12 mois", "—")
+        self._kpi_cagr = MetricLabel("Rendement annualisé", "—")
         kpi_perf.addWidget(self._kpi_3m)
         kpi_perf.addWidget(self._kpi_12m)
         kpi_perf.addWidget(self._kpi_cagr)
@@ -257,12 +298,16 @@ class VueEnsemblePanel(QWidget):
         layout.addWidget(lbl_sante)
 
         kpi_row2 = QHBoxLayout()
-        self._kpi_endettement   = KpiCard("Taux d'endettement", "—", tone="neutral")
-        self._kpi_part_liquide  = KpiCard("Part liquide",       "—", tone="neutral")
-        self._kpi_expo_marches  = KpiCard("Exposition marchés", "—", tone="neutral")
-        self._kpi_illiquides    = KpiCard("Actifs illiquides",  "—", tone="neutral")
-        self._kpis_sante = [self._kpi_endettement, self._kpi_part_liquide,
-                            self._kpi_expo_marches, self._kpi_illiquides]
+        self._kpi_endettement = KpiCard("Taux d'endettement", "—", tone="neutral")
+        self._kpi_part_liquide = KpiCard("Part liquide", "—", tone="neutral")
+        self._kpi_expo_marches = KpiCard("Exposition marchés", "—", tone="neutral")
+        self._kpi_illiquides = KpiCard("Actifs illiquides", "—", tone="neutral")
+        self._kpis_sante = [
+            self._kpi_endettement,
+            self._kpi_part_liquide,
+            self._kpi_expo_marches,
+            self._kpi_illiquides,
+        ]
         for k in self._kpis_sante:
             kpi_row2.addWidget(k)
         kpi_row2.addStretch()
@@ -274,12 +319,16 @@ class VueEnsemblePanel(QWidget):
         layout.addWidget(lbl_prog)
 
         kpi_row3 = QHBoxLayout()
-        self._kpi_gain_3m          = KpiCard("Gain patrimonial 3 mois",    "—", tone="neutral")
-        self._kpi_gain_12m         = KpiCard("Gain patrimonial 12 mois",   "—", tone="neutral")
-        self._kpi_epargne_12m      = KpiCard("Épargne cumulée 12 mois",    "—", tone="neutral")
-        self._kpi_effet_valo       = KpiCard("Effet valorisation 12 mois", "—", tone="neutral")
-        self._kpis_prog = [self._kpi_gain_3m, self._kpi_gain_12m,
-                           self._kpi_epargne_12m, self._kpi_effet_valo]
+        self._kpi_gain_3m = KpiCard("Gain patrimonial 3 mois", "—", tone="neutral")
+        self._kpi_gain_12m = KpiCard("Gain patrimonial 12 mois", "—", tone="neutral")
+        self._kpi_epargne_12m = KpiCard("Épargne cumulée 12 mois", "—", tone="neutral")
+        self._kpi_effet_valo = KpiCard("Effet valorisation 12 mois", "—", tone="neutral")
+        self._kpis_prog = [
+            self._kpi_gain_3m,
+            self._kpi_gain_12m,
+            self._kpi_epargne_12m,
+            self._kpi_effet_valo,
+        ]
         for k in self._kpis_prog:
             kpi_row3.addWidget(k)
         kpi_row3.addStretch()
@@ -291,9 +340,9 @@ class VueEnsemblePanel(QWidget):
         layout.addWidget(lbl_pilotage)
 
         kpi_row4 = QHBoxLayout()
-        self._kpi_avg12       = KpiCard("Taux moy. épargne 12 mois",   "—", tone="neutral")
-        self._kpi_avg12_ep    = KpiCard("Capacité d'épargne moyenne",  "—", tone="neutral")
-        self._kpi_reserve     = KpiCard("Réserve de sécurité",         "—", tone="neutral")
+        self._kpi_avg12 = KpiCard("Taux moy. épargne 12 mois", "—", tone="neutral")
+        self._kpi_avg12_ep = KpiCard("Capacité d'épargne moyenne", "—", tone="neutral")
+        self._kpi_reserve = KpiCard("Réserve de sécurité", "—", tone="neutral")
         self._kpis_pilot = [self._kpi_avg12, self._kpi_avg12_ep, self._kpi_reserve]
         for k in self._kpis_pilot:
             kpi_row4.addWidget(k)
@@ -433,9 +482,7 @@ class VueEnsemblePanel(QWidget):
     def _on_rebuild_full_progress(self, current_year: int, week_index: int, total_weeks: int) -> None:
         """Met a jour le label avec l'annee en cours de reconstruction."""
         pct = int(week_index / total_weeks * 100) if total_weeks > 0 else 0
-        self._rebuild_status.setText(
-            f"⏳ Reconstruction {current_year}… ({week_index}/{total_weeks} semaines, {pct}%)"
-        )
+        self._rebuild_status.setText(f"⏳ Reconstruction {current_year}… ({week_index}/{total_weeks} semaines, {pct}%)")
 
     def _on_rebuild_full_done(self, result: str) -> None:
         self._btn_rebuild.setEnabled(True)
@@ -456,12 +503,17 @@ class VueEnsemblePanel(QWidget):
 
     def _load_data(self) -> None:
         # ── 1. Activation des Skeletons ───────────────────────────────────
-        all_widgets = (self._kpis + self._kpis_sante + self._kpis_prog + 
-                       self._kpis_pilot + [self._kpi_3m, self._kpi_12m, self._kpi_cagr])
+        all_widgets = (
+            self._kpis
+            + self._kpis_sante
+            + self._kpis_prog
+            + self._kpis_pilot
+            + [self._kpi_3m, self._kpi_12m, self._kpi_cagr]
+        )
         for w in all_widgets:
             if hasattr(w, "set_loading"):
                 w.set_loading(True)
-        
+
         self._chart_line.set_loading(True)
         self._chart_alloc.set_loading(True)
         self._chart_cashflow.set_loading(True)
@@ -470,37 +522,24 @@ class VueEnsemblePanel(QWidget):
         self._overlay.start("Chargement des données…", blur=True)
         try:
             from services.vue_ensemble_metrics import get_vue_ensemble_metrics
+
             m = get_vue_ensemble_metrics(self._conn, self._person_id)
 
             if not m:
                 self._semaine_label.setStyleSheet(STYLE_STATUS_WARNING)
-                self._semaine_label.setText(
-                    "⚠️  Aucune donnée weekly — lancez un rebuild."
-                )
+                self._semaine_label.setText("⚠️  Aucune donnée weekly — lancez un rebuild.")
                 return
 
             self._semaine_label.setStyleSheet(STYLE_STATUS)
             self._semaine_label.setText(f"Données au : {m.get('week_date', '—')}")
 
             # ── Ligne 1 ───────────────────────────────────────────────────
-            self._kpi_net.set_content(
-                "Patrimoine net", money(m["net"]), tone="blue"
-            )
-            self._kpi_brut.set_content(
-                "Patrimoine brut", money(m["brut"]), tone="green"
-            )
-            self._kpi_liq.set_content(
-                "Liquidités", money(m["liq"]), tone="primary"
-            )
-            self._kpi_bourse.set_content(
-                "Holdings bourse", money(m["bourse"]), tone="broker"
-            )
-            self._kpi_immo.set_content(
-                "Immobilier", money(m["immo_value"]), tone="neutral"
-            )
-            self._kpi_credits.set_content(
-                "Crédits restants", money(m["credits"]), tone="red"
-            )
+            self._kpi_net.set_content("Patrimoine net", money(m["net"]), tone="blue")
+            self._kpi_brut.set_content("Patrimoine brut", money(m["brut"]), tone="green")
+            self._kpi_liq.set_content("Liquidités", money(m["liq"]), tone="primary")
+            self._kpi_bourse.set_content("Holdings bourse", money(m["bourse"]), tone="broker")
+            self._kpi_immo.set_content("Immobilier", money(m["immo_value"]), tone="neutral")
+            self._kpi_credits.set_content("Crédits restants", money(m["credits"]), tone="red")
 
             # Perfs (MetricLabel)
             self._fill_perfs(m)
@@ -532,10 +571,10 @@ class VueEnsemblePanel(QWidget):
             )
 
             # ── Ligne 3 — Progression réelle ──────────────────────────────
-            gain_3m  = m.get("gain_3m")
+            gain_3m = m.get("gain_3m")
             gain_12m = m.get("gain_12m")
-            ep_12m   = m.get("epargne_12m")
-            effet    = m.get("effet_valorisation_12m")
+            ep_12m = m.get("epargne_12m")
+            effet = m.get("effet_valorisation_12m")
 
             self._kpi_gain_3m.set_content(
                 "Gain patrimonial 3 mois",
@@ -564,8 +603,8 @@ class VueEnsemblePanel(QWidget):
 
             # ── Ligne 4 — Pilotage personnel ──────────────────────────────
             taux_avg = m.get("taux_epargne_avg")
-            cap_avg  = m.get("capacite_epargne_avg")
-            reserve  = m.get("reserve_securite")
+            cap_avg = m.get("capacite_epargne_avg")
+            reserve = m.get("reserve_securite")
 
             self._kpi_avg12.set_content(
                 "Taux moy. épargne 12 mois",
@@ -594,12 +633,11 @@ class VueEnsemblePanel(QWidget):
 
             # ── Alerte taux FX manquants ──────────────────────────────────
             from services import market_history as _mh
+
             missing_fx = _mh.get_and_clear_missing_fx()
             if missing_fx:
                 pairs_str = ", ".join(f"{a}→{b}" for a, b in sorted(missing_fx))
-                self._fx_alert_label.setText(
-                    f"⚠️  Taux FX manquants — certains actifs valorisés à 0 € : {pairs_str}"
-                )
+                self._fx_alert_label.setText(f"⚠️  Taux FX manquants — certains actifs valorisés à 0 € : {pairs_str}")
                 self._fx_alert_label.setVisible(True)
             else:
                 self._fx_alert_label.setVisible(False)
@@ -636,7 +674,7 @@ class VueEnsemblePanel(QWidget):
             for w in all_widgets:
                 if hasattr(w, "set_loading"):
                     w.set_loading(False)
-            
+
             self._chart_line.set_loading(False)
             self._chart_alloc.set_loading(False)
             self._chart_cashflow.set_loading(False)
@@ -686,7 +724,9 @@ class VueEnsemblePanel(QWidget):
                 self._chart_line.set_figure(_empty_figure("Aucun snapshot disponible"))
                 return
             fig = px.line(
-                df, x="_dt", y="patrimoine_net",
+                df,
+                x="_dt",
+                y="patrimoine_net",
                 template="plotly_dark",
                 labels={"_dt": "Semaine", "patrimoine_net": "Patrimoine net (€)"},
             )
@@ -700,24 +740,28 @@ class VueEnsemblePanel(QWidget):
 
     def _build_alloc_chart(self, m: dict) -> None:
         try:
+
             def _nonneg(key: str) -> float:
                 value = _finite_float(m.get(key))
                 return max(0.0, value) if value is not None else 0.0
 
             alloc_data = [
-                {"Catégorie": "Liquidités",     "Valeur": _nonneg("liq")},
-                {"Catégorie": "Holdings bourse","Valeur": _nonneg("bourse")},
-                {"Catégorie": "Immobilier",     "Valeur": _nonneg("immo_value")},
-                {"Catégorie": "PE",             "Valeur": _nonneg("pe_value")},
-                {"Catégorie": "Entreprises",    "Valeur": _nonneg("ent_value")},
+                {"Catégorie": "Liquidités", "Valeur": _nonneg("liq")},
+                {"Catégorie": "Holdings bourse", "Valeur": _nonneg("bourse")},
+                {"Catégorie": "Immobilier", "Valeur": _nonneg("immo_value")},
+                {"Catégorie": "PE", "Valeur": _nonneg("pe_value")},
+                {"Catégorie": "Entreprises", "Valeur": _nonneg("ent_value")},
             ]
             alloc_df = pd.DataFrame([a for a in alloc_data if a["Valeur"] > 0])
             if alloc_df.empty:
                 self._chart_alloc.set_figure(_empty_figure("Aucune allocation positive"))
                 return
             fig = px.pie(
-                alloc_df, names="Catégorie", values="Valeur",
-                hole=0.45, template="plotly_dark",
+                alloc_df,
+                names="Catégorie",
+                values="Valeur",
+                hole=0.45,
+                template="plotly_dark",
             )
             fig.update_layout(**plotly_layout())
             self._chart_alloc.set_figure(fig)
@@ -735,18 +779,23 @@ class VueEnsemblePanel(QWidget):
                 return
             last12 = df_cf.tail(12).copy()
             fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=last12["mois"], y=last12["revenus"],
-                name="Revenus", marker_color=CHART_GREEN,
-            ))
-            fig.add_trace(go.Bar(
-                x=last12["mois"], y=last12["depenses"],
-                name="Dépenses", marker_color=CHART_RED,
-            ))
-            fig.update_layout(
-                **plotly_layout(barmode="group",
-                                xaxis_title="Mois", yaxis_title="Montant (€)")
+            fig.add_trace(
+                go.Bar(
+                    x=last12["mois"],
+                    y=last12["revenus"],
+                    name="Revenus",
+                    marker_color=CHART_GREEN,
+                )
             )
+            fig.add_trace(
+                go.Bar(
+                    x=last12["mois"],
+                    y=last12["depenses"],
+                    name="Dépenses",
+                    marker_color=CHART_RED,
+                )
+            )
+            fig.update_layout(**plotly_layout(barmode="group", xaxis_title="Mois", yaxis_title="Montant (€)"))
             self._chart_cashflow.set_figure(fig)
         except Exception as exc:
             logger.warning("_build_cashflow_chart error: %s", exc)
@@ -761,48 +810,57 @@ class VueEnsemblePanel(QWidget):
                 self._chart_epargne.set_figure(_empty_figure("Aucune donnée cashflow"))
                 return
             df = df_cf.copy()
-            df["mois_label"] = (
-                pd.to_datetime(df["mois"], errors="coerce")
-                .dt.strftime("%b %Y")
-            )
+            df["mois_label"] = pd.to_datetime(df["mois"], errors="coerce").dt.strftime("%b %Y")
 
             fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=df["mois_label"], y=df["revenus"],
-                name="Revenus",
-                marker_color="rgba(96,165,250,0.25)",
-                hovertemplate="<b>%{x}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
-            ))
-            fig.add_trace(go.Bar(
-                x=df["mois_label"], y=df["depenses"],
-                name="Dépenses",
-                marker_color="rgba(239,68,68,0.35)",
-                hovertemplate="<b>%{x}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
-            ))
+            fig.add_trace(
+                go.Bar(
+                    x=df["mois_label"],
+                    y=df["revenus"],
+                    name="Revenus",
+                    marker_color="rgba(96,165,250,0.25)",
+                    hovertemplate="<b>%{x}</b><br>Revenus : %{y:,.0f} €<extra></extra>",
+                )
+            )
+            fig.add_trace(
+                go.Bar(
+                    x=df["mois_label"],
+                    y=df["depenses"],
+                    name="Dépenses",
+                    marker_color="rgba(239,68,68,0.35)",
+                    hovertemplate="<b>%{x}</b><br>Dépenses : %{y:,.0f} €<extra></extra>",
+                )
+            )
 
             df_valid = df.dropna(subset=["taux_epargne"])
             if not df_valid.empty:
-                fig.add_trace(go.Scatter(
-                    x=df_valid["mois_label"], y=df_valid["taux_epargne"],
-                    name="Taux d'épargne", yaxis="y2",
-                    mode="lines+markers",
-                    line=dict(color=COLOR_SUCCESS, width=2.5),
-                    marker=dict(
-                        size=7,
-                        color=df_valid["taux_epargne"].apply(_color_for_rate),
-                    ),
-                    hovertemplate="<b>%{x}</b><br>Taux : %{y:.1f} %<extra></extra>",
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_valid["mois_label"],
+                        y=df_valid["taux_epargne"],
+                        name="Taux d'épargne",
+                        yaxis="y2",
+                        mode="lines+markers",
+                        line=dict(color=COLOR_SUCCESS, width=2.5),
+                        marker=dict(
+                            size=7,
+                            color=df_valid["taux_epargne"].apply(_color_for_rate),
+                        ),
+                        hovertemplate="<b>%{x}</b><br>Taux : %{y:.1f} %<extra></extra>",
+                    )
+                )
 
             fig.add_hline(
-                y=20, yref="y2",
+                y=20,
+                yref="y2",
                 line=dict(color="#4ade80", width=1.5, dash="dot"),
                 annotation_text="Objectif 20 %",
                 annotation_font_color="#4ade80",
                 annotation_position="top right",
             )
             fig.add_hline(
-                y=0, yref="y2",
+                y=0,
+                yref="y2",
                 line=dict(color="#64748b", width=1, dash="solid"),
             )
             fig.update_layout(
@@ -812,17 +870,29 @@ class VueEnsemblePanel(QWidget):
                 ),
                 xaxis=dict(title="", showgrid=False, tickangle=-35),
                 yaxis=dict(
-                    title="Montant (€)", showgrid=True, gridcolor="#1e2538",
-                    tickformat=",.0f", ticksuffix=" €",
+                    title="Montant (€)",
+                    showgrid=True,
+                    gridcolor="#1e2538",
+                    tickformat=",.0f",
+                    ticksuffix=" €",
                 ),
                 yaxis2=dict(
-                    title="Taux (%)", overlaying="y", side="right",
-                    showgrid=False, ticksuffix=" %",
-                    zeroline=True, zerolinecolor="#334155", zerolinewidth=1,
+                    title="Taux (%)",
+                    overlaying="y",
+                    side="right",
+                    showgrid=False,
+                    ticksuffix=" %",
+                    zeroline=True,
+                    zerolinecolor="#334155",
+                    zerolinewidth=1,
                 ),
                 legend=dict(
-                    orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="right", x=1, font=dict(size=11),
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    font=dict(size=11),
                 ),
                 hovermode="x unified",
             )

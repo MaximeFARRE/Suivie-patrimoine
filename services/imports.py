@@ -1,6 +1,7 @@
 # services/imports.py
 import logging
 import sqlite3
+
 import pandas as pd
 
 _logger = logging.getLogger(__name__)
@@ -89,9 +90,9 @@ def _month_key_from_date(date_value) -> str:
 def import_wide_csv_to_monthly_table(
     conn: sqlite3.Connection,
     *,
-    table: str,                 # "depenses" ou "revenus"
+    table: str,  # "depenses" ou "revenus"
     person_name: str,
-    file,                       # file uploader ou chemin
+    file,  # file uploader ou chemin
     date_col: str = "Date",
     ignore_cols=("Total",),
     delete_existing: bool = True,
@@ -138,10 +139,7 @@ def import_wide_csv_to_monthly_table(
             _logger.warning("import_csv_wide: %d montants négatifs dans les dépenses (ignorés)", len(negatifs))
             long = long[long["montant"] >= 0]
 
-    rows = [
-        (person_id, r["mois"], r["categorie"], float(r["montant"]), import_batch_id)
-        for _, r in long.iterrows()
-    ]
+    rows = [(person_id, r["mois"], r["categorie"], float(r["montant"]), import_batch_id) for _, r in long.iterrows()]
 
     # DELETE ciblé sur les mois du fichier importé uniquement (pas l’historique complet)
     if delete_existing:
@@ -155,7 +153,7 @@ def import_wide_csv_to_monthly_table(
 
     conn.executemany(
         f"INSERT INTO {table} (person_id, mois, categorie, montant, import_batch_id) VALUES (?, ?, ?, ?, ?)",
-        rows
+        rows,
     )
     conn.commit()
 
@@ -167,7 +165,9 @@ def import_wide_csv_to_monthly_table(
         "mois": sorted(set(long["mois"].tolist())),
     }
 
+
 # --- Bankin import ---
+
 
 # Mapping Bankin -> catégories finales (N3) simplifiées (ta version figée)
 def map_bankin_to_final(parent_cat: str, cat: str, amount: float) -> str:
@@ -184,7 +184,14 @@ def map_bankin_to_final(parent_cat: str, cat: str, amount: float) -> str:
             return "Revenus financiers"
         if cat in ("Allocations et pensions",):
             return "Aides & allocations"
-        if cat in ("Autres rentrées", "Extra", "Ventes", "Remboursements", "Dépôt d'argent", "Services"):
+        if cat in (
+            "Autres rentrées",
+            "Extra",
+            "Ventes",
+            "Remboursements",
+            "Dépôt d'argent",
+            "Services",
+        ):
             return "Autres revenus"
         if cat in ("Économies", "Emprunt", "Virements internes"):
             return "Flux financiers"
@@ -196,7 +203,13 @@ def map_bankin_to_final(parent_cat: str, cat: str, amount: float) -> str:
             return "Loyer"
         if cat in ("Eau", "Gaz", "Électricité", "Charges diverses"):
             return "Charges logement"
-        if cat in ("Assurance habitation", "Entretien", "Décoration", "Extérieur et jardin", "Logement - Autres"):
+        if cat in (
+            "Assurance habitation",
+            "Entretien",
+            "Décoration",
+            "Extérieur et jardin",
+            "Logement - Autres",
+        ):
             return "Assurance & entretien logement"
         return "Assurance & entretien logement"
 
@@ -408,7 +421,14 @@ def import_bankin_csv(
     df = pd.read_csv(file, sep=None, engine="python")
     df.columns = [c.strip() for c in df.columns]
 
-    required = ["Date", "Amount", "Description", "Account Name", "Category Name", "Parent Category Name"]
+    required = [
+        "Date",
+        "Amount",
+        "Description",
+        "Account Name",
+        "Category Name",
+        "Parent Category Name",
+    ]
     for col in required:
         if col not in df.columns:
             raise ValueError(f"Colonne manquante dans l'export Bankin : {col}. Colonnes trouvées: {list(df.columns)}")
@@ -429,7 +449,7 @@ def import_bankin_csv(
             FROM transactions 
             WHERE person_id = ? AND note LIKE 'Bankin:%'
             """,
-            (person_id,)
+            (person_id,),
         ).fetchall()
         for r_ext in rows:
             d_ext = str(r_ext[0] if not hasattr(r_ext, "keys") else r_ext["date"])
