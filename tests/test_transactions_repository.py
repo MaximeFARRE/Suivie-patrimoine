@@ -103,3 +103,45 @@ def test_delete_transaction_removes_row(conn):
     assert repo.get_transaction(conn, tx_id) is None
     tx_df = repo.list_transactions(conn, account_id=1, limit=10)
     assert tx_df.empty
+
+
+def test_get_transaction_returns_none_after_soft_delete(conn):
+    """get_transaction doit retourner None pour une transaction soft-deletée."""
+    _seed_people_accounts_assets(conn)
+    tx_id = repo.create_transaction(
+        conn,
+        {
+            "date": "2026-04-01",
+            "person_id": 1,
+            "account_id": 1,
+            "type": "DEPOT",
+            "amount": 100.0,
+            "fees": 0.0,
+        },
+    )
+    assert repo.get_transaction(conn, tx_id) is not None
+    repo.delete_transaction(conn, tx_id)
+    assert repo.get_transaction(conn, tx_id) is None
+
+
+def test_list_transactions_excludes_soft_deleted_by_default(conn):
+    """list_transactions ne doit pas retourner les transactions soft-deletées par défaut."""
+    _seed_people_accounts_assets(conn)
+    tx_id = repo.create_transaction(
+        conn,
+        {
+            "date": "2026-04-01",
+            "person_id": 1,
+            "account_id": 1,
+            "type": "DEPOT",
+            "amount": 200.0,
+            "fees": 0.0,
+        },
+    )
+    repo.delete_transaction(conn, tx_id)
+    df = repo.list_transactions(conn, account_id=1, limit=10)
+    assert df.empty
+
+    df_with_deleted = repo.list_transactions(conn, account_id=1, limit=10, include_deleted=True)
+    assert not df_with_deleted.empty
+    assert int(df_with_deleted.iloc[0]["id"]) == tx_id
