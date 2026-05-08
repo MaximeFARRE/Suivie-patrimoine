@@ -221,11 +221,18 @@ def compute_taux_epargne_mensuel(
     end_month: str | None = None,
 ) -> pd.DataFrame:
     """
-    [DEPRECATED] Calcule le taux d'épargne mensuel.
-    Ceci est désormais un wrapper vers `services.cashflow.get_person_monthly_savings_series`.
+    [DEPRECATED] Utiliser services.cashflow.get_person_monthly_savings_series à la place.
+    Ce wrapper sera supprimé dans une prochaine version.
     """
+    import warnings
+
     from services.cashflow import get_person_monthly_savings_series
 
+    warnings.warn(
+        "compute_taux_epargne_mensuel est déprécié. " "Utiliser services.cashflow.get_person_monthly_savings_series.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return get_person_monthly_savings_series(
         conn,
         person_id,
