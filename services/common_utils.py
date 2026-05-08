@@ -35,3 +35,27 @@ def fmt_amount(value: Any) -> str:
     """Formate un montant avec séparateur d'espace et 2 décimales."""
     num = safe_float(value, 0.0)
     return f"{num:,.2f}".replace(",", " ")
+
+
+def get_asset_type_by_id(conn: Any, asset_ids: list[int]) -> dict[int, str]:
+    """Retourne un mapping {asset_id: asset_type} pour les ids fournis."""
+    if not asset_ids:
+        return {}
+    ids = sorted({int(aid) for aid in asset_ids if aid is not None})
+    if not ids:
+        return {}
+    qmarks = ",".join(["?"] * len(ids))
+    rows = conn.execute(
+        f"SELECT id, asset_type FROM assets WHERE id IN ({qmarks})",
+        tuple(ids),
+    ).fetchall()
+    out: dict[int, str] = {}
+    for row in rows:
+        try:
+            rid = int(row["id"])
+            at = str(row["asset_type"] or "autre")
+        except Exception:
+            rid = int(row[0])
+            at = str(row[1] or "autre")
+        out[rid] = at
+    return out

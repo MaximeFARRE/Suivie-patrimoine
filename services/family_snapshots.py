@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from services.snapshots import _now_paris_iso
+from services.snapshots_helpers import _now_paris_iso
 
 FAMILY_WEEKLY_COLUMNS = [
     "week_date",

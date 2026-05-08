@@ -160,8 +160,8 @@ class SyncedLibsqlConn:
         if exc_type is None:
             try:
                 self.commit()
-            except Exception:
-                pass
+            except Exception as commit_exc:
+                _logger.error("SyncedLibsqlConn: échec du commit en sortie de contexte : %s", commit_exc)
 
         self.close()
         return False

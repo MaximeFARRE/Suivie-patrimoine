@@ -350,7 +350,7 @@ def get_transaction(conn: sqlite3.Connection, tx_id: int) -> Optional[dict]:
         LEFT JOIN assets a ON a.id = t.asset_id
         JOIN accounts acc ON acc.id = t.account_id
         JOIN people p ON p.id = t.person_id
-        WHERE t.id = ?
+        WHERE t.id = ? AND t.deleted_at IS NULL
         LIMIT 1
         """,
         (int(tx_id),),

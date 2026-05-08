@@ -9,7 +9,7 @@
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.7%2B-41cd52?style=flat-square&logo=qt&logoColor=white)](https://www.riverbankcomputing.com/software/pyqt/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f0db4f?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-235%20collected-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-237%20passed-brightgreen?style=flat-square)](tests/)
 [![Code style](https://img.shields.io/badge/code%20style-Black-000000?style=flat-square)](https://black.readthedocs.io/)
 [![Lint](https://img.shields.io/badge/lint-Ruff-d7ff64?style=flat-square)](https://docs.astral.sh/ruff/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](#installation)
@@ -81,7 +81,7 @@ pip install -r requirements.txt
 ### Development setup
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 

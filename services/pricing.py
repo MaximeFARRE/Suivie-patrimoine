@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import time
 
 _PRICE_CACHE_TTL_SEC = 15
 _PRICE_CACHE: dict[str, tuple[float, tuple[float | None, str]]] = {}
+
+_logger = logging.getLogger(__name__)
 
 
 def today_str() -> str:
@@ -46,8 +49,8 @@ def fetch_last_price_auto(symbol: str) -> tuple[float | None, str]:
             _PRICE_CACHE[symbol] = (now_ts, payload)
             return payload
 
-    except Exception:
-        pass
+    except Exception as exc:
+        _logger.debug("fetch_last_price_auto: échec récupération prix pour %s : %s", symbol, exc)
 
     _PRICE_CACHE[symbol] = (now_ts, (None, "EUR"))
     return None, "EUR"

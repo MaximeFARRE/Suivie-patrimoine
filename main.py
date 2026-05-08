@@ -143,9 +143,12 @@ def _backup_database():
     except Exception:
         max_backups = 10
 
-    # Rotation : ne garder que le max
-    for prefix in ["patrimoine_2", "patrimoine_turso_2"]:
-        backups = sorted([p for p in backup_dir.glob(f"{prefix}*.db") if p.is_file()], key=lambda p: p.name)
+    # Rotation : ne garder que le max (pattern horodatage : YYYYMMDD_HHMMSS)
+    for base in ["patrimoine", "patrimoine_turso"]:
+        backups = sorted(
+            [p for p in backup_dir.glob(f"{base}_????????_??????.db") if p.is_file()],
+            key=lambda p: p.name,
+        )
         while len(backups) > max_backups:
             old = backups.pop(0)
             try:
