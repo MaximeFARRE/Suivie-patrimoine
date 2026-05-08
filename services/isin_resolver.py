@@ -53,8 +53,9 @@ def _get_cached(conn, isin: str) -> str | None:
       - str non-vide  → ticker trouvé en cache
       - ""            → ISIN déjà cherché, aucun ticker trouvé
       - None          → pas encore en cache (première fois)
+
+    Pré-requis : _ensure_cache(conn) a déjà été appelé.
     """
-    _ensure_cache(conn)
     row = conn.execute("SELECT ticker FROM isin_ticker_cache WHERE isin = ?", (isin.upper(),)).fetchone()
     if row is None:
         return None
@@ -63,7 +64,7 @@ def _get_cached(conn, isin: str) -> str | None:
 
 
 def _set_cached(conn, isin: str, ticker: str, source: str) -> None:
-    _ensure_cache(conn)
+    """Pré-requis : _ensure_cache(conn) a déjà été appelé."""
     conn.execute(
         """
         INSERT INTO isin_ticker_cache(isin, ticker, source, resolved_at)
@@ -156,6 +157,8 @@ def resolve_isin(conn, isin: str) -> str | None:
     if not isin or not str(isin).strip():
         return None
     isin = str(isin).strip().upper()
+
+    _ensure_cache(conn)
 
     # 1. Cache DB
     cached = _get_cached(conn, isin)
