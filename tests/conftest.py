@@ -20,8 +20,10 @@ def conn():
         if stmt and not stmt.upper().startswith("PRAGMA"):
             try:
                 c.execute(stmt)
-            except sqlite3.OperationalError:
-                pass  # index ou table déjà présents
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if "already exists" not in msg:
+                    raise
 
     yield c
     c.close()
