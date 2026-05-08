@@ -11,6 +11,7 @@ from services import private_equity as pe_service
 from services import private_equity_repository as pe_repo
 from services import repositories as repo
 from services.asset_panel_mapping import INVESTMENT_ACCOUNT_TYPES, is_asset_type_in_panel
+from services.common_utils import get_asset_type_by_id
 from services.credits import get_crd_a_date, list_credits_by_person
 from services.snapshots_helpers import _now_paris_iso
 
@@ -42,29 +43,6 @@ _SENS_FLUX_MAP: dict[str, int] = {
 }
 
 
-def _asset_type_by_id(conn, asset_ids: list[int]) -> dict[int, str]:
-    if not asset_ids:
-        return {}
-    ids = sorted({int(aid) for aid in asset_ids if aid is not None})
-    if not ids:
-        return {}
-    qmarks = ",".join(["?"] * len(ids))
-    rows = conn.execute(
-        f"SELECT id, asset_type FROM assets WHERE id IN ({qmarks})",
-        tuple(ids),
-    ).fetchall()
-    out: dict[int, str] = {}
-    for row in rows:
-        try:
-            rid = int(row["id"])
-            at = str(row["asset_type"] or "autre")
-        except Exception:
-            rid = int(row[0])
-            at = str(row[1] or "autre")
-        out[rid] = at
-    return out
-
-
 def _filter_positions_by_panel(conn, pos_df: pd.DataFrame, panel: str) -> pd.DataFrame:
     if pos_df is None or pos_df.empty:
         return pd.DataFrame(columns=pos_df.columns if pos_df is not None else [])
@@ -74,7 +52,7 @@ def _filter_positions_by_panel(conn, pos_df: pd.DataFrame, panel: str) -> pd.Dat
     out = pos_df.copy()
     aid_num = pd.to_numeric(out["asset_id"], errors="coerce")
     asset_ids = aid_num.dropna().astype(int).tolist()
-    at_map = _asset_type_by_id(conn, asset_ids)
+    at_map = get_asset_type_by_id(conn, asset_ids)
     out["asset_type"] = aid_num.apply(lambda aid: at_map.get(int(aid), "autre") if pd.notna(aid) else "autre")
     keep = out["asset_type"].apply(lambda at: is_asset_type_in_panel(at, panel))
     return out[keep].copy()
