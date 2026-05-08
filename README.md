@@ -81,7 +81,7 @@ pip install -r requirements.txt
 ### Development setup
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
